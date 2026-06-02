@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Local state
+*.sqlite
+*.sqlite3
+*.db
+state/
+artifacts/
+cache/
+logs/
+*.log
+
+# Generated evaluation material. The public pack is reproducible from its seed;
+# the hidden pack must never be committed.
+data/public_pack/
+data/hidden_pack/
+data/reports/
+
+# Model + adapter weights
+*.safetensors
+*.bin
+*.pt
+models/
+
+# Secrets and operator configuration
+.env
+.env.*
+!.env.example
+backend.local.yaml
+*.pem
+*.key
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Local tooling configuration, not part of the project
+.claude/
+
+# Internal specification documents. The protocol is defined by the published
+# contract and the code that implements it; source documents stay out of the
+# repository so there is exactly one authoritative description.
+*.docx
+*.doc
+*.pdf
+*.pptx
+*.xlsx
+
+# Development scratch produced by scripts/run_dev_engine.sh
+.dev-state/
+.dev-pool/

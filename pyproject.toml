@@ -1,0 +1,90 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "capability-subnet"
+version = "1.0.0"
+description = "LoRA Merger — the Capability Composition Subnet on Bittensor. Miners submit declarative merge recipes over a certified LoRA pool; a continuous champion-challenge engine scores them on a hidden agentic workflow."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Capability Composition Subnet" }]
+keywords = ["bittensor", "lora", "model-merging", "peft", "agentic-evaluation"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+  "bittensor>=10.0.0",
+  "torch>=2.2",
+  "numpy>=1.26",
+  "safetensors>=0.4",
+  "pydantic>=2.6",
+  "fastapi>=0.110",
+  "uvicorn>=0.29",
+  "httpx>=0.27",
+  "jsonschema>=4.21",
+  "PyYAML>=6.0",
+  "rich>=13.0",
+]
+
+[project.optional-dependencies]
+# Everything needed to actually reconstruct and serve a candidate on a GPU host.
+backend = [
+  "transformers>=4.44",
+  "accelerate>=0.30",
+  "psycopg[binary]>=3.1",
+  "docker>=7.0",
+]
+# Convenience extras for miners who want the reference local search loop.
+miner = [
+  "transformers>=4.44",
+  "huggingface_hub>=0.23",
+]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.4",
+]
+
+[project.scripts]
+capability-backend = "capability_subnet.backend.service:main"
+capability-backend-api = "capability_subnet.backend.api:main"
+capability-miner = "capability_subnet.miner.cli:main"
+capability-validator = "capability_subnet.validator.neuron:main"
+capability-workflow = "capability_subnet.workflows.cli:main"
+capability-registry = "capability_subnet.registry.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["capability_subnet*"]
+
+[tool.setuptools.package-data]
+capability_subnet = [
+  "registry/data/*.json",
+  "workflows/**/*.json",
+  "workflows/**/*.yaml",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
+markers = [
+  "gpu: requires a CUDA device and the pinned base model",
+  "docker: requires a working Docker daemon",
+  "chain: requires a reachable subtensor endpoint",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501", "B008"]

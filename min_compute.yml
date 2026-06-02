@@ -1,0 +1,102 @@
+# Minimum compute requirements per role.
+#
+# The three roles in this subnet have very different hardware profiles:
+#   miner     — searches composition space privately; hardware is entirely the
+#               miner's choice. The numbers below describe what the reference
+#               local search + local evaluation loop needs.
+#   validator — thin weight-setter. No GPU, no model, no adapter downloads.
+#   backend   — runs reconstruction, serving and sandboxed evaluation. This is
+#               operated by the subnet owner, not by the general public.
+
+version: "1.0.0"
+
+miner:
+  # A miner can do useful work with nothing but a CPU (recipe construction and
+  # schema validation), but reproducing the local evaluation harness against the
+  # public pack needs a GPU that fits Qwen3-8B in bf16.
+  cpu:
+    min_cores: 8
+    min_speed: 2.5          # GHz
+    recommended_cores: 16
+  gpu:
+    required: false         # required only for local evaluation
+    min_vram: 24            # GB — matches the peak-VRAM deployment gate
+    recommended_vram: 48
+    cuda_cores: 5000
+    min_compute_capability: 8.0
+  memory:
+    min_ram: 32             # GB
+    recommended_ram: 64
+    min_swap: 8
+  storage:
+    min_space: 250          # GB — base model + certified adapter pool + candidates
+    recommended_space: 500
+    type: SSD
+    min_iops: 1000
+  os:
+    name: Ubuntu
+    version: 22.04
+  network:
+    bandwidth:
+      download: 200         # Mbps
+      upload: 50
+
+validator:
+  # The validator fetches a signed weight vector and submits it on-chain.
+  # It never loads a model. A small always-on VPS is sufficient.
+  cpu:
+    min_cores: 2
+    min_speed: 2.5
+    recommended_cores: 4
+  gpu:
+    required: false
+    min_vram: 0
+  memory:
+    min_ram: 4
+    recommended_ram: 8
+    min_swap: 2
+  storage:
+    min_space: 20
+    recommended_space: 50
+    type: SSD
+    min_iops: 500
+  os:
+    name: Ubuntu
+    version: 22.04
+  network:
+    bandwidth:
+      download: 100
+      upload: 20
+
+backend:
+  # Owner-operated evaluation engine. Sizing is per evaluation worker; the
+  # scheduler, monitor and API can share one smaller control-plane host.
+  cpu:
+    min_cores: 32
+    min_speed: 3.0
+    recommended_cores: 64
+  gpu:
+    required: true
+    min_vram: 80            # one assigned GPU per sandbox; 80 GB gives headroom
+    recommended_vram: 80
+    count: 1                # per concurrent sandbox
+    min_compute_capability: 8.0
+  memory:
+    min_ram: 128
+    recommended_ram: 256
+    min_swap: 16
+  storage:
+    min_space: 2000         # GB — artifact cache, sample rows, signed reports
+    recommended_space: 4000
+    type: NVMe
+    min_iops: 20000
+  os:
+    name: Ubuntu
+    version: 22.04
+  docker:
+    required: true
+    min_version: "24.0"
+  network:
+    bandwidth:
+      download: 1000
+      upload: 500
