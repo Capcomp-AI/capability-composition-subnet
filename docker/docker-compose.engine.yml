@@ -1,0 +1,80 @@
+# The evaluation engine and its read-only API.
+#
+# Operator-only. Miners and validators do not run any of this.
+#
+# The engine and the API are separate services on purpose: the API is exposed to
+# the internet so validators can poll it, and it must not share a process with
+# the loop that holds the hidden instances and the signing key.
+
+name: capability-engine
+
+x-engine-base: &engine-base
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile.backend
+  image: capability-subnet/engine:${CAPSUB_VERSION:-latest}
+  env_file:
+    - ../.env
+  volumes:
+    - engine-state:/app/state
+    - ${CAPSUB_ADAPTER_POOL:-../pool}:/app/pool:ro
+    - ${CAPSUB_WALLET_PATH:-~/.bittensor/wallets}:/home/capsub/.bittensor/wallets:ro
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  engine:
+    <<: *engine-base
+    container_name: capsub-engine
+    command: ["--config", "/app/state/backend.yaml"]
+    environment:
+      CAPSUB_STATE_DIR: /app/state
+      CAPSUB_ADAPTER_POOL_DIR: /app/pool
+      CAPSUB_LOG_LEVEL: ${CAPSUB_LOG_LEVEL:-INFO}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - engine
+      - tools
+
+  api:
+    <<: *engine-base
+    container_name: capsub-api
+    entrypoint: ["python3", "-m", "capability_subnet.backend.api"]
+    command: ["--config", "/app/state/backend.yaml"]
+    # Read-only: this service has no route that changes engine state, so
+    # exposing it cannot affect an evaluation.
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    ports:
+      - "${CAPSUB_API_BIND:-127.0.0.1}:8080:8080"
+    environment:
+      CAPSUB_STATE_DIR: /app/state
+      CAPSUB_API_HOST: 0.0.0.0
+      CAPSUB_API_PORT: "8080"
+    depends_on:
+      - engine
+    networks:
+      - engine
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  engine:
+    driver: bridge
+  tools:
+    external: true
+    name: capability-sandbox_tools
+
+volumes:
+  engine-state:

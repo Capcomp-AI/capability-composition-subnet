@@ -1,0 +1,115 @@
+# Sandbox tool services.
+#
+# One environment per hidden workflow instance. The agent container can reach the
+# candidate endpoint and the tool services and nothing else — in particular it
+# cannot reach the internet, the host, or the process holding the ground truth.
+#
+# The scorer is deliberately absent from this file. It runs in the engine
+# process, outside every network the agent can see, because a scorer the agent
+# can reach is an answer key with a REST interface.
+
+name: capability-sandbox
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: capsub-postgres
+    environment:
+      POSTGRES_DB: maintenance
+      POSTGRES_USER: capsub
+      POSTGRES_PASSWORD: ${CAPSUB_PG_PASSWORD:?set CAPSUB_PG_PASSWORD}
+      # Deterministic collation: ordering differences would change result sets
+      # and turn a correct query into a scored failure.
+      POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+    command:
+      - postgres
+      - -c
+      - max_connections=200
+      - -c
+      - default_transaction_read_only=off
+      - -c
+      - statement_timeout=10000
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - tools
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U capsub -d maintenance"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  python-runner:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.runner
+    container_name: capsub-python-runner
+    # The strongest boundary in the whole system. Candidate-written code executes
+    # here, so it gets no network at all, no writable filesystem, no privileges
+    # and no capabilities.
+    network_mode: none
+    read_only: true
+    user: "65534:65534"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 512m
+    cpus: 1.0
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    restart: unless-stopped
+
+  inventory:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.tools
+    container_name: capsub-inventory
+    command: ["python", "-m", "capability_subnet.sandbox.services.inventory_api"]
+    environment:
+      CAPSUB_SERVICE_PORT: "8091"
+    networks:
+      - tools
+    read_only: true
+    user: "65534:65534"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    restart: unless-stopped
+
+  safety:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.tools
+    container_name: capsub-safety
+    command: ["python", "-m", "capability_subnet.sandbox.services.safety_api"]
+    environment:
+      CAPSUB_SERVICE_PORT: "8092"
+    networks:
+      - tools
+    read_only: true
+    user: "65534:65534"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    restart: unless-stopped
+
+networks:
+  tools:
+    driver: bridge
+    # Internal: containers on this network can talk to each other and to nothing
+    # else. Without it, a prompt injection that reaches the SQL tool could
+    # exfiltrate the hidden snapshot to any host on the internet.
+    internal: true
+
+volumes:
+  postgres-data:

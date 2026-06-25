@@ -1,0 +1,119 @@
+# Evaluation engine configuration.
+#
+# Copy to backend.yaml and fill in the values marked CHANGE ME. The engine refuses
+# to start if any of them are still at their defaults, because each one, left
+# unset, would make its own results indefensible.
+#
+# Every field can also be set with an environment variable: CAPSUB_<FIELD_NAME>.
+
+# ---------------------------------------------------------------------------
+# Chain
+# ---------------------------------------------------------------------------
+netuid: 1
+network: finney
+chain_endpoint: ""            # empty uses the named network's public endpoint
+wallet_name: capability
+wallet_hotkey: default
+
+# Commitments at or before this block are ignored. Set it to the block this
+# arena opened at, so leftovers from a previous arena version cannot enter the
+# queue. CHANGE ME.
+min_commit_block: 0
+
+# ---------------------------------------------------------------------------
+# Storage
+# ---------------------------------------------------------------------------
+state_dir: state
+artifact_cache_dir: state/artifacts
+adapter_pool_dir: pool         # where the certified adapters are materialised
+report_dir: state/reports
+
+# The engine's own verified copy of every admitted recipe. A champion is
+# re-measured every window, so this must outlive the miner's own pointer — a
+# champion whose host goes down must not silently stop defending.
+recipe_dir: state/recipes
+
+# ---------------------------------------------------------------------------
+# Windows
+# ---------------------------------------------------------------------------
+# 7200 blocks is roughly 24 hours at 12-second blocks. Shorter windows re-measure
+# the references more often, which costs GPU time; longer ones give a champion
+# more time on one instance draw.
+window_blocks: 7200
+hidden_instances: 100
+ood_instances: 30
+
+# The secret root every window's hidden draw is derived from. Anyone who knows
+# it can predict every future hidden instance, so it must be generated once,
+# kept out of version control, and never shared. CHANGE ME:
+#   python3 -c "import secrets; print(secrets.randbits(63))"
+hidden_seed_root: 0
+
+# ---------------------------------------------------------------------------
+# Evaluation
+# ---------------------------------------------------------------------------
+workflow_id: industrial_maintenance_de_v1
+
+# The OpenAI-compatible endpoint serving the candidate. With the external server
+# the operator restarts the runtime per candidate; the managed server does it
+# automatically.
+serving_base_url: http://127.0.0.1:8000
+serving_model_name: candidate
+dispatch_budget: 600
+
+# PostgreSQL for the hidden maintenance snapshot. Leave empty to serve it from
+# an in-memory SQLite database, which is correct for development and not for a
+# live network.
+postgres_dsn: ""
+
+# The image digest of the engine build. Written into every published report so a
+# report identifies the software that produced it. CHANGE ME:
+#   docker inspect --format='{{index .RepoDigests 0}}' capability-subnet/engine:latest
+evaluator_image_digest: unpinned
+
+# Independent workers that rebuild each recipe and must agree on the artifact
+# digest. Two is the minimum that catches a determinism regression; one disables
+# the check entirely.
+reconstruction_workers: 2
+
+# Whether an unmeasurable peak-memory reading fails the resource gate. Leave it
+# true on any host with a GPU: a broken counter reads as 0 GB, and 0 GB passes a
+# 24 GB limit, so every candidate would clear the memory gate unchecked. Set it
+# false only for CPU-only development, where there is no GPU to measure.
+require_vram_measurement: true
+
+# ---------------------------------------------------------------------------
+# Champion challenge
+# ---------------------------------------------------------------------------
+# A challenger must be dominant on at least min_dominant_axes capability axes and
+# not worse on every other one, then clear the end-to-end margin against the
+# strongest reference with a paired lower confidence bound above zero.
+axis_margin: 0.02             # absolute margin to count as dominant on an axis
+axis_tolerance: 0.01          # relative band that still counts as not worse
+min_dominant_axes: 1
+min_axis_samples: 20          # fewer paired samples than this counts as worse
+end_to_end_margin: 0.03       # absolute completion margin over the strongest reference
+strict_pareto: false          # true requires dominance on every axis
+
+# ---------------------------------------------------------------------------
+# Incentive
+# ---------------------------------------------------------------------------
+incentive_mode: winner_take_all   # or graded_top3
+burn_percentage: 0.0              # operational safety valve; 0.0 in normal operation
+burn_uid: 0
+
+# ---------------------------------------------------------------------------
+# API
+# ---------------------------------------------------------------------------
+api_host: 0.0.0.0
+api_port: 8080
+
+# ---------------------------------------------------------------------------
+# Operations
+# ---------------------------------------------------------------------------
+poll_seconds: 30.0
+log_level: INFO
+
+# Runs without a chain connection and downgrades every preflight failure to a
+# warning. Development only.
+dry_run: false
