@@ -1,0 +1,35 @@
+# The isolated Python runner.
+#
+# This is the only container that executes candidate-written code, so it is the
+# only one whose threat model assumes the input is hostile. Everything is
+# stripped: no compilers, no package manager, no network client, no shell
+# utilities beyond what the interpreter needs to start.
+#
+# The container-level restrictions that matter — no network, read-only root, no
+# capabilities, memory and PID limits — are set where the container is run, not
+# here, because an image cannot enforce them on itself.
+
+FROM python:3.11-slim-bookworm
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONHASHSEED=0
+
+# No third-party packages at all. The runner's job is to execute a small,
+# dependency-free function; anything installed here would be reachable from
+# submitted code and would widen the attack surface for no benefit.
+WORKDIR /app
+COPY capability_subnet/sandbox/python_runner.py ./capability_subnet/sandbox/python_runner.py
+COPY capability_subnet/sandbox/limits.py ./capability_subnet/sandbox/limits.py
+RUN touch ./capability_subnet/__init__.py ./capability_subnet/sandbox/__init__.py
+
+# Remove the package manager so submitted code cannot install anything even if it
+# somehow acquired a network.
+RUN python -m pip uninstall -y pip setuptools wheel 2>/dev/null || true
+
+RUN useradd --system --uid 65534 --no-create-home runner 2>/dev/null || true
+USER 65534:65534
+
+# Idle by default. The engine execs into this container per submission rather
+# than leaving a service listening, so there is no port and nothing to reach.
+ENTRYPOINT ["python", "-c", "import time; time.sleep(2**31)"]
