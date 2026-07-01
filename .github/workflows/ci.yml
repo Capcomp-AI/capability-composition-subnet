@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Weekly, because the failure this catches is a dependency drifting under a
+  # loose pin rather than anything a commit did.
+  schedule:
+    - cron: "17 4 * * 1"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUNBUFFERED: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install ruff
+      - run: ruff check capability_subnet neurons tests scripts
+      - run: ruff format --check capability_subnet neurons tests scripts
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m pytest -q -m "not gpu and not docker and not chain"
+
+  determinism:
+    # Split out from the matrix and given its own job because a failure here is
+    # not a normal test failure: reconstruction is the one place two machines
+    # must agree byte-for-byte, so a regression invalidates every artifact
+    # digest the network has recorded.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - name: Reconstruction determinism
+        run: python -m pytest -q tests/reproducibility
+      - name: Adversarial and silent-failure suites
+        run: python -m pytest -q tests/adversarial
+
+  environment:
+    # The scripted reference solver knows every answer by construction. If it
+    # cannot finish an instance, the generator, the tools or the scorer is
+    # broken and every candidate score from that instance is meaningless.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - name: Hidden instances are solvable
+        run: python -m capability_subnet.workflows.cli selftest --count 15
+      - name: Out-of-distribution instances are solvable
+        run: python -m capability_subnet.workflows.cli selftest --count 15 --split ood
+
+  contract:
+    # The published contract is what miners build against. It must serialise
+    # cleanly and describe the code that is actually running.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m capability_subnet.workflows.cli contract > /dev/null
+      - run: python -m capability_subnet.miner.cli pool --json > /dev/null
