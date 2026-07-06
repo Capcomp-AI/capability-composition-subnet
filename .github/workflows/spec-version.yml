@@ -1,0 +1,65 @@
+name: Spec version
+
+# Reconstruction and scoring changes are consensus-relevant: they change what a
+# recipe produces or what it is worth. Every participant must upgrade together,
+# and the spec version is how mismatched submissions stay distinguishable.
+#
+# This job cannot decide whether a change is consensus-relevant — only a human
+# can. What it can do is refuse to let one merge silently.
+
+on:
+  pull_request:
+    paths:
+      - "capability_subnet/merge_engine/**"
+      - "capability_subnet/common/constants.py"
+      - "capability_subnet/common/schemas.py"
+      - "capability_subnet/backend/scorer/**"
+      - "capability_subnet/backend/comparator/**"
+      - "capability_subnet/workflows/**/scoring.py"
+      - "capability_subnet/workflows/**/generator.py"
+
+jobs:
+  version-bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require a version bump or an explicit waiver
+        run: |
+          set -euo pipefail
+          base="origin/${{ github.base_ref }}"
+          git fetch -q origin "${{ github.base_ref }}"
+
+          current=$(grep -oP '__version__ = "\K[^"]+' capability_subnet/__init__.py)
+          previous=$(git show "$base:capability_subnet/__init__.py" \
+                     | grep -oP '__version__ = "\K[^"]+')
+
+          echo "base version:    $previous"
+          echo "current version: $current"
+
+          if [ "$current" != "$previous" ]; then
+            echo "Version bumped. Nothing to flag."
+            exit 0
+          fi
+
+          if git log "$base..HEAD" --format=%B | grep -qiE '^no-spec-change:'; then
+            echo "Waived by a 'no-spec-change:' trailer explaining why."
+            exit 0
+          fi
+
+          cat <<'MESSAGE'
+          This pull request touches reconstruction or scoring without bumping
+          __version__.
+
+          If it changes what a recipe reconstructs to, or what a package is
+          worth, it is a coordinated network upgrade: bump the version so the
+          spec version travelling with every weight submission changes with it.
+
+          If it genuinely changes neither — a comment, a log line, a test — add a
+          commit trailer saying so:
+
+              no-spec-change: <why this cannot alter an artifact or a score>
+          MESSAGE
+          exit 1

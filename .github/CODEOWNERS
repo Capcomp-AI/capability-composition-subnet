@@ -1,0 +1,26 @@
+# Review ownership.
+#
+# The consensus-critical paths carry two owners on purpose: a change to
+# reconstruction or scoring changes what every historical artifact and score
+# meant, and that should not be one person's call.
+
+*                                       @favoroot @nemoluck
+
+# Reconstruction — a change here alters every artifact digest.
+/capability_subnet/merge_engine/         @favoroot @nemoluck
+/capability_subnet/common/constants.py   @favoroot @nemoluck
+/capability_subnet/common/schemas.py     @favoroot @nemoluck
+
+# Scoring and the dethrone rule — a change here alters what a package is worth.
+/capability_subnet/backend/scorer/       @favoroot @nemoluck
+/capability_subnet/backend/comparator/   @favoroot @nemoluck
+/capability_subnet/backend/weights/      @favoroot @nemoluck
+
+# The workflow defines the truth every score is measured against.
+/capability_subnet/workflows/            @nemoluck
+/capability_subnet/sandbox/              @nemoluck
+
+# Operator surface.
+/capability_subnet/backend/              @favoroot
+/docker/                                 @nemoluck
+/.github/                                @favoroot
