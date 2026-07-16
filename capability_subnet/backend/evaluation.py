@@ -82,6 +82,10 @@ class EvaluationOutput:
     artifact_bytes: int = 0
     build: BuildOutcome | None = None
     infrastructure_error: str | None = None
+    #: Traces retained for later disclosure, as (result, trace) pairs. Bounded,
+    #: and chosen by instance identifier rather than by outcome so the engine
+    #: cannot retain only the runs that flatter it.
+    sampled_traces: list = field(default_factory=list)
 
     @property
     def gates_passed(self) -> bool:
@@ -121,6 +125,7 @@ class Evaluator:
         gpu_index: int = 0,
         min_valid_samples: int = 20,
         require_vram_measurement: bool = False,
+        disclosure_traces: int = 10,
     ) -> None:
         self.reconstructor = reconstructor
         self.server = server
@@ -133,6 +138,7 @@ class Evaluator:
         # measure, is not blocked by a gate that cannot apply. Any deployment
         # with a GPU sets it True.
         self.require_vram_measurement = require_vram_measurement
+        self.disclosure_traces = disclosure_traces
 
     # -- build --------------------------------------------------------------
 
@@ -271,6 +277,14 @@ class Evaluator:
 
         output.hidden_results = [outcome.result for outcome in hidden]
         output.ood_results = [outcome.result for outcome in ood]
+
+        # Retained by lexicographic instance identifier, not by score. Anyone
+        # holding the window's disclosed seeds can confirm the rule was followed,
+        # which is what stops the engine from disclosing only its honest runs.
+        ordered = sorted(hidden + ood, key=lambda item: item.result.instance_id)
+        output.sampled_traces = [
+            (item.result, item.trace) for item in ordered[: self.disclosure_traces]
+        ]
 
         output.resources = measure_resources(
             output.hidden_results,

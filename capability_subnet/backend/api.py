@@ -15,6 +15,7 @@ engine's state.
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -139,6 +140,58 @@ def create_app(settings: BackendSettings | None = None):
         if record is None:
             raise HTTPException(status_code=404, detail="no such report")
         return record.model_dump(mode="json", exclude_none=True)
+
+    @app.get(
+        "/windows/{window_id}/disclosure",
+        summary="A closed window's instances, published for independent re-scoring",
+    )
+    def disclosure(window_id: int) -> dict[str, Any]:
+        """Publish a closed window so anyone can check the engine's arithmetic.
+
+        Hidden instances are drawn fresh every window and never reused, so a
+        closed window's seeds have no value as a secret. Together with the
+        traces the scorer read, they let an auditor regenerate each problem and
+        re-run the deterministic scorer without a GPU.
+
+        The current window is never disclosed: its challenger is still sitting
+        that test.
+        """
+        latest = store.latest_window_id()
+        if latest is None:
+            raise HTTPException(status_code=404, detail="no windows have been recorded")
+        if window_id >= latest:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"window {window_id} has not closed yet (latest is {latest}); "
+                    "disclosing it would publish a test still being sat"
+                ),
+            )
+
+        stored = store.get_window(window_id)
+        if stored is None:
+            raise HTTPException(status_code=404, detail=f"no record of window {window_id}")
+
+        traces = store.load_traces(window_id)
+        return {
+            "workflow_id": resolved.workflow_id,
+            "window_id": window_id,
+            "closed_at_block": stored["opened_block"],
+            "spec_version": __spec_version__,
+            "hidden_seeds": stored["hidden_seeds"],
+            "ood_seeds": stored["ood_seeds"],
+            "instances": [
+                {
+                    "instance_id": row["instance_id"],
+                    "instance_seed": row["instance_seed"],
+                    "split": row["split"],
+                    "candidate_id": row["candidate_id"],
+                    "claimed_result": json.loads(row["result"]),
+                    "trace": row["trace"],
+                }
+                for row in traces
+            ],
+        }
 
     @app.get("/compatibility", summary="Adapter compatibility history")
     def compatibility(limit: int = Query(default=200, ge=1, le=1000)) -> dict[str, Any]:

@@ -86,6 +86,12 @@ class BackendSettings:
     #: every candidate through the memory limit unchecked.
     require_vram_measurement: bool = True
 
+    #: Traces retained per candidate per window for later disclosure. Chosen by
+    #: instance identifier rather than by outcome, so the engine cannot retain
+    #: only the runs that flatter it. Zero disables disclosure and removes the
+    #: strongest check available to anyone outside the operator.
+    disclosure_traces: int = 10
+
     # -- comparator ----------------------------------------------------------
     axis_margin: float = C.DEFAULT_AXIS_MARGIN
     axis_tolerance: float = C.DEFAULT_AXIS_TOLERANCE
@@ -161,6 +167,12 @@ class BackendSettings:
             problems.append(
                 "min_commit_block is unset, so commitments from before this arena "
                 "opened would be admitted."
+            )
+        if self.disclosure_traces <= 0:
+            problems.append(
+                "disclosure_traces is 0, so closed windows publish no re-scorable "
+                "instances. That removes the only check on the engine's scoring "
+                "that does not require trusting the operator."
             )
         if self.incentive_mode not in (C.MODE_WINNER_TAKE_ALL, C.MODE_GRADED_TOP3):
             problems.append(f"unknown incentive_mode {self.incentive_mode!r}")

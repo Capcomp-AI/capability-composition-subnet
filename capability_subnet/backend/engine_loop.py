@@ -208,6 +208,7 @@ class EngineLoop:
             self.store.store_samples(
                 state.window_id, package.candidate_id, output.hidden_results
             )
+            self._retain_traces(state.window_id, package.candidate_id, output)
 
             if package.candidate_id == ref.BASE_MODEL:
                 state.base_e2e = output.scores.end_to_end
@@ -252,6 +253,81 @@ class EngineLoop:
         state.incumbent_latency_seconds = percentile(durations, 0.5)
 
         log.info("window %d incumbent %s", state.window_id, summarise_evaluation(output))
+
+    def _retain_traces(self, window_id: int, candidate_id: str, output) -> None:
+        """Keep the sampled traces so this window can be re-scored once closed."""
+        if not output.sampled_traces:
+            return
+        self.store.store_traces(
+            window_id,
+            candidate_id,
+            [
+                {
+                    "instance_id": result.instance_id,
+                    "split": result.split,
+                    "instance_seed": result.instance_seed,
+                    "trace": trace.to_dict(),
+                    "result": result.model_dump_json(),
+                }
+                for result, trace in output.sampled_traces
+            ],
+        )
+
+    def build_disclosure(self, window_id: int, block: int):
+        """Publish a closed window's instances so anyone can re-score them.
+
+        Only closed windows. Disclosing the window currently being evaluated
+        would hand its challenger the test it is sitting.
+        """
+        from capability_subnet.common.schemas import (
+            DisclosedInstance,
+            InstanceResult,
+            WindowDisclosure,
+        )
+
+        current = window_id_for_block(block, self.settings.window_blocks)
+        if window_id >= current:
+            raise ValueError(
+                f"window {window_id} has not closed yet (current is {current}); "
+                "disclosing it would publish a test that is still being sat"
+            )
+
+        stored = self.store.get_window(window_id)
+        if stored is None:
+            raise ValueError(f"no record of window {window_id}")
+
+        disclosure = WindowDisclosure(
+            workflow_id=self.workflow.workflow_id,
+            window_id=window_id,
+            closed_at_block=block,
+            spec_version=self.workflow_spec_version,
+            hidden_seeds=list(stored["hidden_seeds"]),
+            ood_seeds=list(stored["ood_seeds"]),
+            instances=[
+                DisclosedInstance(
+                    instance_id=row["instance_id"],
+                    instance_seed=row["instance_seed"],
+                    split=row["split"],
+                    candidate_id=row["candidate_id"],
+                    claimed_result=InstanceResult.model_validate_json(row["result"]),
+                    trace=row["trace"],
+                )
+                for row in self.store.load_traces(window_id)
+            ],
+        )
+
+        if self.publisher.keypair is not None:
+            from capability_subnet.common.signing import sign_in_place
+
+            sign_in_place(self.publisher.keypair, disclosure)
+
+        log.info(
+            "disclosed window %d: %d seeds, %d re-scorable instances",
+            window_id,
+            len(disclosure.hidden_seeds) + len(disclosure.ood_seeds),
+            len(disclosure.instances),
+        )
+        return disclosure
 
     def _package_for_champion(self, champion: ChampionRecord) -> EvaluablePackage | None:
         """Rebuild the champion's package from stored state."""
@@ -347,6 +423,7 @@ class EngineLoop:
             return output
 
         self.store.store_samples(state.window_id, entry.hotkey, output.hidden_results)
+        self._retain_traces(state.window_id, entry.hotkey, output)
         if output.artifact_sha256:
             self.store.set_artifact(entry.hotkey, output.artifact_sha256)
 
