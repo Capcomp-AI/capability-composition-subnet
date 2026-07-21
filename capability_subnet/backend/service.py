@@ -82,6 +82,7 @@ class EngineService:
             stages=self.workflow.critical_axes,
             min_valid_samples=settings.min_axis_samples,
             require_vram_measurement=settings.require_vram_measurement,
+            disclosure_traces=settings.disclosure_traces,
         )
 
         self.loop = EngineLoop(

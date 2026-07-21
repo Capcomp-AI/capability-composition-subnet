@@ -536,6 +536,59 @@ class WeightVector(StrictModel):
 # ---------------------------------------------------------------------------
 
 
+class DisclosedInstance(StrictModel):
+    """One instance from a closed window, published so it can be re-scored."""
+
+    instance_id: str
+    instance_seed: int
+    split: str
+    candidate_id: str
+    #: The engine's own scored row. An auditor regenerates the instance from the
+    #: seed, re-scores the trace, and compares against this.
+    claimed_result: InstanceResult
+    #: The immutable record the scorer read. Everything needed to reproduce the
+    #: scoring arithmetic without running a model.
+    trace: dict[str, Any] = Field(default_factory=dict)
+
+
+class WindowDisclosure(StrictModel):
+    """What a closed window makes public.
+
+    Hidden instances are drawn fresh every window and never reused, so a closed
+    window's instances have no further value as a secret — and considerable
+    value as evidence. Publishing them lets anyone regenerate the exact problems
+    a candidate faced and re-run the deterministic scorer over its stored trace,
+    which turns "the engine says this candidate scored 0.8" into something that
+    can be checked without a GPU.
+
+    Only closed windows are ever disclosed. Publishing the current window would
+    hand its challenger the test it is sitting.
+    """
+
+    workflow_id: str = C.DEFAULT_WORKFLOW_ID
+    window_id: int
+    closed_at_block: int
+    spec_version: int
+
+    #: Every hidden and out-of-distribution seed the window drew. Disclosing all
+    #: of them rather than a subset is deliberate: a subset the engine chose
+    #: could be the subset it scored honestly.
+    hidden_seeds: list[int] = Field(default_factory=list)
+    ood_seeds: list[int] = Field(default_factory=list)
+
+    #: Traces for a bounded, deterministically chosen sample.
+    instances: list[DisclosedInstance] = Field(default_factory=list)
+
+    signature: str | None = None
+    signer_hotkey: str | None = None
+
+    def signable_bytes(self) -> bytes:
+        payload = self.model_dump(mode="json", exclude_none=True)
+        payload.pop("signature", None)
+        payload.pop("signer_hotkey", None)
+        return canonical_json_bytes(payload)
+
+
 class ChampionRecord(StrictModel):
     """The reigning champion. Rewritten only by a successful dethrone."""
 

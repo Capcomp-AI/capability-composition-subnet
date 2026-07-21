@@ -298,3 +298,9 @@ def make_results(
             )
         )
     return rows
+
+
+# The wired-up evaluation engine, shared by the end-to-end and disclosure suites.
+# Re-exported here so pytest collects the fixture for both without either suite
+# importing the other.
+from tests.engine_fixture import engine  # noqa: E402, F401

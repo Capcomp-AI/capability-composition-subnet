@@ -96,6 +96,18 @@ CREATE TABLE IF NOT EXISTS weights (
     payload   TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS traces (
+    window_id    INTEGER NOT NULL,
+    candidate_id TEXT NOT NULL,
+    instance_id  TEXT NOT NULL,
+    split        TEXT NOT NULL,
+    instance_seed INTEGER NOT NULL,
+    trace        TEXT NOT NULL,
+    result       TEXT NOT NULL,
+    PRIMARY KEY (window_id, candidate_id, instance_id)
+);
+CREATE INDEX IF NOT EXISTS traces_window ON traces(window_id);
+
 CREATE TABLE IF NOT EXISTS compatibility (
     window_id    INTEGER NOT NULL,
     candidate_id TEXT NOT NULL,
@@ -356,6 +368,48 @@ class Store:
             (window_id, candidate_id),
         ).fetchone()
         return row is not None
+
+    # -- traces --------------------------------------------------------------
+
+    def store_traces(self, window_id: int, candidate_id: str, entries: list[dict]) -> None:
+        """Retain traces so a closed window can be independently re-scored."""
+        with self.transaction() as connection:
+            connection.executemany(
+                "INSERT INTO traces(window_id, candidate_id, instance_id, split, "
+                "instance_seed, trace, result) VALUES (?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(window_id, candidate_id, instance_id) DO UPDATE SET "
+                "trace = excluded.trace, result = excluded.result",
+                [
+                    (
+                        window_id,
+                        candidate_id,
+                        entry["instance_id"],
+                        entry["split"],
+                        entry["instance_seed"],
+                        json.dumps(entry["trace"], sort_keys=True),
+                        entry["result"],
+                    )
+                    for entry in entries
+                ],
+            )
+
+    def load_traces(self, window_id: int) -> list[dict]:
+        rows = self._connection.execute(
+            "SELECT candidate_id, instance_id, split, instance_seed, trace, result "
+            "FROM traces WHERE window_id = ? ORDER BY candidate_id, instance_id",
+            (window_id,),
+        ).fetchall()
+        return [
+            {
+                "candidate_id": row["candidate_id"],
+                "instance_id": row["instance_id"],
+                "split": row["split"],
+                "instance_seed": row["instance_seed"],
+                "trace": json.loads(row["trace"]),
+                "result": row["result"],
+            }
+            for row in rows
+        ]
 
     # -- reports ------------------------------------------------------------
 

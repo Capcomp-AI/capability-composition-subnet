@@ -117,7 +117,14 @@ class ExecutionTrace:
         return any(verdict.get("approved") for verdict in self.safety_verdicts)
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialisable form, stored alongside the sample row for audit."""
+        """Serialisable form, stored alongside the sample row for audit.
+
+        Complete on purpose. This is the record an auditor re-scores a closed
+        window from, so every field the scorer reads has to survive the round
+        trip — a trace that omits the SQL submissions or the diagnostic results
+        cannot reproduce those stages, and the omission would look exactly like
+        the engine having scored them dishonestly.
+        """
         return {
             "instance_id": self.instance_id,
             "instance_seed": self.instance_seed,
@@ -139,6 +146,21 @@ class ExecutionTrace:
                 for call in self.calls
             ],
             "final_payload": self.final_payload,
-            "inventory_final_state": self.inventory_final_state,
-            "safety_verdicts": self.safety_verdicts,
+            # Everything below is read by the deterministic scorer.
+            "manual_queries": list(self.manual_queries),
+            "manual_sections_read": list(self.manual_sections_read),
+            "sql_submissions": [
+                {
+                    "statement": item.statement,
+                    "columns": list(item.columns),
+                    "rows": [list(row) for row in item.rows],
+                    "error": item.error,
+                }
+                for item in self.sql_submissions
+            ],
+            "diagnostic_code_submissions": list(self.diagnostic_code_submissions),
+            "diagnostic_tool_results": list(self.diagnostic_tool_results),
+            "inventory_final_state": dict(self.inventory_final_state),
+            "inventory_attempts": list(self.inventory_attempts),
+            "safety_verdicts": list(self.safety_verdicts),
         }
