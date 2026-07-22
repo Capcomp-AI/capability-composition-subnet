@@ -82,6 +82,14 @@ reconstruction_workers: 2
 # false only for CPU-only development, where there is no GPU to measure.
 require_vram_measurement: true
 
+# Traces retained per candidate per window, for later disclosure. Once a window
+# closes, its seeds and these traces are published so anyone can regenerate the
+# instances and re-score them without a GPU. Retained by instance identifier
+# rather than by score, so the engine cannot keep only its flattering runs.
+# Zero disables disclosure entirely, which removes the strongest check anyone
+# outside the operator can run.
+disclosure_traces: 10
+
 # ---------------------------------------------------------------------------
 # Champion challenge
 # ---------------------------------------------------------------------------

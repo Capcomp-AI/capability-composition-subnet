@@ -117,7 +117,18 @@ This is the honest weak point of a centralised engine, and it is mitigated rathe
 | Chain consensus | Weights still pass through the chain's own aggregation |
 | Sample rows retained | Every per-instance outcome is stored, so a claimed aggregate can be checked against its parts |
 
-What this does **not** give: independent verification that the hidden instances were fair or that the reported scores match what actually ran. Validator audit re-runs — where a validator re-executes a sampled instance and checks the engine's answer — are a planned hardening step and do not exist today.
+| Closed-window disclosure | Once a window closes, its seeds and the traces the scorer read are published, so anyone can regenerate the instances and re-run the scorer over them without a GPU |
+
+Since v1.0.0 the reported scores **can** be checked independently:
+`capability-audit replay --window <n>` regenerates each disclosed instance from
+its seed and re-scores the engine's own trace. A published score that does not
+follow from its published trace is caught, specifically and by anyone.
+
+What this still does **not** give: proof that the hidden draw was fair, or that a
+trace faithfully records what the model did. A determined operator could publish
+a fabricated trace that scores exactly as claimed — but it would have to stay
+internally consistent, per turn, with a workflow the auditor regenerates
+independently.
 
 If that residual trust is unacceptable, it is better to know before registering than after.
 
