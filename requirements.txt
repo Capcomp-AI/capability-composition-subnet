@@ -1,6 +1,11 @@
 # Runtime requirements shared by miners, validators and the backend.
 # Backend operators additionally need: pip install -e ".[backend]"
 bittensor>=10.0.0
+# Substrate keypair used to sign published records and verify them.
+# Declared explicitly: the Bittensor SDK no longer pulls it in, and without
+# it signature verification refuses every payload — which fails safe, but
+# leaves signing and verification entirely non-functional.
+bittensor-wallet>=3.0.0
 torch>=2.2
 numpy>=1.26
 safetensors>=0.4

@@ -24,6 +24,10 @@ classifiers = [
 
 dependencies = [
   "bittensor>=10.0.0",
+  # Substrate keypair for signing published records and verifying them.
+  # Declared explicitly: the SDK no longer pulls it in, and without it
+  # verification refuses every payload.
+  "bittensor-wallet>=3.0.0",
   "torch>=2.2",
   "numpy>=1.26",
   "safetensors>=0.4",
