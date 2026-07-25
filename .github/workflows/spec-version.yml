@@ -27,13 +27,20 @@ jobs:
           fetch-depth: 0
 
       - name: Require a version bump or an explicit waiver
+        env:
+          # The base commit as it stood when the pull request was opened.
+          #
+          # Not `origin/<base_ref>`: that moves. If the branch is merged while
+          # this job is queued, the symbolic ref already contains these commits,
+          # the comparison range is empty, and the job fails on a pull request
+          # that did everything right — which is exactly how this check failed
+          # the first time it ran.
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          base="origin/${{ github.base_ref }}"
-          git fetch -q origin "${{ github.base_ref }}"
 
           current=$(grep -oP '__version__ = "\K[^"]+' capability_subnet/__init__.py)
-          previous=$(git show "$base:capability_subnet/__init__.py" \
+          previous=$(git show "$BASE_SHA:capability_subnet/__init__.py" \
                      | grep -oP '__version__ = "\K[^"]+')
 
           echo "base version:    $previous"
@@ -44,7 +51,7 @@ jobs:
             exit 0
           fi
 
-          if git log "$base..HEAD" --format=%B | grep -qiE '^no-spec-change:'; then
+          if git log "$BASE_SHA..HEAD" --format=%B | grep -qiE '^no-spec-change:'; then
             echo "Waived by a 'no-spec-change:' trailer explaining why."
             exit 0
           fi
