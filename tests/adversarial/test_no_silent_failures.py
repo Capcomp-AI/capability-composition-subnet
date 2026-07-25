@@ -379,3 +379,61 @@ class TestAnIncompleteBarCannotCrown:
 
         assert complete is False
         assert "base model" in why
+
+
+class TestSignatureVerificationAlwaysAnswers:
+    """A verifier that raises takes the process down instead of answering.
+
+    The keypair class has moved between SDK versions. A hard import of any one
+    location turns a routine dependency bump into a crash inside signature
+    verification — which is where a validator decides whether to trust a weight
+    vector, and therefore the worst possible place to raise.
+    """
+
+    def _payload(self):
+        from capability_subnet.common.schemas import WeightEntry, WeightVector
+
+        return WeightVector(
+            window_id=1,
+            computed_at_block=1,
+            spec_version=1,
+            entries=[WeightEntry(uid=1, hotkey="5A", weight=1.0)],
+        )
+
+    def test_a_missing_keypair_library_refuses_rather_than_raising(self, monkeypatch):
+        from capability_subnet.common import signing
+
+        monkeypatch.setattr(signing, "_keypair_resolved", False)
+        monkeypatch.setattr(signing, "_keypair_class", None)
+        # No location resolves — the situation on any SDK that moved the class.
+        monkeypatch.setattr(signing, "_KEYPAIR_LOCATIONS", (("no_such_module", "Keypair"),))
+
+        assert signing.verify_payload(self._payload(), "00" * 64, "5Operator") is False
+
+    def test_the_enforcing_wrapper_still_refuses(self, monkeypatch):
+        from capability_subnet.common import signing
+
+        monkeypatch.setattr(signing, "_keypair_resolved", False)
+        monkeypatch.setattr(signing, "_keypair_class", None)
+        monkeypatch.setattr(signing, "_KEYPAIR_LOCATIONS", (("no_such_module", "Keypair"),))
+
+        payload = self._payload()
+        payload.signature = "00" * 64
+        payload.signer_hotkey = "5Operator"
+
+        with pytest.raises(signing.SignatureError, match="does not verify"):
+            signing.require_trusted_signature(payload, {"5Operator"})
+
+    def test_a_malformed_signature_refuses_rather_than_raising(self):
+        from capability_subnet.common.signing import verify_payload
+
+        assert verify_payload(self._payload(), "not-hex", "5Operator") is False
+        assert verify_payload(self._payload(), "", "5Operator") is False
+        assert verify_payload(self._payload(), "00" * 64, "") is False
+
+    def test_a_keypair_class_is_found_on_this_install(self):
+        # Not asserting which one: the point is that some location resolves, so
+        # signatures can actually be checked here.
+        from capability_subnet.common.signing import _resolve_keypair_class
+
+        assert _resolve_keypair_class() is not None

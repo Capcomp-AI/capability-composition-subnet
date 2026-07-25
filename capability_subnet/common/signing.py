@@ -33,21 +33,72 @@ def sign_payload(keypair, payload: Signable) -> str:
     return signature.hex() if isinstance(signature, (bytes, bytearray)) else str(signature)
 
 
+#: Where the substrate keypair lives, across the SDK versions this package
+#: supports. It has moved between them, and a hard import of any single one
+#: turns a routine dependency bump into a crash inside signature verification.
+_KEYPAIR_LOCATIONS: tuple[tuple[str, str], ...] = (
+    ("bittensor_wallet", "Keypair"),
+    ("bittensor", "Keypair"),
+    ("substrateinterface", "Keypair"),
+    ("scalecodec.utils.ss58", "Keypair"),
+)
+
+_keypair_class: type | None = None
+_keypair_resolved = False
+
+
+def _resolve_keypair_class() -> type | None:
+    """Find a usable keypair implementation, or report that there is none.
+
+    Returns ``None`` rather than raising. Verification must be able to answer
+    "no" under any circumstances: a validator that crashed here instead of
+    refusing would stop setting weights entirely, which is a worse outcome than
+    declining one vector.
+    """
+    global _keypair_class, _keypair_resolved
+
+    if _keypair_resolved:
+        return _keypair_class
+
+    for module_name, attribute in _KEYPAIR_LOCATIONS:
+        try:
+            module = __import__(module_name, fromlist=[attribute])
+        except ImportError:
+            continue
+        candidate = getattr(module, attribute, None)
+        if candidate is not None:
+            _keypair_class = candidate
+            _keypair_resolved = True
+            log.debug("using %s.%s for signature verification", module_name, attribute)
+            return _keypair_class
+
+    _keypair_resolved = True
+    log.error(
+        "no substrate keypair implementation is available (tried %s). Signature "
+        "verification will refuse every payload, so nothing signed can be trusted "
+        "on this host.",
+        ", ".join(f"{m}.{a}" for m, a in _KEYPAIR_LOCATIONS),
+    )
+    return None
+
+
 def verify_payload(payload: Signable, signature: str, signer_ss58: str) -> bool:
     """Verify a hex signature over ``payload`` against ``signer_ss58``.
 
-    Returns False rather than raising on any malformed input, so a caller
-    scanning many payloads can simply drop the bad ones.
+    Returns False rather than raising, under every failure mode: a malformed
+    signature, an unparseable address, or no keypair library at all. Callers use
+    this to decide whether to trust something, and a verifier that raises is a
+    verifier that takes the process down instead of answering.
     """
     if not signature or not signer_ss58:
         return False
-    try:
-        from bittensor_wallet import Keypair
-    except ImportError:  # pragma: no cover - only in environments without the wallet lib
-        from substrateinterface import Keypair  # type: ignore[no-redef]
+
+    keypair_class = _resolve_keypair_class()
+    if keypair_class is None:
+        return False
 
     try:
-        keypair = Keypair(ss58_address=signer_ss58)
+        keypair = keypair_class(ss58_address=signer_ss58)
         raw = bytes.fromhex(signature[2:] if signature.startswith("0x") else signature)
         return bool(keypair.verify(payload.signable_bytes(), raw))
     except Exception:
