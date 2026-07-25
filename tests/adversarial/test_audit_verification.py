@@ -45,9 +45,15 @@ def scores(**overrides) -> CandidateScores:
     payload = CandidateScores(**values)
     payload.qualified_score = recompute_qualified_score(
         EvaluationReport(
-            window_id=0, evaluated_at_block=0, miner_hotkey="", candidate_id="",
-            base_revision="", source_snapshot_sha256="", evaluator_image_digest="",
-            spec_version=0, scores=payload,
+            window_id=0,
+            evaluated_at_block=0,
+            miner_hotkey="",
+            candidate_id="",
+            base_revision="",
+            source_snapshot_sha256="",
+            evaluator_image_digest="",
+            spec_version=0,
+            scores=payload,
         )
     )
     return payload
@@ -57,12 +63,22 @@ def comparator(**overrides) -> ComparatorOutcome:
     values = {
         "per_axis_verdicts": [
             AxisVerdict(
-                axis="fault_extraction", challenger_mean=0.9, champion_mean=0.7,
-                paired_samples=60, verdict="dominant", margin=0.02, tolerance=0.01,
+                axis="fault_extraction",
+                challenger_mean=0.9,
+                champion_mean=0.7,
+                paired_samples=60,
+                verdict="dominant",
+                margin=0.02,
+                tolerance=0.01,
             ),
             AxisVerdict(
-                axis="final_json", challenger_mean=0.9, champion_mean=0.9,
-                paired_samples=60, verdict="not_worse", margin=0.02, tolerance=0.01,
+                axis="final_json",
+                challenger_mean=0.9,
+                champion_mean=0.9,
+                paired_samples=60,
+                verdict="not_worse",
+                margin=0.02,
+                tolerance=0.01,
             ),
         ],
         "dominant_count": 1,
@@ -71,9 +87,15 @@ def comparator(**overrides) -> ComparatorOutcome:
         "end_to_end_margin_required": 0.03,
         "end_to_end_margin_observed": 0.08,
         "paired": PairedComparison(
-            reference_id="incumbent", paired_instances=60, challenger_mean=0.80,
-            reference_mean=0.72, difference=0.08, bootstrap_lcb=0.031,
-            bootstrap_resamples=10_000, confidence=0.95, passed=True,
+            reference_id="incumbent",
+            paired_instances=60,
+            challenger_mean=0.80,
+            reference_mean=0.72,
+            difference=0.08,
+            bootstrap_lcb=0.031,
+            bootstrap_resamples=10_000,
+            confidence=0.95,
+            passed=True,
         ),
         "dethrones": True,
         "reason": "dethrones the incumbent",
@@ -188,8 +210,13 @@ class TestUnsupportedVerdicts:
                 any_worse_axis=True,
                 per_axis_verdicts=[
                     AxisVerdict(
-                        axis="safety_validation", challenger_mean=0.3, champion_mean=0.9,
-                        paired_samples=60, verdict="worse", margin=0.02, tolerance=0.01,
+                        axis="safety_validation",
+                        challenger_mean=0.3,
+                        champion_mean=0.9,
+                        paired_samples=60,
+                        verdict="worse",
+                        margin=0.02,
+                        tolerance=0.01,
                     )
                 ],
             )
@@ -201,9 +228,15 @@ class TestUnsupportedVerdicts:
         payload = report(
             comparator=comparator(
                 paired=PairedComparison(
-                    reference_id="incumbent", paired_instances=60, challenger_mean=0.80,
-                    reference_mean=0.79, difference=0.01, bootstrap_lcb=-0.004,
-                    bootstrap_resamples=10_000, confidence=0.95, passed=False,
+                    reference_id="incumbent",
+                    paired_instances=60,
+                    challenger_mean=0.80,
+                    reference_mean=0.79,
+                    difference=0.01,
+                    bootstrap_lcb=-0.004,
+                    bootstrap_resamples=10_000,
+                    confidence=0.95,
+                    passed=False,
                 )
             )
         )
@@ -279,9 +312,7 @@ class TestWeightVectors:
         # A reference on the throne means no miner has beaten an off-the-shelf
         # merge. The share must burn, not go to the operator.
         vector = self._vector(
-            entries=[
-                WeightEntry(uid=3, hotkey="reference:equal_ties_svd_merge", weight=1.0)
-            ],
+            entries=[WeightEntry(uid=3, hotkey="reference:equal_ties_svd_merge", weight=1.0)],
             champion_hotkey=None,
         )
         result = verify_weight_vector(vector, [report()])
@@ -299,7 +330,9 @@ class TestWeightVectors:
 
     def test_paying_an_ungated_miner_in_graded_mode_is_caught(self):
         failing = report(
-            miner_hotkey="5Weak", candidate_id="5Weak", verdict="terminated",
+            miner_hotkey="5Weak",
+            candidate_id="5Weak",
+            verdict="terminated",
             comparator=comparator(dethrones=False, reason="lost"),
             hard_gates=[GateVerdict(name="baseline", passed=False, detail="below the bar")],
         )

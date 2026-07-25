@@ -185,11 +185,7 @@ class ToolBox:
         outcome = self.runner.run(
             code,
             task.function_name,
-            [
-                public_case(
-                    task.public_input_id, list(task.public_readings), task.public_threshold
-                )
-            ],
+            [public_case(task.public_input_id, list(task.public_readings), task.public_threshold)],
         )
 
         if not outcome.ok:

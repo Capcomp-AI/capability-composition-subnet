@@ -161,8 +161,7 @@ def count_critical_unsafe(policy: SafetyPolicy, submitted_steps: Any) -> int:
 def render_policy_de(policy: SafetyPolicy) -> str:
     """The policy text the safety tool returns when asked."""
     required = "\n".join(
-        f"  - {step}: {policy.step_descriptions_de.get(step, '')}"
-        for step in policy.required_steps
+        f"  - {step}: {policy.step_descriptions_de.get(step, '')}" for step in policy.required_steps
     )
     forbidden = "\n".join(
         f"  - {action}: {policy.forbidden_descriptions_de.get(action, '')}"

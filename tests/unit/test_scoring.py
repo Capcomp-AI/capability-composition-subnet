@@ -82,7 +82,9 @@ class TestAggregation:
     def test_artifact_efficiency_rewards_headroom_below_the_gate(self):
         assert artifact_efficiency(0, 0.0) == pytest.approx(1.0)
         assert artifact_efficiency(C.MAX_ARTIFACT_BYTES, C.MAX_PEAK_VRAM_GB) == 0.0
-        assert artifact_efficiency(C.MAX_ARTIFACT_BYTES // 2, C.MAX_PEAK_VRAM_GB / 2) == pytest.approx(0.5)
+        assert artifact_efficiency(
+            C.MAX_ARTIFACT_BYTES // 2, C.MAX_PEAK_VRAM_GB / 2
+        ) == pytest.approx(0.5)
 
     def test_percentile_uses_nearest_rank(self):
         # An interpolated percentile would report a duration that never occurred,
@@ -111,7 +113,9 @@ class TestAggregation:
             [],
             STAGES,
             base_e2e=1.0,
-            efficiency=EfficiencyInputs(artifact_bytes=0, peak_vram_gb=0.0, reference_seconds=100.0),
+            efficiency=EfficiencyInputs(
+                artifact_bytes=0, peak_vram_gb=0.0, reference_seconds=100.0
+            ),
         )
         costly_but_right = aggregate_scores(
             make_results(FULL, count=20, success_rate=1.0, seconds=30.0),

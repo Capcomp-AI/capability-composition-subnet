@@ -179,7 +179,9 @@ class TestHiddenMaterialStaysHidden:
         try:
             toolbox = ToolBox(instance, database, PythonRunner(), trace)
             call = toolbox.dispatch(
-                1, "run_diagnostic_python", {"code": "def analyze(r, t): return {}", "input_id": "case_0"}
+                1,
+                "run_diagnostic_python",
+                {"code": "def analyze(r, t): return {}", "input_id": "case_0"},
             )
         finally:
             database.close()

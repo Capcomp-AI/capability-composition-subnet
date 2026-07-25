@@ -232,8 +232,7 @@ def refine_layer_groups(
                 assert report.best is not None
                 current = report.best.recipe
                 overrides = {
-                    name: dict(values)
-                    for name, values in current.layer_group_overrides.items()
+                    name: dict(values) for name, values in current.layer_group_overrides.items()
                 }
                 overrides.setdefault(group, {})
 

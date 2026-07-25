@@ -53,14 +53,12 @@ def main(argv: list[str] | None = None) -> int:
             for module in C.CANONICAL_TARGET_MODULES:
                 shape = manifest.shape_of(module)
                 tensors[manifest.tensor_key(layer, module, "lora_A")] = (
-                    torch.randn(
-                        C.CANONICAL_RANK, shape.in_features, generator=generator
-                    ) * args.scale
+                    torch.randn(C.CANONICAL_RANK, shape.in_features, generator=generator)
+                    * args.scale
                 ).to(torch.bfloat16)
                 tensors[manifest.tensor_key(layer, module, "lora_B")] = (
-                    torch.randn(
-                        shape.out_features, C.CANONICAL_RANK, generator=generator
-                    ) * args.scale
+                    torch.randn(shape.out_features, C.CANONICAL_RANK, generator=generator)
+                    * args.scale
                 ).to(torch.bfloat16)
 
         save_file(tensors, str(directory / "adapter_model.safetensors"))

@@ -50,9 +50,7 @@ def canonical_json_str(obj: Any) -> str:
     :func:`canonical_json_bytes` of the *parsed* document, so pretty-printing on
     disk never changes the digest.
     """
-    return (
-        json.dumps(obj, sort_keys=True, indent=2, ensure_ascii=False, allow_nan=False) + "\n"
-    )
+    return json.dumps(obj, sort_keys=True, indent=2, ensure_ascii=False, allow_nan=False) + "\n"
 
 
 def sha256_bytes(data: bytes) -> str:

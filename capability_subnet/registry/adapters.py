@@ -106,8 +106,7 @@ class AdapterRegistry:
             if entry.adapter_id == adapter_id:
                 return entry
         raise RegistryError(
-            f"adapter {adapter_id!r} is not in the certified pool. "
-            f"Available: {', '.join(self.ids)}"
+            f"adapter {adapter_id!r} is not in the certified pool. Available: {', '.join(self.ids)}"
         )
 
     def contains(self, adapter_id: str) -> bool:
@@ -198,7 +197,9 @@ def load_registry(path: str | Path | None = None) -> AdapterRegistry:
     try:
         raw = json.loads(registry_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        raise RegistryError(f"adapter registry at {registry_path} is not valid JSON: {exc}") from exc
+        raise RegistryError(
+            f"adapter registry at {registry_path} is not valid JSON: {exc}"
+        ) from exc
 
     entries = tuple(_parse_entry(item) for item in raw.get("adapters", []))
     if not entries:

@@ -100,13 +100,17 @@ def check_adapter_config(
     problems: list[str] = []
 
     if config.get("peft_type") != C.CANONICAL_PEFT_TYPE:
-        problems.append(f"peft_type={config.get('peft_type')!r}, expected {C.CANONICAL_PEFT_TYPE!r}")
+        problems.append(
+            f"peft_type={config.get('peft_type')!r}, expected {C.CANONICAL_PEFT_TYPE!r}"
+        )
     if int(config.get("r", -1)) != C.CANONICAL_RANK:
         problems.append(f"r={config.get('r')}, expected {C.CANONICAL_RANK}")
     if int(config.get("lora_alpha", -1)) != C.CANONICAL_LORA_ALPHA:
         problems.append(f"lora_alpha={config.get('lora_alpha')}, expected {C.CANONICAL_LORA_ALPHA}")
     if float(config.get("lora_dropout", -1.0)) != C.CANONICAL_LORA_DROPOUT:
-        problems.append(f"lora_dropout={config.get('lora_dropout')}, expected {C.CANONICAL_LORA_DROPOUT}")
+        problems.append(
+            f"lora_dropout={config.get('lora_dropout')}, expected {C.CANONICAL_LORA_DROPOUT}"
+        )
     if config.get("bias") != C.CANONICAL_BIAS:
         problems.append(f"bias={config.get('bias')!r}, expected {C.CANONICAL_BIAS!r}")
 
@@ -233,9 +237,7 @@ def check_capability_certification(
     """The adapter must actually be good at its declared capability, and must
     not have destroyed the base model's general ability to get there."""
     if capability_score is None:
-        return GateResult(
-            "capability", False, "no capability certification run has been recorded"
-        )
+        return GateResult("capability", False, "no capability certification run has been recorded")
     if capability_score < min_capability_score:
         return GateResult(
             "capability",
@@ -257,9 +259,7 @@ def check_capability_certification(
     )
 
 
-def check_conversion_recertified(
-    converted_from_rank: int | None, recertified: bool
-) -> GateResult:
+def check_conversion_recertified(converted_from_rank: int | None, recertified: bool) -> GateResult:
     """An adapter normalised to the canonical rank must be recertified afterwards.
 
     Rank conversion is lossy. Certifying the original and admitting the converted
@@ -324,9 +324,7 @@ def certify_adapter(
     gates.append(check_base_revision(config, manifest))
     gates.append(check_tensor_shapes(adapter_path, manifest))
     gates.append(check_finite_values(adapter_path))
-    gates.append(
-        check_license(license_id, declared_allows_derivatives=declared_allows_derivatives)
-    )
+    gates.append(check_license(license_id, declared_allows_derivatives=declared_allows_derivatives))
     gates.append(
         check_capability_certification(
             capability_score, base_retention, min_capability_score=min_capability_score

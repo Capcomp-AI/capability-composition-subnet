@@ -148,9 +148,7 @@ class TestDoctoredResultsAreCaught:
     def test_a_mislabelled_instance_is_caught(self, scored_run):
         instance, trace, result = scored_run
         outcome, audit = replay_disclosure(
-            disclosure_for(
-                instance, trace, result, entry={"instance_id": "hidden-000000000001"}
-            )
+            disclosure_for(instance, trace, result, entry={"instance_id": "hidden-000000000001"})
         )
         del outcome
         assert any(f.code == "instance_id_mismatch" for f in audit.errors)

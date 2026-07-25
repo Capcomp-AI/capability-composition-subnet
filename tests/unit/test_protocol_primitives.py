@@ -177,7 +177,9 @@ class TestRecipeContract:
 
     def test_density_is_required_where_it_applies_and_refused_where_it_does_not(self):
         with pytest.raises(Exception, match="requires 'density'"):
-            self._minimal(merge=MergeSpec(combination_type=C.MERGE_TIES_SVD, majority_sign_method="total"))
+            self._minimal(
+                merge=MergeSpec(combination_type=C.MERGE_TIES_SVD, majority_sign_method="total")
+            )
 
         with pytest.raises(Exception, match="does not accept 'density'"):
             self._minimal(merge=MergeSpec(combination_type=C.MERGE_LINEAR, density=0.5))
@@ -217,9 +219,7 @@ class TestRecipeContract:
 class TestLayerGroups:
     def test_groups_partition_the_model_exactly(self):
         groups = C.build_layer_groups(C.NUM_HIDDEN_LAYERS)
-        covered = [
-            layer for _, (low, high) in groups.items() for layer in range(low, high + 1)
-        ]
+        covered = [layer for _, (low, high) in groups.items() for layer in range(low, high + 1)]
         assert sorted(covered) == list(range(C.NUM_HIDDEN_LAYERS))
 
     def test_group_sizes_differ_by_at_most_one(self):
@@ -230,9 +230,7 @@ class TestLayerGroups:
     @pytest.mark.parametrize("depth", [4, 28, 32, 36, 40, 64])
     def test_partitioning_holds_at_every_plausible_depth(self, depth):
         groups = C.build_layer_groups(depth)
-        covered = [
-            layer for _, (low, high) in groups.items() for layer in range(low, high + 1)
-        ]
+        covered = [layer for _, (low, high) in groups.items() for layer in range(low, high + 1)]
         assert sorted(covered) == list(range(depth))
         assert len(groups) == C.NUM_LAYER_GROUPS
 

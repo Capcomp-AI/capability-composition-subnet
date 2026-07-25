@@ -111,8 +111,7 @@ def read_commitments(
         # Loud, because a persistent count here means miners are silently unable
         # to enter the queue.
         log.warning(
-            "%d commitments on netuid %s had an unreadable block and were not queued "
-            "this pass",
+            "%d commitments on netuid %s had an unreadable block and were not queued this pass",
             unreadable,
             netuid,
         )
@@ -137,15 +136,12 @@ def _commitment_block(subtensor: bt.Subtensor, netuid: int, hotkey: str) -> int 
     try:
         metadata: Any = subtensor.get_commitment_metadata(netuid, hotkey)
     except Exception:
-        log.warning(
-            "could not read commitment metadata for %s", hotkey[:12], exc_info=True
-        )
+        log.warning("could not read commitment metadata for %s", hotkey[:12], exc_info=True)
         return None
 
     if not isinstance(metadata, dict):
         log.warning(
-            "commitment metadata for %s has an unexpected shape (%s); cannot determine "
-            "its block",
+            "commitment metadata for %s has an unexpected shape (%s); cannot determine its block",
             hotkey[:12],
             type(metadata).__name__,
         )
@@ -159,9 +155,7 @@ def _commitment_block(subtensor: bt.Subtensor, netuid: int, hotkey: str) -> int 
     try:
         return int(block)
     except (TypeError, ValueError):
-        log.warning(
-            "commitment block for %s is not an integer: %r", hotkey[:12], block
-        )
+        log.warning("commitment block for %s is not an integer: %r", hotkey[:12], block)
         return None
 
 

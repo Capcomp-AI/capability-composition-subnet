@@ -205,9 +205,7 @@ class EngineLoop:
 
             state.reference_scores[package.candidate_id] = output.scores.end_to_end
             state.reference_results[package.candidate_id] = output.hidden_results
-            self.store.store_samples(
-                state.window_id, package.candidate_id, output.hidden_results
-            )
+            self.store.store_samples(state.window_id, package.candidate_id, output.hidden_results)
             self._retain_traces(state.window_id, package.candidate_id, output)
 
             if package.candidate_id == ref.BASE_MODEL:
@@ -711,9 +709,7 @@ class EngineLoop:
                 continue
             if not report.gates_passed:
                 continue
-            ranked.append(
-                (report.scores.qualified_score, report.miner_uid, report.miner_hotkey)
-            )
+            ranked.append((report.scores.qualified_score, report.miner_uid, report.miner_hotkey))
 
         ranked.sort(key=lambda item: (-item[0], item[1]))
         return [(uid, hotkey) for _, uid, hotkey in ranked[:3]]

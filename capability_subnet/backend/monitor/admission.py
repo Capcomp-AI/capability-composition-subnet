@@ -135,17 +135,13 @@ def evaluate_commitment(
     recipe, problems = parse_recipe(fetched.raw)
     verdicts.append(gates.gate_schema(problems))
     if recipe is None:
-        return AdmissionResult(
-            hotkey, False, "; ".join(problems[:3]), verdicts=verdicts
-        )
+        return AdmissionResult(hotkey, False, "; ".join(problems[:3]), verdicts=verdicts)
 
     # A recipe's canonical digest is taken over the parsed document, so a miner
     # cannot commit one set of bytes and have a differently-formatted document
     # scored. Re-deriving it here catches that immediately.
     if not digests_equal(recipe.digest(), payload.recipe_sha256):
-        verdicts.append(
-            gates.gate_digest(False, payload.recipe_sha256, recipe.digest())
-        )
+        verdicts.append(gates.gate_digest(False, payload.recipe_sha256, recipe.digest()))
         return AdmissionResult(
             hotkey,
             False,

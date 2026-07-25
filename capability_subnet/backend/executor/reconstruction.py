@@ -153,9 +153,7 @@ class Reconstructor:
             result=written,
         )
 
-    def _cross_check(
-        self, recipe: Recipe, first: ReconstructionResult
-    ) -> tuple[bool, str]:
+    def _cross_check(self, recipe: Recipe, first: ReconstructionResult) -> tuple[bool, str]:
         """Rebuild the recipe and compare digests."""
         if self.workers < 2:
             return True, "cross-worker check disabled (single worker)"

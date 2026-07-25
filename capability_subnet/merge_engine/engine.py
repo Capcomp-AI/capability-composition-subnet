@@ -123,9 +123,7 @@ def validate_against_pool(recipe: Recipe, snapshot: PoolSnapshot) -> None:
 
     unknown = snapshot.registry.unknown_ids(recipe.selected_adapters)
     if unknown:
-        problems.append(
-            f"recipe selects adapters that are not in the certified pool: {unknown}"
-        )
+        problems.append(f"recipe selects adapters that are not in the certified pool: {unknown}")
 
     if recipe.workflow_id != snapshot.registry.workflow_id:
         problems.append(
@@ -145,8 +143,7 @@ def _needs_reduction(recipe: Recipe, source_rank: int) -> bool:
     (which is defined on the decomposition and has no factor-space equivalent).
     """
     return (
-        recipe.compression.output_rank < source_rank
-        or recipe.compression.svd_clamp_quantile < 1.0
+        recipe.compression.output_rank < source_rank or recipe.compression.svd_clamp_quantile < 1.0
     )
 
 
@@ -169,9 +166,7 @@ def _merge_site_factor_space(
         lora_a, lora_b = scaled_factors(
             source, adapter_id, site, scaling=entry.scaling, coefficient=coefficient
         )
-        stats.record_contribution(
-            group, adapter_id, low_rank_delta_norm(lora_a, lora_b)
-        )
+        stats.record_contribution(group, adapter_id, low_rank_delta_norm(lora_a, lora_b))
         accumulated_a = lora_a if accumulated_a is None else accumulated_a + lora_a
         accumulated_b = lora_b if accumulated_b is None else accumulated_b + lora_b
 
@@ -274,9 +269,7 @@ def reconstruct(
 
     missing = [adapter_id for adapter_id in adapters if not source.has_adapter(adapter_id)]
     if missing:
-        raise AdapterUnavailableError(
-            f"adapter weights are not available on this host: {missing}"
-        )
+        raise AdapterUnavailableError(f"adapter weights are not available on this host: {missing}")
 
     use_factor_space = pipeline.factor_space and not _needs_reduction(recipe, source_rank)
     stats = ReconstructionStats(used_factor_space=use_factor_space)

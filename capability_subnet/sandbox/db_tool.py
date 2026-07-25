@@ -125,9 +125,7 @@ def validate_statement(sql: str) -> str:
     if forbidden:
         raise SqlRejected(f"Unzulässige Schlüsselwörter: {', '.join(forbidden)}.")
 
-    catalogs = sorted(
-        word for word in words if word.startswith(_FORBIDDEN_IDENTIFIER_PREFIXES)
-    )
+    catalogs = sorted(word for word in words if word.startswith(_FORBIDDEN_IDENTIFIER_PREFIXES))
     if catalogs:
         raise SqlRejected(
             f"Zugriff auf Systemkataloge ist nicht zulässig: {', '.join(catalogs)}. "
@@ -300,7 +298,9 @@ def open_database(
     return SqliteMaintenanceDatabase(snapshot, limits=limits)
 
 
-def open_sqlite_file(path: str | Path, limits: ExecutionLimits | None = None) -> MaintenanceDatabase:
+def open_sqlite_file(
+    path: str | Path, limits: ExecutionLimits | None = None
+) -> MaintenanceDatabase:
     """Open a pack-shipped SQLite file read-only.
 
     Used by miner tooling against the public pack, where the database is a file

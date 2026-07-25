@@ -106,9 +106,7 @@ def _cmd_window(args: argparse.Namespace) -> int:
                 reports = [r for r in reports if r.window_id == args.window]
             vector = None
             if args.weights:
-                vector = WeightVector.model_validate_json(
-                    Path(args.weights).read_text("utf-8")
-                )
+                vector = WeightVector.model_validate_json(Path(args.weights).read_text("utf-8"))
         else:
             path = (
                 f"/reports?window_id={args.window}&limit=200"
@@ -117,9 +115,7 @@ def _cmd_window(args: argparse.Namespace) -> int:
             )
             payload = _fetch(args.backend_url, path, args.timeout)
             reports = [EvaluationReport.model_validate(r) for r in payload["reports"]]
-            weights_path = (
-                f"/weights/{args.window}" if args.window is not None else "/weights"
-            )
+            weights_path = f"/weights/{args.window}" if args.window is not None else "/weights"
             try:
                 vector = WeightVector.model_validate(
                     _fetch(args.backend_url, weights_path, args.timeout)
@@ -145,9 +141,7 @@ def _cmd_window(args: argparse.Namespace) -> int:
 def _cmd_report(args: argparse.Namespace) -> int:
     try:
         if args.file:
-            report = EvaluationReport.model_validate_json(
-                Path(args.file).read_text("utf-8")
-            )
+            report = EvaluationReport.model_validate_json(Path(args.file).read_text("utf-8"))
         else:
             report = EvaluationReport.model_validate(
                 _fetch(args.backend_url, f"/reports/{args.digest}", args.timeout)
@@ -213,9 +207,7 @@ def _cmd_replay(args: argparse.Namespace) -> int:
 
     try:
         if args.file:
-            disclosure = WindowDisclosure.model_validate_json(
-                Path(args.file).read_text("utf-8")
-            )
+            disclosure = WindowDisclosure.model_validate_json(Path(args.file).read_text("utf-8"))
         else:
             disclosure = WindowDisclosure.model_validate(
                 _fetch(
@@ -227,16 +219,11 @@ def _cmd_replay(args: argparse.Namespace) -> int:
     except Exception as exc:  # noqa: BLE001
         return _report_error(str(exc))
 
-    outcome, result = verify_disclosure(
-        disclosure, trusted_signers=_signers(args.trusted_signers)
-    )
+    outcome, result = verify_disclosure(disclosure, trusted_signers=_signers(args.trusted_signers))
 
     if not args.json:
         print(f"  window {disclosure.window_id}")
-        print(
-            f"  seeds disclosed : "
-            f"{len(disclosure.hidden_seeds) + len(disclosure.ood_seeds)}"
-        )
+        print(f"  seeds disclosed : {len(disclosure.hidden_seeds) + len(disclosure.ood_seeds)}")
         print(f"  re-scored       : {outcome.summary()}\n")
 
     code = _emit(result, args.json)

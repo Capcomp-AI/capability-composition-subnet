@@ -57,7 +57,9 @@ def parse_layer_index(key: str) -> int:
     return int(match.group(1))
 
 
-def enumerate_sites(manifest, modules: tuple[str, ...] = C.CANONICAL_TARGET_MODULES) -> list[TensorSite]:
+def enumerate_sites(
+    manifest, modules: tuple[str, ...] = C.CANONICAL_TARGET_MODULES
+) -> list[TensorSite]:
     """Every site a fully populated adapter covers, in deterministic order.
 
     Ordering is ``(layer, module)`` with modules in the canonical tuple order,

@@ -109,9 +109,7 @@ def factorize(
 
     if keep < output_rank:
         pad = output_rank - keep
-        lora_b = torch.cat(
-            [lora_b, torch.zeros((out_features, pad), dtype=WORK_DTYPE)], dim=1
-        )
+        lora_b = torch.cat([lora_b, torch.zeros((out_features, pad), dtype=WORK_DTYPE)], dim=1)
         lora_a = torch.cat([lora_a, torch.zeros((pad, in_features), dtype=WORK_DTYPE)], dim=0)
 
     energy_ratio = 1.0 if total_energy <= 0.0 else retained_energy / total_energy
@@ -142,10 +140,6 @@ def pad_to_rank(
             f"cannot pad rank {current} down to {output_rank}; use a decomposition instead"
         )
     pad = output_rank - current
-    padded_a = torch.cat(
-        [lora_a, torch.zeros((pad, lora_a.shape[1]), dtype=lora_a.dtype)], dim=0
-    )
-    padded_b = torch.cat(
-        [lora_b, torch.zeros((lora_b.shape[0], pad), dtype=lora_b.dtype)], dim=1
-    )
+    padded_a = torch.cat([lora_a, torch.zeros((pad, lora_a.shape[1]), dtype=lora_a.dtype)], dim=0)
+    padded_b = torch.cat([lora_b, torch.zeros((lora_b.shape[0], pad), dtype=lora_b.dtype)], dim=1)
     return padded_a, padded_b

@@ -107,9 +107,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "description": "Sucht eine Teilenummer im Lagerbestand.",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "part_number": {"type": "string", "description": "Teilenummer."}
-                },
+                "properties": {"part_number": {"type": "string", "description": "Teilenummer."}},
                 "required": ["part_number"],
                 "additionalProperties": False,
             },

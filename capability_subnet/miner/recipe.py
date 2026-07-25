@@ -168,9 +168,7 @@ def advise(recipe: Recipe, snapshot: PoolSnapshot | None = None) -> list[str]:
         )
 
     extreme = {
-        adapter: weight
-        for adapter, weight in recipe.global_weights.items()
-        if abs(weight) > 1.5
+        adapter: weight for adapter, weight in recipe.global_weights.items() if abs(weight) > 1.5
     }
     if extreme:
         notes.append(
@@ -228,9 +226,7 @@ def describe(recipe: Recipe, snapshot: PoolSnapshot | None = None) -> str:
         f"compression    : rank {recipe.compression.output_rank}, "
         f"clamp {recipe.compression.svd_clamp_quantile}"
     )
-    lines.append(
-        f"estimated size : {estimate_artifact_bytes(recipe, pool) / (1024 * 1024):.0f} MB"
-    )
+    lines.append(f"estimated size : {estimate_artifact_bytes(recipe, pool) / (1024 * 1024):.0f} MB")
     lines.append("adapters       :")
 
     for adapter in recipe.sorted_adapters():

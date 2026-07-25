@@ -184,9 +184,7 @@ class TestAdmittedRecipesArePersisted:
         # And it round-trips, so the engine can re-measure a champion later.
         assert recipe_store.fetch("local", recipe.digest()).raw == raw
 
-    def test_a_recipe_that_cannot_be_stored_is_not_queued(
-        self, tiny_snapshot, store, tmp_path
-    ):
+    def test_a_recipe_that_cannot_be_stored_is_not_queued(self, tiny_snapshot, store, tmp_path):
         from capability_subnet.backend.monitor.admission import admit_new_commitments
         from tests.adversarial.test_attacks import commitment, fetcher_for
         from tests.conftest import build_recipe
@@ -279,9 +277,7 @@ class TestAgentLimitsCannotBeEvaded:
         assert len(trace.calls) <= limits.max_turns * limits.max_tool_calls_per_turn
 
     def test_the_total_cap_bounds_the_whole_instance(self, instance):
-        limits = ExecutionLimits(
-            max_turns=20, max_tool_calls_per_turn=5, max_tool_calls_total=7
-        )
+        limits = ExecutionLimits(max_turns=20, max_tool_calls_per_turn=5, max_tool_calls_total=7)
         trace = self._run(instance, calls_per_turn=5, limits=limits)
         assert len(trace.calls) <= 7
 
@@ -305,9 +301,7 @@ class TestACandidateCannotExcludeItsOwnInstance:
                 raise RecursionError("crafted input")
 
             monkeypatch.setattr(toolbox, "_read_manual", _explode)
-            monkeypatch.setattr(
-                toolbox, "_handlers", lambda: {"read_manual": toolbox._read_manual}
-            )
+            monkeypatch.setattr(toolbox, "_handlers", lambda: {"read_manual": toolbox._read_manual})
 
             call = toolbox.dispatch(1, "read_manual", {"section_or_query": "x"})
         finally:

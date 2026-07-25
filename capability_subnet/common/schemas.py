@@ -67,8 +67,7 @@ class MergeSpec(StrictModel):
     def _known_method(cls, value: str) -> str:
         if value not in C.ALLOWED_MERGE_METHODS:
             raise ValueError(
-                f"unknown combination_type {value!r}; allowed: "
-                f"{', '.join(C.ALLOWED_MERGE_METHODS)}"
+                f"unknown combination_type {value!r}; allowed: {', '.join(C.ALLOWED_MERGE_METHODS)}"
             )
         return value
 
@@ -90,9 +89,7 @@ class MergeSpec(StrictModel):
             if self.majority_sign_method is None:
                 raise ValueError(f"{self.combination_type} requires 'majority_sign_method'")
         elif self.majority_sign_method is not None:
-            raise ValueError(
-                f"{self.combination_type} does not accept 'majority_sign_method'"
-            )
+            raise ValueError(f"{self.combination_type} does not accept 'majority_sign_method'")
 
         return self
 
@@ -268,8 +265,7 @@ class Recipe(StrictModel):
 def _check_weight_bounds(weight: float, where: str) -> None:
     if not (C.ADAPTER_WEIGHT_MIN <= weight <= C.ADAPTER_WEIGHT_MAX):
         raise ValueError(
-            f"{where} = {weight} outside "
-            f"[{C.ADAPTER_WEIGHT_MIN}, {C.ADAPTER_WEIGHT_MAX}]"
+            f"{where} = {weight} outside [{C.ADAPTER_WEIGHT_MIN}, {C.ADAPTER_WEIGHT_MAX}]"
         )
 
 

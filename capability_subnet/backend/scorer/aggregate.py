@@ -49,9 +49,7 @@ def per_stage_means(results: list[InstanceResult], stages: tuple[str, ...]) -> d
     rows = valid_rows(results)
     if not rows:
         return {stage: 0.0 for stage in stages}
-    return {
-        stage: sum(row.stage_score(stage) for row in rows) / len(rows) for stage in stages
-    }
+    return {stage: sum(row.stage_score(stage) for row in rows) / len(rows) for stage in stages}
 
 
 def stage_balance(results: list[InstanceResult], stages: tuple[str, ...]) -> float:

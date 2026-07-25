@@ -117,9 +117,7 @@ class GraphSummary:
         return sorted(confident, key=lambda pair: pair.interaction)[:limit]
 
     def ranked_adapters(self) -> list[AdapterStatistics]:
-        return sorted(
-            self.adapters.values(), key=lambda stats: -stats.marginal_contribution
-        )
+        return sorted(self.adapters.values(), key=lambda stats: -stats.marginal_contribution)
 
     def method_means(self) -> dict[str, float]:
         return {
@@ -182,9 +180,7 @@ def build_graph(
         ordered = sorted(universe)
         for index, left in enumerate(ordered):
             for right in ordered[index + 1 :]:
-                pair = summary.pairs.setdefault(
-                    (left, right), PairStatistics(left, right)
-                )
+                pair = summary.pairs.setdefault((left, right), PairStatistics(left, right))
                 in_left = left in selected
                 in_right = right in selected
                 if in_left and in_right:
@@ -266,8 +262,7 @@ def render_summary(summary: GraphSummary) -> str:
         lines.extend(["", "pairs that transfer positively:"])
         for pair in best:
             lines.append(
-                f"  {pair.left} + {pair.right}: {pair.interaction:+.4f} "
-                f"({pair.together} together)"
+                f"  {pair.left} + {pair.right}: {pair.interaction:+.4f} ({pair.together} together)"
             )
 
     worst = summary.worst_pairs(5)
@@ -275,8 +270,7 @@ def render_summary(summary: GraphSummary) -> str:
         lines.extend(["", "pairs that appear to interfere:"])
         for pair in worst:
             lines.append(
-                f"  {pair.left} + {pair.right}: {pair.interaction:+.4f} "
-                f"({pair.together} together)"
+                f"  {pair.left} + {pair.right}: {pair.interaction:+.4f} ({pair.together} together)"
             )
 
     methods = summary.method_means()
@@ -293,9 +287,7 @@ def render_summary(summary: GraphSummary) -> str:
 
     redundant = redundant_adapters(summary)
     if redundant:
-        lines.extend(
-            ["", "adapters with no measurable effect (worth investigating): "]
-        )
+        lines.extend(["", "adapters with no measurable effect (worth investigating): "])
         lines.append("  " + ", ".join(redundant))
 
     return "\n".join(lines)

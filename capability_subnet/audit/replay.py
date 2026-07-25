@@ -134,8 +134,7 @@ def _compare(claimed: InstanceResult, rescored: InstanceResult) -> list[str]:
             continue
         if abs(claimed_stage.score - rescored_stage.score) > SCORE_TOLERANCE:
             problems.append(
-                f"{stage}: claimed {claimed_stage.score:.4f}, "
-                f"re-scored {rescored_stage.score:.4f}"
+                f"{stage}: claimed {claimed_stage.score:.4f}, re-scored {rescored_stage.score:.4f}"
             )
 
     return problems
@@ -159,7 +158,8 @@ def replay_disclosure(
 
         if disclosed_seeds and entry.instance_seed not in disclosed_seeds:
             result.add(
-                "undisclosed_instance", "error",
+                "undisclosed_instance",
+                "error",
                 f"instance {entry.instance_id} carries seed {entry.instance_seed}, which "
                 "is not among the seeds this window says it drew",
                 subject,
@@ -170,7 +170,8 @@ def replay_disclosure(
         except Exception as exc:  # noqa: BLE001
             outcome.unscorable.append(entry.instance_id)
             result.add(
-                "regeneration_failed", "error",
+                "regeneration_failed",
+                "error",
                 f"could not regenerate the instance from seed {entry.instance_seed}: {exc}",
                 subject,
             )
@@ -178,7 +179,8 @@ def replay_disclosure(
 
         if instance.instance_id != entry.instance_id:
             result.add(
-                "instance_id_mismatch", "error",
+                "instance_id_mismatch",
+                "error",
                 f"seed {entry.instance_seed} generates {instance.instance_id}, but the "
                 f"disclosure labels it {entry.instance_id}",
                 subject,
@@ -194,9 +196,9 @@ def replay_disclosure(
         except Exception as exc:  # noqa: BLE001
             outcome.unscorable.append(entry.instance_id)
             result.add(
-                "rescoring_failed", "error",
-                f"the published trace could not be scored against the regenerated "
-                f"instance: {exc}",
+                "rescoring_failed",
+                "error",
+                f"the published trace could not be scored against the regenerated instance: {exc}",
                 subject,
             )
             continue
@@ -220,7 +222,8 @@ def replay_disclosure(
         if problems:
             outcome.disagreed.append(entry.instance_id)
             result.add(
-                "score_disagreement", "error",
+                "score_disagreement",
+                "error",
                 "re-scoring the published trace against the regenerated instance "
                 "disagrees with the published result: " + "; ".join(problems[:4]),
                 subject,
@@ -230,7 +233,8 @@ def replay_disclosure(
 
     if outcome.checked == 0:
         result.add(
-            "nothing_disclosed", "warning",
+            "nothing_disclosed",
+            "warning",
             f"window {disclosure.window_id} discloses no instances, so none of its "
             "scoring can be independently checked",
         )
@@ -253,7 +257,8 @@ def verify_disclosure(
         result.add("unsigned", "error", "the disclosure carries no signature", subject)
     elif trusted_signers is not None and disclosure.signer_hotkey not in trusted_signers:
         result.add(
-            "untrusted_signer", "error",
+            "untrusted_signer",
+            "error",
             f"signed by {disclosure.signer_hotkey}, which is not on the allow-list",
             subject,
         )

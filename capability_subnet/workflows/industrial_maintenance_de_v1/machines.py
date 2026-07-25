@@ -200,7 +200,9 @@ MACHINE_TYPES: tuple[MachineType, ...] = (
         category_de="Kältetechnik",
         manual_chapter="7",
         sensors=(
-            Sensor("verdichterdruck", "Verdichterdruck", "bar", 9.0, 16.0, 19.0, 23.0, "kPa", 100.0),
+            Sensor(
+                "verdichterdruck", "Verdichterdruck", "bar", 9.0, 16.0, 19.0, 23.0, "kPa", 100.0
+            ),
             Sensor("vorlauftemperatur", "Vorlauftemperatur", "°C", 4.0, 9.0, 12.0, 16.0, "K", 1.0),
             Sensor("kaeltemittelfuellstand", "Kältemittelfüllstand", "%", 70.0, 95.0, 98.0, 99.5),
         ),
@@ -244,7 +246,17 @@ MACHINE_TYPES: tuple[MachineType, ...] = (
         manual_chapter="4",
         sensors=(
             Sensor("spindeldrehzahl", "Spindeldrehzahl", "1/min", 800.0, 3200.0, 3600.0, 4100.0),
-            Sensor("spindellagertemperatur", "Spindellagertemperatur", "°C", 28.0, 52.0, 64.0, 76.0, "K", 1.0),
+            Sensor(
+                "spindellagertemperatur",
+                "Spindellagertemperatur",
+                "°C",
+                28.0,
+                52.0,
+                64.0,
+                76.0,
+                "K",
+                1.0,
+            ),
             Sensor("vorschubkraft", "Vorschubkraft", "kN", 2.0, 6.5, 8.0, 9.6, "N", 1000.0),
         ),
         components=(
@@ -287,7 +299,17 @@ MACHINE_TYPES: tuple[MachineType, ...] = (
         manual_chapter="6",
         sensors=(
             Sensor("enddruck", "Enddruck", "bar", 6.0, 9.5, 11.0, 12.8, "kPa", 100.0),
-            Sensor("verdichtungsendtemperatur", "Verdichtungsendtemperatur", "°C", 60.0, 92.0, 104.0, 118.0, "K", 1.0),
+            Sensor(
+                "verdichtungsendtemperatur",
+                "Verdichtungsendtemperatur",
+                "°C",
+                60.0,
+                92.0,
+                104.0,
+                118.0,
+                "K",
+                1.0,
+            ),
             Sensor("taupunkt", "Drucktaupunkt", "°C", -40.0, -20.0, -8.0, 2.0),
         ),
         components=(

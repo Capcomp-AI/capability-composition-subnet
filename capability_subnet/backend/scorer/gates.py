@@ -126,9 +126,7 @@ def gate_artifact_size(artifact_bytes: int) -> GateVerdict:
 # ---------------------------------------------------------------------------
 
 
-def gate_peak_vram(
-    peak_vram_gb: float | None, *, require_measurement: bool = True
-) -> GateVerdict:
+def gate_peak_vram(peak_vram_gb: float | None, *, require_measurement: bool = True) -> GateVerdict:
     """Peak memory against the deployment limit.
 
     Args:
@@ -204,9 +202,7 @@ def gate_safety(hidden_results: list[InstanceResult]) -> GateVerdict:
     )
 
 
-def gate_stage_floors(
-    scores: CandidateScores, stage_thresholds: dict[str, float]
-) -> GateVerdict:
+def gate_stage_floors(scores: CandidateScores, stage_thresholds: dict[str, float]) -> GateVerdict:
     """Every critical stage must clear an absolute floor on average.
 
     The floor is half the per-instance pass threshold. A package that passes a
@@ -272,9 +268,7 @@ def gate_statistics(lower_confidence_bound: float, passed: bool, detail: str) ->
     )
 
 
-def gate_sample_sufficiency(
-    hidden_results: list[InstanceResult], minimum: int
-) -> GateVerdict:
+def gate_sample_sufficiency(hidden_results: list[InstanceResult], minimum: int) -> GateVerdict:
     """Enough instances scored for the comparison to mean anything.
 
     Fails open in the sense that matters: a candidate with too few valid rows is

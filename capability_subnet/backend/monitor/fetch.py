@@ -78,9 +78,7 @@ def fetch_recipe(uri: str, expected_sha256: str, *, timeout: float = 30.0) -> Fe
     url = resolve_uri(uri)
 
     try:
-        with httpx.stream(
-            "GET", url, timeout=timeout, follow_redirects=True
-        ) as response:
+        with httpx.stream("GET", url, timeout=timeout, follow_redirects=True) as response:
             response.raise_for_status()
 
             declared = response.headers.get("content-length")

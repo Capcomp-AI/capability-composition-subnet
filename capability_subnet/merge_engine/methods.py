@@ -124,9 +124,7 @@ def pipeline_for(method: str) -> MergePipeline:
     try:
         return PIPELINES[method]
     except KeyError:
-        raise ValueError(
-            f"unknown merge method {method!r}; allowed: {sorted(PIPELINES)}"
-        ) from None
+        raise ValueError(f"unknown merge method {method!r}; allowed: {sorted(PIPELINES)}") from None
 
 
 # ---------------------------------------------------------------------------
