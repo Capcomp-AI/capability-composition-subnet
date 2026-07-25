@@ -77,9 +77,7 @@ def require_trusted_signature(payload, allowed_signers: set[str] | None) -> None
             the signer is not on the allow-list.
     """
     if allowed_signers is None:
-        log.warning(
-            "signature enforcement is disabled — this is only safe for local development"
-        )
+        log.warning("signature enforcement is disabled — this is only safe for local development")
         return
 
     signer = getattr(payload, "signer_hotkey", None)

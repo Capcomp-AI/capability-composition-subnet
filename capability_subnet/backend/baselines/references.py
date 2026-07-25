@@ -128,9 +128,7 @@ def owner_reference_recipe(snapshot: PoolSnapshot) -> Recipe:
     }
 
     overrides = {
-        group: {
-            adapter: weight for adapter, weight in weights.items() if adapter in present
-        }
+        group: {adapter: weight for adapter, weight in weights.items() if adapter in present}
         for group, weights in depth_emphasis.items()
     }
 

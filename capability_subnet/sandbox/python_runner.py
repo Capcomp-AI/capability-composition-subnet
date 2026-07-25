@@ -33,7 +33,7 @@ log = logging.getLogger(__name__)
 #: nothing — full builtins are available on purpose. Restricting builtins is
 #: security theatre inside an already-isolated container, and it would silently
 #: fail correct submissions that use ``sum`` or ``max``.
-_CHILD_PROGRAM = r'''
+_CHILD_PROGRAM = r"""
 import json
 import sys
 
@@ -72,7 +72,7 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-'''
+"""
 
 
 #: Negative return codes that mean a resource limit fired rather than the code
@@ -124,9 +124,7 @@ class PythonRunner:
                 [], fatal=f"Quelltext überschreitet {self._limits.max_code_bytes} Bytes"
             )
 
-        job = json.dumps(
-            {"source": source, "function_name": function_name, "cases": cases}
-        )
+        job = json.dumps({"source": source, "function_name": function_name, "cases": cases})
 
         try:
             completed = subprocess.run(

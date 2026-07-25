@@ -234,9 +234,7 @@ def hash_split(split: str) -> int:
     return {"public": 0x5000, "hidden": 0xA000, "ood": 0xF000}.get(split, 0)
 
 
-def generate_batch(
-    seeds: list[int], *, split: str = "hidden"
-) -> list[WorkflowInstance]:
+def generate_batch(seeds: list[int], *, split: str = "hidden") -> list[WorkflowInstance]:
     """Generate a set of instances."""
     return [generate_instance(seed, split=split) for seed in seeds]
 

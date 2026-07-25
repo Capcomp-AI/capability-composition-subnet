@@ -145,9 +145,7 @@ def compare(
     challenger_e2e = (
         sum(challenger_outcomes[key] for key in shared) / len(shared) if shared else 0.0
     )
-    reference_e2e = (
-        sum(reference_outcomes[key] for key in shared) / len(shared) if shared else 0.0
-    )
+    reference_e2e = sum(reference_outcomes[key] for key in shared) / len(shared) if shared else 0.0
     observed_margin = challenger_e2e - reference_e2e
 
     bootstrap = paired_bootstrap(

@@ -70,9 +70,7 @@ def _round(value: float) -> float:
 
 def _generate_normal(rng: random.Random, sensor: Sensor) -> list[float]:
     span = sensor.nominal_high - sensor.nominal_low
-    return [
-        sensor.nominal_low + rng.uniform(0.1, 0.9) * span for _ in range(SAMPLE_COUNT)
-    ]
+    return [sensor.nominal_low + rng.uniform(0.1, 0.9) * span for _ in range(SAMPLE_COUNT)]
 
 
 def _generate_faulty(

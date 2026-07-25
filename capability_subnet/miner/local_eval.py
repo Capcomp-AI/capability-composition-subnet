@@ -132,13 +132,14 @@ def evaluate_locally(
         for seed in sample_seeds(hidden_rng, instance_count)
     ]
     ood = [
-        workflow.generate_instance(seed, split="ood")
-        for seed in sample_seeds(ood_rng, ood_count)
+        workflow.generate_instance(seed, split="ood") for seed in sample_seeds(ood_rng, ood_count)
     ]
 
     config = sandbox_config or SandboxConfig()
     hidden_results = [outcome.result for outcome in run_batch(hidden, client, config=config)]
-    ood_results = [outcome.result for outcome in run_batch(ood, client, config=config)] if ood else []
+    ood_results = (
+        [outcome.result for outcome in run_batch(ood, client, config=config)] if ood else []
+    )
 
     resources = measure_resources(
         hidden_results, artifact_bytes=artifact_bytes, peak_vram_gb=config.peak_vram_gb

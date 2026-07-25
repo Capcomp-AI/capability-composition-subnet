@@ -164,9 +164,7 @@ DENSITY_METHODS: Final[frozenset[str]] = frozenset(
 )
 
 #: Methods whose randomness depends on ``random_seed``.
-STOCHASTIC_METHODS: Final[frozenset[str]] = frozenset(
-    {MERGE_DARE_TIES_SVD, MERGE_DARE_LINEAR_SVD}
-)
+STOCHASTIC_METHODS: Final[frozenset[str]] = frozenset({MERGE_DARE_TIES_SVD, MERGE_DARE_LINEAR_SVD})
 
 #: Sign-election strategies available to TIES-family merges.
 ALLOWED_SIGN_METHODS: Final[tuple[str, ...]] = ("total", "frequency")

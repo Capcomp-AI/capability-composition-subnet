@@ -129,7 +129,9 @@ def load_base_manifest(path: str | Path | None = None) -> BaseManifest:
     try:
         raw = json.loads(manifest_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        raise BaseManifestError(f"base manifest at {manifest_path} is not valid JSON: {exc}") from exc
+        raise BaseManifestError(
+            f"base manifest at {manifest_path} is not valid JSON: {exc}"
+        ) from exc
 
     required = (
         "model_repo",

@@ -54,9 +54,7 @@ class TestPerMethodDeterminism:
             combination_type=method, density=density, sign_method=sign_method, seed=99
         )
         digests = {
-            reconstruct(
-                recipe, tiny_snapshot, tiny_source, threads=threads
-            ).artifact_sha256
+            reconstruct(recipe, tiny_snapshot, tiny_source, threads=threads).artifact_sha256
             for threads in (1, 2, 4)
         }
         assert len(digests) == 1
@@ -109,10 +107,9 @@ class TestWrittenArtifactDeterminism:
         second = reconstruct(recipe, tiny_snapshot, tiny_source, output_dir=tmp_path / "two")
 
         assert first.artifact_sha256 == second.artifact_sha256
-        assert (
-            (tmp_path / "one" / "adapter_model.safetensors").read_bytes()
-            == (tmp_path / "two" / "adapter_model.safetensors").read_bytes()
-        )
+        assert (tmp_path / "one" / "adapter_model.safetensors").read_bytes() == (
+            tmp_path / "two" / "adapter_model.safetensors"
+        ).read_bytes()
 
     def test_the_config_written_beside_the_weights_is_stable(
         self, tiny_snapshot, tiny_source, recipe_factory, tmp_path
@@ -159,8 +156,16 @@ class TestWorkerAgreement:
     ):
         # Scoring one of two disagreeing artifacts would mean paying for a result
         # nobody can reproduce.
-        first = reconstruct(recipe_factory(seed=1, combination_type=C.MERGE_DARE_TIES_SVD, density=0.3), tiny_snapshot, tiny_source)
-        second = reconstruct(recipe_factory(seed=2, combination_type=C.MERGE_DARE_TIES_SVD, density=0.3), tiny_snapshot, tiny_source)
+        first = reconstruct(
+            recipe_factory(seed=1, combination_type=C.MERGE_DARE_TIES_SVD, density=0.3),
+            tiny_snapshot,
+            tiny_source,
+        )
+        second = reconstruct(
+            recipe_factory(seed=2, combination_type=C.MERGE_DARE_TIES_SVD, density=0.3),
+            tiny_snapshot,
+            tiny_source,
+        )
 
         agreed, detail = artifact_hashes_agree([first, second])
         assert not agreed
@@ -227,4 +232,6 @@ class TestInstanceDeterminism:
         readings = list(instance.diagnostic.public_readings)
 
         assert max(readings) == pytest.approx(truth.peak_value)
-        assert sum(1 for value in readings if value > truth.warn_threshold) == truth.exceedance_count
+        assert (
+            sum(1 for value in readings if value > truth.warn_threshold) == truth.exceedance_count
+        )

@@ -182,40 +182,56 @@ def render(store: Store, *, workflow_id: str, generated_at: str | None = None) -
 </head>
 <body>
 <h1>Capability Composition Subnet</h1>
-<p class="sub">Continuous champion-challenge evaluation · {_e(workflow_id)} · generated {_e(stamp)}</p>
+<p class="sub">Continuous champion-challenge evaluation · {_e(workflow_id)} · generated {
+        _e(stamp)
+    }</p>
 
 <div class="cards">{"".join(cards)}</div>
 
 <h2>Champion</h2>
-{_table(
-    ["candidate", "recipe", "artifact", "crowned in window", "end-to-end", "qualified"],
-    champion_rows,
-    empty="The throne is empty. No package has cleared the reference baselines yet, so the workflow share is burned.",
-)}
+{
+        _table(
+            ["candidate", "recipe", "artifact", "crowned in window", "end-to-end", "qualified"],
+            champion_rows,
+            empty="The throne is empty. No package has cleared the reference baselines yet, so the workflow share is burned.",
+        )
+    }
 
 <h2>Latest weight vector</h2>
-{_table(["uid", "hotkey", "role", "weight"], weight_rows, empty="No weight vector has been published yet.")}
+{
+        _table(
+            ["uid", "hotkey", "role", "weight"],
+            weight_rows,
+            empty="No weight vector has been published yet.",
+        )
+    }
 
 <h2>Queue</h2>
-{_table(
-    ["hotkey", "uid", "recipe", "commit block", "status", "reason"],
-    queue_rows,
-    empty="No submissions have been admitted.",
-)}
+{
+        _table(
+            ["hotkey", "uid", "recipe", "commit block", "status", "reason"],
+            queue_rows,
+            empty="No submissions have been admitted.",
+        )
+    }
 
 <h2>Recent evaluations</h2>
-{_table(
-    ["report", "candidate", "window", "end-to-end", "qualified", "verdict", "reason"],
-    report_rows,
-    empty="No evaluations have been published.",
-)}
+{
+        _table(
+            ["report", "candidate", "window", "end-to-end", "qualified", "verdict", "reason"],
+            report_rows,
+            empty="No evaluations have been published.",
+        )
+    }
 
 <h2>Adapter contribution</h2>
-{_table(
-    ["adapter", "times selected", "mean end-to-end", "marginal contribution"],
-    adapter_rows,
-    empty="Not enough evaluations yet to say anything about individual adapters.",
-)}
+{
+        _table(
+            ["adapter", "times selected", "mean end-to-end", "marginal contribution"],
+            adapter_rows,
+            empty="Not enough evaluations yet to say anything about individual adapters.",
+        )
+    }
 
 <footer>
 Version {_e(__version__)}. Every number here is derived from published, signed
@@ -226,9 +242,7 @@ evaluation reports; nothing is shown that the read-only API does not serve.
 """
 
 
-def write(
-    store: Store, destination: str | Path, *, workflow_id: str
-) -> Path:
+def write(store: Store, destination: str | Path, *, workflow_id: str) -> Path:
     """Render and write the dashboard."""
     target = Path(destination)
     target.parent.mkdir(parents=True, exist_ok=True)

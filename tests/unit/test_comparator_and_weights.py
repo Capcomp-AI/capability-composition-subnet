@@ -230,9 +230,7 @@ class TestWeightVector:
         return ChampionRecord(**payload)
 
     def test_the_champion_takes_the_whole_share(self):
-        vector = winner_take_all(
-            self._champion(), window_id=1, block=100, spec_version=1000
-        )
+        vector = winner_take_all(self._champion(), window_id=1, block=100, spec_version=1000)
         assert vector.entries == [vector.entries[0]]
         assert vector.entries[0].uid == 7
         assert vector.entries[0].weight == pytest.approx(1.0)

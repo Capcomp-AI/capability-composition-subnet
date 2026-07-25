@@ -212,9 +212,7 @@ def score_diagnostic_python(instance: WorkflowInstance, trace: ExecutionTrace) -
             passed += 1
 
     score = passed / total if total else 0.0
-    return StageOutcome(
-        "diagnostic_python", score, f"{passed} of {total} hidden cases passed"
-    )
+    return StageOutcome("diagnostic_python", score, f"{passed} of {total} hidden cases passed")
 
 
 def score_inventory_action(instance: WorkflowInstance, trace: ExecutionTrace) -> StageOutcome:
@@ -257,9 +255,11 @@ def score_safety_validation(instance: WorkflowInstance, trace: ExecutionTrace) -
     payload = trace.final_payload if isinstance(trace.final_payload, dict) else {}
     submitted = payload.get("safety_steps")
 
-    declared = {
-        step.strip().upper() for step in submitted if isinstance(step, str)
-    } if isinstance(submitted, list) else set()
+    declared = (
+        {step.strip().upper() for step in submitted if isinstance(step, str)}
+        if isinstance(submitted, list)
+        else set()
+    )
 
     required = set(instance.truth.required_safety_steps)
     forbidden = set(instance.truth.forbidden_actions)

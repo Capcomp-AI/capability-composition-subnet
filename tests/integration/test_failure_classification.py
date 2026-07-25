@@ -45,9 +45,7 @@ class _StubServer:
 
 def _evaluator(snapshot, source, tmp_path, *, server=None) -> Evaluator:
     return Evaluator(
-        reconstructor=Reconstructor(
-            snapshot, source, ArtifactCache(tmp_path / "cache"), workers=1
-        ),
+        reconstructor=Reconstructor(snapshot, source, ArtifactCache(tmp_path / "cache"), workers=1),
         server=server or _StubServer(),
         adapter_pool_dir=tmp_path / "pool",
         stages=("stage_a",),
@@ -90,9 +88,7 @@ class TestOperatorFailures:
         assert not output.usable
         assert "fell over" in output.infrastructure_error
 
-    def test_a_missing_single_adapter_reference_is_infrastructure(
-        self, tiny_snapshot, tmp_path
-    ):
+    def test_a_missing_single_adapter_reference_is_infrastructure(self, tiny_snapshot, tmp_path):
         evaluator = _evaluator(tiny_snapshot, InMemoryAdapterSource({}), tmp_path)
 
         output = evaluator.evaluate(
@@ -121,14 +117,10 @@ class TestMinerFailures:
     def test_a_recipe_for_the_wrong_pool_is_a_gate_failure(
         self, tiny_snapshot, tiny_pool_dir, recipe_factory, tmp_path, field, value, expected
     ):
-        evaluator = _evaluator(
-            tiny_snapshot, SafetensorsAdapterSource(tiny_pool_dir), tmp_path
-        )
+        evaluator = _evaluator(tiny_snapshot, SafetensorsAdapterSource(tiny_pool_dir), tmp_path)
         recipe = recipe_factory().model_copy(update={field: value})
 
-        output = evaluator.evaluate(
-            EvaluablePackage(candidate_id="5Miner", recipe=recipe), [], []
-        )
+        output = evaluator.evaluate(EvaluablePackage(candidate_id="5Miner", recipe=recipe), [], [])
 
         # Usable, so the candidate is judged rather than held…
         assert output.usable
@@ -141,14 +133,14 @@ class TestMinerFailures:
     ):
         from capability_subnet.backend.scorer import gates
 
-        evaluator = _evaluator(
-            tiny_snapshot, SafetensorsAdapterSource(tiny_pool_dir), tmp_path
-        )
+        evaluator = _evaluator(tiny_snapshot, SafetensorsAdapterSource(tiny_pool_dir), tmp_path)
 
         # Pretend every artifact is over the limit; the stub server asserts if
         # anything actually tries to run.
         monkeypatch.setattr(
-            gates, "gate_artifact_size", lambda _bytes: gates.gate("artifact_size", False, "too big")
+            gates,
+            "gate_artifact_size",
+            lambda _bytes: gates.gate("artifact_size", False, "too big"),
         )
 
         output = evaluator.evaluate(

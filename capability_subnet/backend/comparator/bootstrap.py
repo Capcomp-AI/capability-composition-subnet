@@ -40,9 +40,7 @@ class BootstrapResult:
         return self.lower_confidence_bound > 0.0
 
 
-def paired_differences(
-    challenger: dict[str, float], reference: dict[str, float]
-) -> list[float]:
+def paired_differences(challenger: dict[str, float], reference: dict[str, float]) -> list[float]:
     """Per-instance differences over the instances both sides have.
 
     Args:
@@ -129,6 +127,4 @@ def outcome_map(results: list, *, attribute: str = "end_to_end_success") -> dict
 
 def stage_outcome_map(results: list, stage: str) -> dict[str, float]:
     """The same mapping, for one capability axis."""
-    return {
-        row.instance_id: row.stage_score(stage) for row in results if row.is_valid_sample
-    }
+    return {row.instance_id: row.stage_score(stage) for row in results if row.is_valid_sample}

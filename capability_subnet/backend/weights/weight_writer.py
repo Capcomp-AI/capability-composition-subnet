@@ -64,9 +64,7 @@ def winner_take_all(
     )
 
     if not payable:
-        reason = (
-            "no champion" if champion is None else f"{champion.candidate_id} is a reference"
-        )
+        reason = "no champion" if champion is None else f"{champion.candidate_id} is a reference"
         log.info("burning the full workflow share: %s", reason)
         entries.append(burn_entry(1.0, burn_uid))
     else:

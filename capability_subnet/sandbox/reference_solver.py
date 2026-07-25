@@ -42,7 +42,7 @@ IMPAIRMENTS = (
     "malformed_json",  # submits a payload that fails schema validation
 )
 
-CORRECT_CODE = '''
+CORRECT_CODE = """
 def analyze(readings, threshold):
     if not readings:
         return {"peak": 0.0, "exceedances": 0, "longest_run": 0}
@@ -59,12 +59,12 @@ def analyze(readings, threshold):
         else:
             current = 0
     return {"peak": float(peak), "exceedances": int(exceedances), "longest_run": int(longest)}
-'''
+"""
 
 #: Passes the visible case by conflating the run length with the count. On the
 #: visible window those two happen to differ, so this is caught immediately — the
 #: point is that it is *plausible* code, not obviously broken code.
-BROKEN_CODE = '''
+BROKEN_CODE = """
 def analyze(readings, threshold):
     if not readings:
         return {"peak": 0.0, "exceedances": 0, "longest_run": 0}
@@ -74,7 +74,7 @@ def analyze(readings, threshold):
         "exceedances": int(len(over)),
         "longest_run": int(len(over)),
     }
-'''
+"""
 
 
 @dataclass
@@ -185,7 +185,11 @@ class ReferenceSolverClient:
 
         if "bad_sql" in self.impairments:
             lookup = dict(
-                zip(DEFAULT_COLUMNS["maintenance_history"], columns["maintenance_history"], strict=True)
+                zip(
+                    DEFAULT_COLUMNS["maintenance_history"],
+                    columns["maintenance_history"],
+                    strict=True,
+                )
             )
             return (
                 f"SELECT COUNT(*) AS anzahl, "
@@ -209,11 +213,7 @@ class ReferenceSolverClient:
         if "wrong_part" not in self.impairments:
             return correct
         superseded = next(
-            (
-                item.part_number
-                for item in self.instance.inventory
-                if item.superseded_by == correct
-            ),
+            (item.part_number for item in self.instance.inventory if item.superseded_by == correct),
             None,
         )
         return superseded or correct

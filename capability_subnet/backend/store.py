@@ -197,9 +197,7 @@ class Store:
             )
 
     def get_queue_entry(self, hotkey: str) -> QueueEntry | None:
-        row = self._connection.execute(
-            "SELECT * FROM queue WHERE hotkey = ?", (hotkey,)
-        ).fetchone()
+        row = self._connection.execute("SELECT * FROM queue WHERE hotkey = ?", (hotkey,)).fetchone()
         return _row_to_queue_entry(row) if row else None
 
     def next_challenger(self) -> QueueEntry | None:
@@ -311,9 +309,7 @@ class Store:
 
     def finalize_window(self, window_id: int) -> None:
         with self.transaction() as connection:
-            connection.execute(
-                "UPDATE windows SET finalized = 1 WHERE window_id = ?", (window_id,)
-            )
+            connection.execute("UPDATE windows SET finalized = 1 WHERE window_id = ?", (window_id,))
 
     # -- samples ------------------------------------------------------------
 

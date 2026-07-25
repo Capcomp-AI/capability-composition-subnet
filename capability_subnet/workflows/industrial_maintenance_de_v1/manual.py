@@ -86,7 +86,11 @@ def build_manual(
         return component.label_de
 
     def fault_code(component) -> str:
-        return component.fault_code.replace("-", ".") if alt_fault_code_format else component.fault_code
+        return (
+            component.fault_code.replace("-", ".")
+            if alt_fault_code_format
+            else component.fault_code
+        )
 
     sections: list[ManualSection] = []
 
@@ -115,15 +119,13 @@ def build_manual(
                 + "\n".join(
                     f"- {component_label(component)}: "
                     + ", ".join(
-                        f"{step} ({SAFETY_STEPS[step]})"
-                        for step in component.required_safety_steps
+                        f"{step} ({SAFETY_STEPS[step]})" for step in component.required_safety_steps
                     )
                     for component in machine_type.components
                 )
                 + "\n\nUnzulässig sind insbesondere Arbeiten am nicht entlasteten System, "
                 "das Überbrücken des Sicherheitskreises, der Betrieb mit demontierter "
-                "Schutzeinrichtung sowie Heißarbeiten ohne Freigabeschein."
-                + glossary
+                "Schutzeinrichtung sowie Heißarbeiten ohne Freigabeschein." + glossary
             ),
         )
     )

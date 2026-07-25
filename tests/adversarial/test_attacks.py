@@ -187,7 +187,9 @@ class TestSubstitutingTheRecipe:
 class TestCopying:
     """Reading a published recipe and resubmitting it."""
 
-    def _queue(self, store, hotkey: str, recipe_digest: str, block: int, artifact: str | None = None):
+    def _queue(
+        self, store, hotkey: str, recipe_digest: str, block: int, artifact: str | None = None
+    ):
         store.upsert_queue_entry(
             QueueEntry(
                 hotkey=hotkey,
@@ -431,7 +433,12 @@ class TestValidatorChecksAgainstTheChain:
         return validate_vector(vector, **kwargs)
 
     def test_a_healthy_vector_passes(self):
-        assert self._validate(self._vector(entries=[WeightEntry(uid=2, hotkey="5Champion", weight=1.0)])) == []
+        assert (
+            self._validate(
+                self._vector(entries=[WeightEntry(uid=2, hotkey="5Champion", weight=1.0)])
+            )
+            == []
+        )
 
     def test_a_uid_beyond_the_subnet_is_caught(self):
         problems = self._validate(

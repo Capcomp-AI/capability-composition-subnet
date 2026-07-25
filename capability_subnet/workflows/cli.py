@@ -155,9 +155,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    pack = subparsers.add_parser(
-        "generate-public-pack", help="Write the public development pack."
-    )
+    pack = subparsers.add_parser("generate-public-pack", help="Write the public development pack.")
     pack.add_argument("--out", default="data/public_pack")
     pack.add_argument("--count", type=int, default=120)
     pack.add_argument("--ood-count", dest="ood_count", type=int, default=30)
@@ -178,9 +176,7 @@ def build_parser() -> argparse.ArgumentParser:
     contract.add_argument("--workflow", default="industrial_maintenance_de_v1")
     contract.set_defaults(func=_cmd_contract)
 
-    selftest = subparsers.add_parser(
-        "selftest", help="Confirm generated instances are solvable."
-    )
+    selftest = subparsers.add_parser("selftest", help="Confirm generated instances are solvable.")
     selftest.add_argument("--count", type=int, default=10)
     selftest.add_argument("--seed", type=int, default=1)
     selftest.add_argument("--split", default="hidden", choices=["public", "hidden", "ood"])

@@ -124,19 +124,22 @@ def verify_report(
     # -- attribution --------------------------------------------------------
     if not report.signature or not report.signer_hotkey:
         result.add(
-            "unsigned", "error",
+            "unsigned",
+            "error",
             "the report carries no signature, so it cannot be attributed to any operator",
             subject,
         )
     elif trusted_signers is not None and report.signer_hotkey not in trusted_signers:
         result.add(
-            "untrusted_signer", "error",
+            "untrusted_signer",
+            "error",
             f"signed by {report.signer_hotkey}, which is not on the allow-list",
             subject,
         )
     elif not verify_payload(report, report.signature, report.signer_hotkey):
         result.add(
-            "bad_signature", "error",
+            "bad_signature",
+            "error",
             f"the signature attributed to {report.signer_hotkey} does not verify",
             subject,
         )
@@ -144,21 +147,23 @@ def verify_report(
     # -- scope --------------------------------------------------------------
     if expected_snapshot and report.source_snapshot_sha256 != expected_snapshot:
         result.add(
-            "snapshot_mismatch", "error",
+            "snapshot_mismatch",
+            "error",
             f"evaluated against pool {report.source_snapshot_sha256[:19]}…, "
             f"expected {expected_snapshot[:19]}…",
             subject,
         )
     if expected_base_revision and report.base_revision != expected_base_revision:
         result.add(
-            "base_mismatch", "error",
-            f"evaluated against base {report.base_revision!r}, "
-            f"expected {expected_base_revision!r}",
+            "base_mismatch",
+            "error",
+            f"evaluated against base {report.base_revision!r}, expected {expected_base_revision!r}",
             subject,
         )
     if report.evaluator_image_digest in ("", "unpinned"):
         result.add(
-            "unpinned_evaluator", "warning",
+            "unpinned_evaluator",
+            "warning",
             "the evaluator image is unpinned, so this report does not identify "
             "the software that produced it",
             subject,
@@ -169,7 +174,8 @@ def verify_report(
     published = report.scores.qualified_score
     if abs(recomputed - published) > SCORE_TOLERANCE:
         result.add(
-            "score_mismatch", "error",
+            "score_mismatch",
+            "error",
             f"qualified score is published as {published:.6f} but its own components "
             f"give {recomputed:.6f}",
             subject,
@@ -181,7 +187,8 @@ def verify_report(
         if report.strongest_reference_score < strongest - SCORE_TOLERANCE:
             winner = max(report.baseline_scores, key=lambda k: report.baseline_scores[k])
             result.add(
-                "understated_bar", "error",
+                "understated_bar",
+                "error",
                 f"the strongest reference is stated as {report.strongest_reference_id} at "
                 f"{report.strongest_reference_score:.4f}, but {winner} is published at "
                 f"{strongest:.4f}. The bar this candidate cleared was lower than the "
@@ -189,9 +196,13 @@ def verify_report(
                 subject,
             )
         claimed = report.baseline_scores.get(report.strongest_reference_id)
-        if claimed is not None and abs(claimed - report.strongest_reference_score) > SCORE_TOLERANCE:
+        if (
+            claimed is not None
+            and abs(claimed - report.strongest_reference_score) > SCORE_TOLERANCE
+        ):
             result.add(
-                "reference_score_mismatch", "error",
+                "reference_score_mismatch",
+                "error",
                 f"{report.strongest_reference_id} is listed at {claimed:.4f} among the "
                 f"baselines but at {report.strongest_reference_score:.4f} as the bar",
                 subject,
@@ -212,13 +223,15 @@ def _verify_verdict(report: EvaluationReport, result: AuditResult, subject: str)
     if verdict == "dethrone":
         if not report.hard_gates:
             result.add(
-                "ungated_dethrone", "error",
+                "ungated_dethrone",
+                "error",
                 "a champion was crowned on a report with no gate verdicts at all",
                 subject,
             )
         elif not gates_passed:
             result.add(
-                "dethrone_despite_failed_gate", "error",
+                "dethrone_despite_failed_gate",
+                "error",
                 f"a champion was crowned despite failing: {', '.join(failed)}",
                 subject,
             )
@@ -226,28 +239,32 @@ def _verify_verdict(report: EvaluationReport, result: AuditResult, subject: str)
         comparator = report.comparator
         if comparator is None:
             result.add(
-                "dethrone_without_comparison", "error",
+                "dethrone_without_comparison",
+                "error",
                 "a champion was crowned with no comparator outcome recorded",
                 subject,
             )
         else:
             if not comparator.dethrones:
                 result.add(
-                    "dethrone_contradicts_comparator", "error",
+                    "dethrone_contradicts_comparator",
+                    "error",
                     f"the comparator did not support a dethrone: {comparator.reason}",
                     subject,
                 )
             if comparator.any_worse_axis:
                 worse = [v.axis for v in comparator.per_axis_verdicts if v.verdict == "worse"]
                 result.add(
-                    "dethrone_with_regression", "error",
+                    "dethrone_with_regression",
+                    "error",
                     f"a champion was crowned while worse on {worse}. The rule requires "
                     "not-worse on every axis it does not dominate.",
                     subject,
                 )
             if comparator.dominant_count < comparator.min_dominant_required:
                 result.add(
-                    "insufficient_dominance", "error",
+                    "insufficient_dominance",
+                    "error",
                     f"dominant on {comparator.dominant_count} axes, "
                     f"{comparator.min_dominant_required} required",
                     subject,
@@ -255,7 +272,8 @@ def _verify_verdict(report: EvaluationReport, result: AuditResult, subject: str)
             paired = comparator.paired
             if paired is not None and not paired.passed:
                 result.add(
-                    "dethrone_without_significance", "error",
+                    "dethrone_without_significance",
+                    "error",
                     f"a champion was crowned with a paired lower bound of "
                     f"{paired.bootstrap_lcb:+.5f}, which is not above zero",
                     subject,
@@ -265,7 +283,8 @@ def _verify_verdict(report: EvaluationReport, result: AuditResult, subject: str)
                 < comparator.end_to_end_margin_required - SCORE_TOLERANCE
             ):
                 result.add(
-                    "margin_not_met", "error",
+                    "margin_not_met",
+                    "error",
                     f"end-to-end margin {comparator.end_to_end_margin_observed:+.4f} is below "
                     f"the required {comparator.end_to_end_margin_required:+.4f}",
                     subject,
@@ -275,7 +294,8 @@ def _verify_verdict(report: EvaluationReport, result: AuditResult, subject: str)
         decisive = report.comparator is not None and not report.comparator.dethrones
         if gates_passed and not decisive:
             result.add(
-                "unexplained_termination", "error",
+                "unexplained_termination",
+                "error",
                 "a candidate was terminated although it passed every gate and no "
                 "comparator outcome explains it",
                 subject,
@@ -302,7 +322,8 @@ def verify_weight_vector(
         result.add("unsigned", "error", "the weight vector carries no signature", subject)
     elif trusted_signers is not None and vector.signer_hotkey not in trusted_signers:
         result.add(
-            "untrusted_signer", "error",
+            "untrusted_signer",
+            "error",
             f"signed by {vector.signer_hotkey}, which is not on the allow-list",
             subject,
         )
@@ -332,14 +353,16 @@ def verify_weight_vector(
     for entry in paid:
         if is_reference(entry.hotkey or ""):
             result.add(
-                "reference_paid", "error",
+                "reference_paid",
+                "error",
                 f"UID {entry.uid} is a permanent reference and must not earn emission",
                 subject,
             )
 
     if vector.mode == C.MODE_WINNER_TAKE_ALL and len(paid) > 1:
         result.add(
-            "multiple_recipients", "error",
+            "multiple_recipients",
+            "error",
             f"winner-take-all mode paid {len(paid)} recipients",
             subject,
         )
@@ -358,7 +381,8 @@ def verify_weight_vector(
         }
         if crowned and vector.champion_hotkey not in crowned | held:
             result.add(
-                "unsupported_champion", "error",
+                "unsupported_champion",
+                "error",
                 f"{vector.champion_hotkey[:16]}… is paid as champion but no published "
                 "report crowns or sustains it",
                 subject,
@@ -366,14 +390,13 @@ def verify_weight_vector(
 
     if vector.mode == C.MODE_GRADED_TOP3:
         qualified = {
-            report.miner_hotkey
-            for report in reports
-            if report.gates_passed and report.miner_hotkey
+            report.miner_hotkey for report in reports if report.gates_passed and report.miner_hotkey
         }
         for entry in paid:
             if entry.hotkey and qualified and entry.hotkey not in qualified:
                 result.add(
-                    "unqualified_recipient", "error",
+                    "unqualified_recipient",
+                    "error",
                     f"{entry.hotkey[:16]}… is paid but no published report shows it "
                     "clearing every gate",
                     subject,
@@ -405,15 +428,14 @@ def audit_window(
     crowned = [r for r in reports if r.verdict == "dethrone"]
     if len(crowned) > 1:
         result.add(
-            "multiple_dethrones", "warning",
+            "multiple_dethrones",
+            "warning",
             f"{len(crowned)} reports claim a dethrone in this window: "
             f"{[r.candidate_id[:12] for r in crowned]}. Only the last can be the "
             "standing champion.",
         )
 
     if vector is not None:
-        verify_weight_vector(
-            vector, reports, trusted_signers=trusted_signers, result=result
-        )
+        verify_weight_vector(vector, reports, trusted_signers=trusted_signers, result=result)
 
     return result

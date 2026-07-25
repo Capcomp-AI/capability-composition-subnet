@@ -130,9 +130,7 @@ class ValidatorNeuron:
         # compiled-in default, so a deployment that tuned the window is judged by
         # the window it actually runs.
         window_blocks = self.client.window_blocks()
-        current_window = (
-            window_id_for_block(block, window_blocks) if window_blocks else None
-        )
+        current_window = window_id_for_block(block, window_blocks) if window_blocks else None
 
         problems = validate_vector(
             vector,

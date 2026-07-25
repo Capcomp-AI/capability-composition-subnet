@@ -33,9 +33,7 @@ class TestReferenceMeasurement:
 
         # Every equal-weight merge, the owner recipe, and one entry per single
         # adapter.
-        singles = [
-            name for name in state.reference_scores if name.startswith(ref.BEST_SINGLE)
-        ]
+        singles = [name for name in state.reference_scores if name.startswith(ref.BEST_SINGLE)]
         assert len(singles) == len(loop.snapshot.registry.capability_adapters())
         for reference in (ref.EQUAL_LINEAR, ref.EQUAL_TIES, ref.EQUAL_DARE_TIES, ref.OWNER_RECIPE):
             assert reference in state.reference_scores
@@ -201,9 +199,7 @@ class TestChallengerEvaluation:
         record = records[0]
         assert record["combination_type"] == recipe.merge.combination_type
         assert record["global_weights"]["alpha-capability-v1"] == pytest.approx(1.25)
-        assert set(record["contribution_by_group"]) == set(
-            loop.snapshot.manifest.layer_groups
-        )
+        assert set(record["contribution_by_group"]) == set(loop.snapshot.manifest.layer_groups)
 
     def test_an_infrastructure_failure_returns_the_candidate_to_the_queue(
         self, engine, recipe_factory
@@ -238,9 +234,7 @@ class TestWeightPublication:
 
     def test_a_champion_receives_the_whole_share(self, engine):
         loop, store, _, _ = engine
-        store.set_champion(
-            ChampionRecord(candidate_id="5Winner", hotkey="5Winner", uid=6)
-        )
+        store.set_champion(ChampionRecord(candidate_id="5Winner", hotkey="5Winner", uid=6))
         loop.publish_weights(block=250)
 
         vector = store.latest_weights()

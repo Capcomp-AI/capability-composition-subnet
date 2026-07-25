@@ -69,8 +69,7 @@ def get_workflow(workflow_id: str = C.DEFAULT_WORKFLOW_ID) -> WorkflowModule:
     loader = _LOADERS.get(workflow_id)
     if loader is None:
         raise KeyError(
-            f"unknown workflow {workflow_id!r}; this build provides "
-            f"{list(available_workflows())}"
+            f"unknown workflow {workflow_id!r}; this build provides {list(available_workflows())}"
         )
     _CACHE[workflow_id] = loader()
     return _CACHE[workflow_id]

@@ -179,7 +179,9 @@ class TestLowRankNorm:
 
 
 class TestReconstruction:
-    def test_every_allowed_method_produces_an_artifact(self, tiny_snapshot, tiny_source, recipe_factory):
+    def test_every_allowed_method_produces_an_artifact(
+        self, tiny_snapshot, tiny_source, recipe_factory
+    ):
         for method in C.ALLOWED_MERGE_METHODS:
             pipeline = methods.pipeline_for(method)
             recipe = recipe_factory(

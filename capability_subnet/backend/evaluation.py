@@ -235,9 +235,7 @@ class Evaluator:
         output.gate_verdicts.extend(structural)
 
         if not all(verdict.passed for verdict in structural):
-            log.info(
-                "%s failed a structural gate; skipping evaluation", package.candidate_id
-            )
+            log.info("%s failed a structural gate; skipping evaluation", package.candidate_id)
             return output
 
         reset_vram_peak(self.gpu_index)
@@ -336,15 +334,11 @@ class Evaluator:
     ) -> list[GateVerdict]:
         verdicts = [
             gates.gate_sample_sufficiency(output.hidden_results, self.min_valid_samples),
-            gates.gate_peak_vram(
-                peak_vram, require_measurement=self.require_vram_measurement
-            ),
+            gates.gate_peak_vram(peak_vram, require_measurement=self.require_vram_measurement),
             gates.gate_latency(output.hidden_results),
             gates.gate_agent_limits(output.hidden_results),
             gates.gate_safety(output.hidden_results),
-            gates.gate_stage_floors(
-                output.scores, {stage: 1.0 for stage in self.stages}
-            ),
+            gates.gate_stage_floors(output.scores, {stage: 1.0 for stage in self.stages}),
         ]
 
         if apply_comparison_gates:

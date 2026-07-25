@@ -60,9 +60,7 @@ class EngineService:
             import bittensor as bt
 
             self.wallet = bt.wallet(name=settings.wallet_name, hotkey=settings.wallet_hotkey)
-            self.subtensor = bt.Subtensor(
-                network=settings.chain_endpoint or settings.network
-            )
+            self.subtensor = bt.Subtensor(network=settings.chain_endpoint or settings.network)
             keypair = self.wallet.hotkey
 
         self.publisher = ReportPublisher(settings.report_dir, keypair)

@@ -183,8 +183,6 @@ def _store_recipe(settings: BackendSettings, recipe) -> None:
     (directory / f"{digest}.json").write_bytes(recipe.canonical_bytes())
 
 
-
-
 def _artifact_name_for(loop: EngineLoop, recipe) -> str:
     """The cache directory name a recipe reconstructs into.
 
