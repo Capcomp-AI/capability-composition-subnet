@@ -61,6 +61,7 @@ capability-miner = "capability_subnet.miner.cli:main"
 capability-validator = "capability_subnet.validator.neuron:main"
 capability-workflow = "capability_subnet.workflows.cli:main"
 capability-registry = "capability_subnet.registry.cli:main"
+capability-audit = "capability_subnet.audit.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["capability_subnet*"]

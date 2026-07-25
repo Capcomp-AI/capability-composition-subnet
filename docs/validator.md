@@ -123,7 +123,49 @@ A report states the recipe digest, the artifact digest, the evaluator image dige
 python -m capability_subnet.miner.cli digest --recipe <the-published-recipe>
 ```
 
-What you cannot independently reproduce is the hidden instances, by design. What you *can* verify is that the reports are internally consistent, signed by the operator, and that the weight vector follows from them.
+### The audit tool does this for you
+
+```bash
+# Every report in a window, plus the weight vector derived from them
+capability-audit --trusted-signers <operator-hotkey> window --window <n>
+
+# One report
+capability-audit --trusted-signers <operator-hotkey> report --digest <sha256>
+```
+
+It checks that the qualified score follows from its own published components,
+that the claimed strongest reference really is the strongest one published, that
+a dethrone is supported by the gates and the comparator, and that the weight
+vector pays only someone a report crowned. A fabricated number has to be
+fabricated *consistently* across a signed record that was published the moment it
+was produced.
+
+### Re-scoring a closed window
+
+Stronger still, and it needs no GPU:
+
+```bash
+capability-audit --trusted-signers <operator-hotkey> replay --window <n>
+```
+
+Hidden instances are drawn fresh every window and never reused, so once a window
+closes its seeds have no value as a secret. The engine publishes them together
+with the traces it scored. The tool regenerates each instance from its seed —
+generation is a pure function of the seed, so this reproduces the exact problem
+the candidate faced — and re-runs the deterministic scorer over the published
+trace.
+
+If the engine's arithmetic was honest, every stage score matches. If it was not,
+you get the specific disagreement: this instance, this stage, this number against
+that one.
+
+What this cannot check is whether a trace faithfully records what the model
+actually did. A determined operator could publish a fabricated trace that scores
+as claimed. But the fabrication has to be carried down to per-turn tool calls
+that stay consistent with a workflow you can regenerate, which is considerably
+harder than adjusting an aggregate.
+
+The current window is never disclosed — its challenger is still sitting that test.
 
 ---
 

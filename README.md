@@ -129,7 +129,19 @@ Then read the guide for your role:
 
 Validators do not reconstruct, serve or score anything. They fetch the signed weight vector the engine publishes, verify it, and set weights.
 
-That is a real trade: it concentrates evaluation in one operator. What keeps it honest is that a validator is **not a relay**. Before touching the chain it verifies the operator signature against an allow-list it controls, checks the vector against the chain it can see (does the champion still hold that UID? is the engine stalled?), and **burns rather than submitting anything it cannot verify**. Every report the decision rests on is signed and published, so the weight vector can be re-derived independently by anyone.
+That is a real trade: it concentrates evaluation in one operator. What keeps it honest is that a validator is **not a relay**. Before touching the chain it verifies the operator signature against an allow-list it controls, checks the vector against the chain it can see (does the champion still hold that UID? is the engine stalled?), and **burns rather than submitting anything it cannot verify**.
+
+Beyond that, anyone can check the record without a GPU:
+
+```bash
+capability-audit window --window <n>    # do the reports and the weight vector agree?
+capability-audit replay --window <n>    # re-score a closed window from its own traces
+```
+
+Closed windows publish their instance seeds and the traces the scorer read.
+Instance generation is a pure function of the seed, so an auditor regenerates the
+exact problems a candidate faced and re-runs the deterministic scorer over them.
+A published score that does not follow from its published trace is caught.
 
 ## Documentation
 
@@ -144,6 +156,7 @@ That is a real trade: it concentrates evaluation in one operator. What keeps it 
 | [Security model](docs/security.md) | Threats, defences and what is deliberately not defended |
 | [Deployment](docs/deployment.md) | Local, testnet and mainnet |
 | [FAQ](docs/faq.md) | Common questions |
+| [Changelog](CHANGELOG.md) | Release history, including what an audit pass found |
 
 ## Project layout
 
@@ -157,6 +170,7 @@ capability_subnet/
 ├── backend/         the evaluation engine (operator-only)
 ├── miner/           recipe construction, local evaluation, search, commitment
 ├── validator/       the thin weight-setter
+├── audit/           independent verification of published records
 └── platform/        storage, compatibility history, dashboard
 ```
 
