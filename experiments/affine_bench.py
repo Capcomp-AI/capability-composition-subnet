@@ -79,7 +79,7 @@ def load_items(per_task: int, max_tasks: int) -> list[Item]:
     # then a fixed shuffle inside each so the choice is not "whatever came first".
     rng = random.Random(SAMPLE_SEED)
     chosen: list[Item] = []
-    for task, items in sorted(by_task.items(), key=lambda kv: -len(kv[1]))[:max_tasks]:
+    for _task, items in sorted(by_task.items(), key=lambda kv: -len(kv[1]))[:max_tasks]:
         pool = sorted(items, key=lambda i: i.item_id)
         rng.shuffle(pool)
         chosen.extend(pool[:per_task])
