@@ -308,3 +308,92 @@ class TestTokenSpendIsScored:
         from capability_subnet.backend.scorer.aggregate import token_efficiency
 
         assert token_efficiency(self._rows(10, completed=0, output_tokens=100)) == 0.0
+
+
+class TestAnUnmeasuredAdapterBlocksItselfNotTheNetwork:
+    """Certification answers two questions that gate different things.
+
+    Collapsing them meant one unmeasured adapter kept the whole arena closed.
+    Separated, a structurally sound but uncharacterised adapter sits in the
+    registry — safe to load, not selectable — until somebody measures it.
+    """
+
+    @staticmethod
+    def _entry(adapter_id, *, certified=True, measured=True, distractor=False):
+        from capability_subnet.registry.adapters import AdapterEntry, CertificationRecord
+
+        return AdapterEntry(
+            adapter_id=adapter_id,
+            capability="c",
+            description="",
+            license="Apache-2.0",
+            license_allows_derivatives=True,
+            provenance="",
+            training_data_ref="",
+            training_data_date_range="",
+            known_overlaps=(),
+            artifact_uri="",
+            artifact_sha256="sha256:" + "0" * 64,
+            rank=64,
+            lora_alpha=64,
+            converted_from_rank=None,
+            certified=certified,
+            is_distractor=distractor,
+            certification=CertificationRecord(
+                capability_score=0.8 if measured else None,
+                base_retention=0.99 if measured else None,
+            ),
+        )
+
+    def _registry(self, entries):
+        from capability_subnet.registry.adapters import AdapterRegistry
+
+        return AdapterRegistry(
+            registry_version=1,
+            workflow_id=C.DEFAULT_WORKFLOW_ID,
+            base_revision="rev",
+            canonical_rank=64,
+            canonical_lora_alpha=64,
+            canonical_target_modules=C.CANONICAL_TARGET_MODULES,
+            adapters=tuple(entries),
+        )
+
+    def test_a_measured_adapter_is_selectable(self):
+        assert self._entry("a").selectable
+
+    def test_an_unmeasured_adapter_is_loadable_but_not_selectable(self):
+        entry = self._entry("a", measured=False)
+        assert entry.certified and not entry.selectable
+
+    def test_a_structurally_rejected_adapter_is_neither(self):
+        """Structural admission is not negotiable — these tensors get loaded
+        into a process that also holds hidden evaluation material."""
+        entry = self._entry("a", certified=False, measured=True)
+        assert not entry.selectable
+
+    def test_the_pool_miners_draw_from_excludes_unmeasured_adapters(self):
+        registry = self._registry([self._entry("measured"), self._entry("pending", measured=False)])
+        assert registry.selectable_ids == ("measured",)
+        assert set(registry.ids) == {"measured", "pending"}
+        assert registry.unmeasured() == ("pending",)
+
+    def test_references_are_never_built_from_unmeasured_weights(self):
+        """A reference built from an uncharacterised adapter would set the bar
+        every miner must clear using weights nobody has looked at."""
+        registry = self._registry([self._entry("measured"), self._entry("pending", measured=False)])
+        assert registry.capability_adapters() == ("measured",)
+
+    def test_selecting_an_unmeasured_adapter_is_reported_distinctly(self):
+        """A different problem from naming an adapter that does not exist, and
+        with a different fix — so it gets its own message."""
+        registry = self._registry([self._entry("measured"), self._entry("pending", measured=False)])
+        assert registry.unselectable_ids(["measured", "pending"]) == ["pending"]
+        assert registry.unknown_ids(["measured", "pending"]) == []
+
+    def test_certifying_an_adapter_changes_the_snapshot_digest(self):
+        """Selectability decides which recipes are valid, so it must be part of
+        the pool's identity. Two engines disagreeing about it would admit
+        different submissions while claiming the same pool."""
+        before = self._registry([self._entry("a"), self._entry("b", measured=False)])
+        after = self._registry([self._entry("a"), self._entry("b")])
+        assert before.snapshot_sha256() != after.snapshot_sha256()

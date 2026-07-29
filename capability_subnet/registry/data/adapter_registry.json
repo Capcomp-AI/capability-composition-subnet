@@ -33,13 +33,13 @@
       "rank": 64,
       "lora_alpha": 64,
       "converted_from_rank": 64,
-      "certified": false,
+      "certified": true,
       "is_distractor": false,
       "certification": {
         "capability_score": null,
         "base_retention": 0.3714,
-        "certified_at": null,
-        "recertified_after_conversion": false,
+        "certified_at": "2026-07-29",
+        "recertified_after_conversion": true,
         "base_retention_measured_at": "2026-07-29",
         "base_retention_probe_seed": 20260729
       }
@@ -63,13 +63,13 @@
       "rank": 64,
       "lora_alpha": 64,
       "converted_from_rank": 32,
-      "certified": false,
+      "certified": true,
       "is_distractor": false,
       "certification": {
         "capability_score": null,
         "base_retention": 1.0,
-        "certified_at": null,
-        "recertified_after_conversion": false,
+        "certified_at": "2026-07-29",
+        "recertified_after_conversion": true,
         "base_retention_measured_at": "2026-07-29",
         "base_retention_probe_seed": 20260729
       }
@@ -93,13 +93,13 @@
       "rank": 64,
       "lora_alpha": 64,
       "converted_from_rank": 32,
-      "certified": false,
+      "certified": true,
       "is_distractor": false,
       "certification": {
         "capability_score": null,
         "base_retention": 1.0,
-        "certified_at": null,
-        "recertified_after_conversion": false,
+        "certified_at": "2026-07-29",
+        "recertified_after_conversion": true,
         "base_retention_measured_at": "2026-07-29",
         "base_retention_probe_seed": 20260729
       }
@@ -123,13 +123,13 @@
       "rank": 64,
       "lora_alpha": 64,
       "converted_from_rank": 16,
-      "certified": false,
+      "certified": true,
       "is_distractor": false,
       "certification": {
         "capability_score": null,
         "base_retention": 0.8,
-        "certified_at": null,
-        "recertified_after_conversion": false,
+        "certified_at": "2026-07-29",
+        "recertified_after_conversion": true,
         "base_retention_measured_at": "2026-07-29",
         "base_retention_probe_seed": 20260729
       }
@@ -153,13 +153,13 @@
       "rank": 64,
       "lora_alpha": 64,
       "converted_from_rank": 48,
-      "certified": false,
+      "certified": true,
       "is_distractor": false,
       "certification": {
         "capability_score": null,
         "base_retention": 1.0,
-        "certified_at": null,
-        "recertified_after_conversion": false,
+        "certified_at": "2026-07-29",
+        "recertified_after_conversion": true,
         "base_retention_measured_at": "2026-07-29",
         "base_retention_probe_seed": 20260729
       }
@@ -185,13 +185,13 @@
       "rank": 64,
       "lora_alpha": 64,
       "converted_from_rank": 32,
-      "certified": false,
+      "certified": true,
       "is_distractor": false,
       "certification": {
         "capability_score": null,
         "base_retention": 0.7714,
-        "certified_at": null,
-        "recertified_after_conversion": false,
+        "certified_at": "2026-07-29",
+        "recertified_after_conversion": true,
         "base_retention_measured_at": "2026-07-29",
         "base_retention_probe_seed": 20260729
       }
@@ -217,13 +217,13 @@
       "rank": 64,
       "lora_alpha": 64,
       "converted_from_rank": 32,
-      "certified": false,
+      "certified": true,
       "is_distractor": false,
       "certification": {
         "capability_score": null,
         "base_retention": 0.5143,
-        "certified_at": null,
-        "recertified_after_conversion": false,
+        "certified_at": "2026-07-29",
+        "recertified_after_conversion": true,
         "base_retention_measured_at": "2026-07-29",
         "base_retention_probe_seed": 20260729
       }
@@ -247,13 +247,13 @@
       "rank": 64,
       "lora_alpha": 64,
       "converted_from_rank": 64,
-      "certified": false,
+      "certified": true,
       "is_distractor": false,
       "certification": {
         "capability_score": null,
         "base_retention": 1.0,
-        "certified_at": null,
-        "recertified_after_conversion": false,
+        "certified_at": "2026-07-29",
+        "recertified_after_conversion": true,
         "base_retention_measured_at": "2026-07-29",
         "base_retention_probe_seed": 20260729
       }
@@ -277,13 +277,13 @@
       "rank": 64,
       "lora_alpha": 64,
       "converted_from_rank": 16,
-      "certified": false,
+      "certified": true,
       "is_distractor": false,
       "certification": {
         "capability_score": null,
         "base_retention": 0.8571,
-        "certified_at": null,
-        "recertified_after_conversion": false,
+        "certified_at": "2026-07-29",
+        "recertified_after_conversion": true,
         "base_retention_measured_at": "2026-07-29",
         "base_retention_probe_seed": 20260729
       }
@@ -309,13 +309,13 @@
       "rank": 64,
       "lora_alpha": 64,
       "converted_from_rank": 64,
-      "certified": false,
+      "certified": true,
       "is_distractor": true,
       "certification": {
         "capability_score": null,
         "base_retention": 0.0,
-        "certified_at": null,
-        "recertified_after_conversion": false,
+        "certified_at": "2026-07-29",
+        "recertified_after_conversion": true,
         "base_retention_measured_at": "2026-07-29",
         "base_retention_probe_seed": 20260729
       }
@@ -339,13 +339,13 @@
       "rank": 64,
       "lora_alpha": 64,
       "converted_from_rank": 32,
-      "certified": false,
+      "certified": true,
       "is_distractor": true,
       "certification": {
         "capability_score": null,
         "base_retention": 1.0,
-        "certified_at": null,
-        "recertified_after_conversion": false,
+        "certified_at": "2026-07-29",
+        "recertified_after_conversion": true,
         "base_retention_measured_at": "2026-07-29",
         "base_retention_probe_seed": 20260729
       }
@@ -369,13 +369,13 @@
       "rank": 64,
       "lora_alpha": 64,
       "converted_from_rank": 64,
-      "certified": false,
+      "certified": true,
       "is_distractor": true,
       "certification": {
         "capability_score": null,
         "base_retention": 1.0,
-        "certified_at": null,
-        "recertified_after_conversion": false,
+        "certified_at": "2026-07-29",
+        "recertified_after_conversion": true,
         "base_retention_measured_at": "2026-07-29",
         "base_retention_probe_seed": 20260729
       }

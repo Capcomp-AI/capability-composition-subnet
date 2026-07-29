@@ -28,6 +28,7 @@ from capability_subnet.backend.monitor.fetch import LocalRecipeSource
 from capability_subnet.backend.reports.publisher import ReportPublisher
 from capability_subnet.backend.settings import BackendSettings, load_settings
 from capability_subnet.backend.store import Store
+from capability_subnet.common import constants as C
 from capability_subnet.common.chain import current_block, fetch_metagraph
 from capability_subnet.common.logging import setup_logging
 from capability_subnet.merge_engine.loader import SafetensorsAdapterSource
@@ -143,12 +144,37 @@ class EngineService:
         except Exception as exc:  # noqa: BLE001
             problems.append(str(exc))
 
-        uncertified = [
+        # Structural admission is not negotiable: these tensors are loaded into
+        # a process that also holds hidden evaluation material.
+        unadmitted = [
             entry.adapter_id for entry in self.snapshot.registry.adapters if not entry.certified
         ]
-        if uncertified:
+        if unadmitted:
             problems.append(
-                f"{len(uncertified)} adapters have not completed certification: {uncertified}"
+                f"{len(unadmitted)} adapters have not passed structural admission and are "
+                f"not safe to load: {unadmitted}"
+            )
+
+        # Capability measurement gates *selection*, not the pool's existence. An
+        # unmeasured adapter blocks itself rather than the network — it sits in
+        # the registry, safe to load and unselectable, until somebody measures
+        # it. What the engine does require is enough measured adapters to make a
+        # contest possible at all.
+        selectable = self.snapshot.registry.capability_adapters()
+        if len(selectable) < C.MIN_SELECTED_ADAPTERS:
+            problems.append(
+                f"only {len(selectable)} capability adapter(s) are certified for selection, "
+                f"and a recipe must combine at least {C.MIN_SELECTED_ADAPTERS}. Measure more "
+                f"with `capability-registry certify` before opening the arena."
+            )
+
+        unmeasured = self.snapshot.registry.unmeasured()
+        if unmeasured:
+            log.warning(
+                "%d adapter(s) are loadable but not certified for selection and will not "
+                "appear in the pool miners can draw from: %s",
+                len(unmeasured),
+                ", ".join(unmeasured),
             )
 
         if self.publisher.keypair is None:

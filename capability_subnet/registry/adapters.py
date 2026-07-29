@@ -31,6 +31,16 @@ class CertificationRecord:
     certified_at: str | None = None
     recertified_after_conversion: bool = False
 
+    @property
+    def is_measured(self) -> bool:
+        """Whether both capability measurements have actually been taken.
+
+        A missing measurement is not a passing one. The floors themselves are
+        applied by :func:`certification.check_capability_certification`; what
+        this answers is the prior question of whether anybody looked.
+        """
+        return self.capability_score is not None and self.base_retention is not None
+
 
 @dataclass(frozen=True, slots=True)
 class AdapterEntry:
@@ -59,6 +69,30 @@ class AdapterEntry:
         """The ``alpha / rank`` factor folded into the effective update."""
         return self.lora_alpha / self.rank
 
+    @property
+    def selectable(self) -> bool:
+        """Whether a recipe may reference this adapter.
+
+        Certification answers two different questions and they gate different
+        things. The structural gates — safetensors only, the canonical config,
+        the pinned base revision, correct shapes, finite values, a licence that
+        permits derivatives — decide whether these tensors may be loaded into a
+        process that also holds hidden evaluation material. They are not
+        negotiable, and ``certified`` records them.
+
+        The capability gates ask whether the adapter is any *good* at what it
+        claims, and whether it destroyed the base model's general ability
+        getting there. That is a measurement, and it arrives per adapter on its
+        own schedule.
+
+        Collapsing the two meant a pool could not open until every last adapter
+        had been measured — so one unmeasured adapter blocked the network rather
+        than blocking itself. Separating them lets the pool grow: an adapter
+        that is structurally sound but unmeasured sits in the registry, safe to
+        load and not selectable, until someone measures it.
+        """
+        return self.certified and self.certification.is_measured
+
     def snapshot_fields(self) -> dict[str, Any]:
         """The subset of fields that define this adapter's identity.
 
@@ -73,6 +107,13 @@ class AdapterEntry:
             "rank": self.rank,
             "lora_alpha": self.lora_alpha,
             "is_distractor": self.is_distractor,
+            # Included because it decides which recipes are *valid*. Two engines
+            # disagreeing about whether an adapter may be selected would admit
+            # different submissions while claiming the same pool, and the
+            # divergence would look like one of them misbehaving. Certifying an
+            # adapter therefore changes the snapshot digest and invalidates
+            # outstanding recipes — which is correct: the pool changed.
+            "selectable": self.selectable,
         }
 
 
@@ -97,9 +138,14 @@ class AdapterRegistry:
 
     @property
     def selectable_ids(self) -> tuple[str, ...]:
-        """IDs a recipe may reference. Distractors are selectable on purpose —
-        recognising that they hurt is part of the composition problem."""
-        return self.ids
+        """IDs a recipe may reference.
+
+        Distractors are selectable on purpose — recognising that they hurt is
+        part of the composition problem. Unmeasured adapters are not, because a
+        miner cannot be asked to reason about an adapter nobody has characterised
+        and the engine cannot defend a score that depends on one.
+        """
+        return tuple(sorted(e.adapter_id for e in self.adapters if e.selectable))
 
     def get(self, adapter_id: str) -> AdapterEntry:
         for entry in self.adapters:
@@ -116,11 +162,25 @@ class AdapterRegistry:
         """Which of ``adapter_ids`` are not in the pool."""
         return sorted(set(adapter_ids) - set(self.ids))
 
+    def unselectable_ids(self, adapter_ids: list[str]) -> list[str]:
+        """Which of ``adapter_ids`` are in the pool but not yet selectable."""
+        return sorted((set(adapter_ids) & set(self.ids)) - set(self.selectable_ids))
+
     def distractors(self) -> tuple[str, ...]:
-        return tuple(sorted(e.adapter_id for e in self.adapters if e.is_distractor))
+        return tuple(
+            sorted(e.adapter_id for e in self.adapters if e.selectable and e.is_distractor)
+        )
 
     def capability_adapters(self) -> tuple[str, ...]:
-        return tuple(sorted(e.adapter_id for e in self.adapters if not e.is_distractor))
+        """Selectable non-distractors — what the reference merges are built from.
+
+        Selectable rather than merely present: a reference built from an
+        unmeasured adapter would set the bar every miner has to clear using
+        weights nobody has characterised.
+        """
+        return tuple(
+            sorted(e.adapter_id for e in self.adapters if e.selectable and not e.is_distractor)
+        )
 
     def retention_anchor(self) -> str | None:
         """The adapter that exists to preserve general ability under merging.
@@ -138,7 +198,22 @@ class AdapterRegistry:
         return tuple(sorted(e.adapter_id for e in self.adapters if e.capability == capability))
 
     def fully_certified(self) -> bool:
+        """Whether every adapter is structurally admitted *and* measured."""
+        return all(entry.selectable for entry in self.adapters)
+
+    def structurally_admitted(self) -> bool:
+        """Whether every adapter is safe to load.
+
+        This one is not negotiable: the merge engine loads these tensors into a
+        process that also holds hidden evaluation material.
+        """
         return all(entry.certified for entry in self.adapters)
+
+    def unmeasured(self) -> tuple[str, ...]:
+        """Structurally sound adapters nobody has characterised yet."""
+        return tuple(
+            sorted(e.adapter_id for e in self.adapters if e.certified and not e.selectable)
+        )
 
     # -- snapshot -----------------------------------------------------------
 

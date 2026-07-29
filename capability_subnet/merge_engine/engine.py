@@ -129,6 +129,17 @@ def validate_against_pool(recipe: Recipe, snapshot: PoolSnapshot) -> None:
     if unknown:
         problems.append(f"recipe selects adapters that are not in the certified pool: {unknown}")
 
+    # Present but not yet measured. Reported separately because it is a
+    # different problem with a different fix: the adapter exists and is safe to
+    # load, nobody has characterised it, and it will become selectable when
+    # somebody does.
+    unmeasured = snapshot.registry.unselectable_ids(recipe.selected_adapters)
+    if unmeasured:
+        problems.append(
+            f"recipe selects adapters that are in the pool but not yet certified for "
+            f"selection: {unmeasured}"
+        )
+
     if recipe.workflow_id != snapshot.registry.workflow_id:
         problems.append(
             f"recipe targets workflow {recipe.workflow_id!r}, this pool serves "
