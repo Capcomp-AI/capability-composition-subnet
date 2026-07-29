@@ -1,9 +1,16 @@
 """Neuron configuration.
 
-Follows the standard Bittensor neuron pattern: every role composes wallet,
-subtensor and logging arguments with its own, and the resulting config object is
-what the neuron reads at runtime. Environment variables provide defaults so the
-same command line works under a process manager without a long argument list.
+Every role composes the shared wallet/network arguments with its own, and the
+resulting config object is what the neuron reads at runtime. Environment
+variables provide defaults so the same command line works under a process
+manager without a long argument list.
+
+The argument surface is defined here rather than borrowed from the SDK. Through
+the 10.x line a neuron called ``bt.wallet.add_args(parser)`` and ``bt.config(parser)``;
+neither exists in 11.x, where ``bittensor.config`` is a module and wallets are
+constructed directly. Owning the parser means an SDK that reorganises its
+helpers changes one import in this file instead of breaking every entry point,
+and it keeps the flags miners and validators type stable across upgrades.
 """
 
 from __future__ import annotations
@@ -11,10 +18,60 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
-
-import bittensor as bt
+from types import SimpleNamespace
 
 from capability_subnet.common import constants as C
+
+
+class Config(SimpleNamespace):
+    """Parsed neuron configuration.
+
+    A namespace rather than a dataclass because the roles genuinely carry
+    different fields, and every consumer reads it with ``getattr`` defaults.
+    """
+
+    def __repr__(self) -> str:  # pragma: no cover - operator convenience
+        fields = ", ".join(f"{k}={v!r}" for k, v in sorted(vars(self).items()) if k != "wallet")
+        return f"Config({fields})"
+
+
+def add_wallet_args(parser: argparse.ArgumentParser) -> None:
+    """Wallet and network selection, matching the names btcli uses."""
+    parser.add_argument(
+        "--wallet.name",
+        dest="wallet_name",
+        type=str,
+        default=_env("BT_WALLET_NAME", "default"),
+        help="Coldkey wallet name.",
+    )
+    parser.add_argument(
+        "--wallet.hotkey",
+        dest="wallet_hotkey",
+        type=str,
+        default=_env("BT_WALLET_HOTKEY", "default"),
+        help="Hotkey name within the wallet.",
+    )
+    parser.add_argument(
+        "--wallet.path",
+        dest="wallet_path",
+        type=str,
+        default=_env("BT_WALLET_PATH", "~/.bittensor/wallets"),
+        help="Directory holding the wallets.",
+    )
+    parser.add_argument(
+        "--subtensor.network",
+        dest="network",
+        type=str,
+        default=_env("BT_NETWORK", "finney"),
+        help="Named network, or a ws:// / wss:// endpoint.",
+    )
+    parser.add_argument(
+        "--logging.logging_dir",
+        dest="logging_dir",
+        type=str,
+        default=_env("BT_LOGGING_DIR", "~/.bittensor/miners"),
+        help="Root directory for neuron state and logs.",
+    )
 
 
 def _env(name: str, default):
@@ -58,12 +115,14 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--neuron.epoch_length",
+        dest="epoch_length",
         type=int,
         default=_env_int("CAPSUB_EPOCH_LENGTH", 100),
         help="Blocks between metagraph resyncs.",
     )
     parser.add_argument(
         "--neuron.device",
+        dest="device",
         type=str,
         default=_env("CAPSUB_DEVICE", "cpu"),
         help="Torch device for any local computation.",
@@ -91,6 +150,7 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
     """
     parser.add_argument(
         "--neuron.name",
+        dest="neuron_name",
         type=str,
         default="validator",
         help="Name used for this neuron's state directory.",
@@ -163,6 +223,20 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
         help="Compute and log the weight vector without submitting it.",
     )
     parser.add_argument(
+        "--neuron.no_spot_check",
+        dest="spot_check",
+        action="store_false",
+        default=not _env_bool("CAPSUB_DISABLE_SPOT_CHECK"),
+        help=(
+            "Stop re-scoring the last closed window before submitting weights. "
+            "The spot check is what makes this validator a verifier rather than "
+            "a relay: it regenerates the instances from their published seeds "
+            "and re-runs the deterministic scorer over the published traces, "
+            "with no GPU and no model. Disabling it means paying on the "
+            "operator's word alone."
+        ),
+    )
+    parser.add_argument(
         "--neuron.max_stale_windows",
         dest="max_stale_windows",
         type=int,
@@ -184,6 +258,7 @@ def add_miner_args(parser: argparse.ArgumentParser) -> None:
     """
     parser.add_argument(
         "--neuron.name",
+        dest="neuron_name",
         type=str,
         default="miner",
         help="Name used for this neuron's state directory.",
@@ -268,16 +343,13 @@ def add_backend_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def build_config(role: str) -> bt.Config:
+def build_config(role: str) -> Config:
     """Assemble the config object for ``role`` (``miner``/``validator``/``backend``)."""
     parser = argparse.ArgumentParser(
         prog=f"capability-subnet-{role}",
         description=f"Capability Composition Subnet — {role}",
     )
-    bt.wallet.add_args(parser)
-    bt.subtensor.add_args(parser)
-    bt.logging.add_args(parser)
-
+    add_wallet_args(parser)
     add_common_args(parser)
     if role == "validator":
         add_validator_args(parser)
@@ -288,26 +360,27 @@ def build_config(role: str) -> bt.Config:
     else:
         raise ValueError(f"unknown role {role!r}")
 
-    config = bt.config(parser)
+    namespace = parser.parse_args()
+    config = Config(**vars(namespace))
     config.role = role
     _finalise(config)
     return config
 
 
-def _finalise(config: bt.Config) -> None:
+def _finalise(config: Config) -> None:
     """Derive the state directory and make sure it exists."""
-    neuron = getattr(config, "neuron", None)
-    name = getattr(neuron, "name", None) if neuron is not None else None
-    if name is None:
+    name = getattr(config, "neuron_name", None)
+    if not name:
         return
 
     full_path = Path(
         os.path.expanduser(
-            f"{config.logging.logging_dir}/{config.wallet.name}/{config.wallet.hotkey}/netuid{config.netuid}/{name}"
+            f"{config.logging_dir}/{config.wallet_name}/{config.wallet_hotkey}"
+            f"/netuid{config.netuid}/{name}"
         )
     )
     full_path.mkdir(parents=True, exist_ok=True)
-    config.neuron.full_path = str(full_path)
+    config.full_path = str(full_path)
 
 
 def parse_trusted_signers(raw: str) -> set[str] | None:

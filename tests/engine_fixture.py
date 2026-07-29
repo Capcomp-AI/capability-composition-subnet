@@ -80,6 +80,13 @@ class _PackageAwareClient:
         self._instance_key: str | None = None
 
     def complete(self, messages, tools, *, seed: int, max_tokens: int):
+        # The general-capability probe is a single user turn with no tools. It
+        # is answered here rather than by the workflow solver because it is
+        # deliberately *not* a workflow question — that separation is the whole
+        # reason the retention gate can see anything the completion score cannot.
+        if len(messages) == 1 and messages[0].role == "user":
+            return self._answer_probe(messages[0].content or "")
+
         key = messages[1].content if len(messages) > 1 else ""
         assert key is not None
 
@@ -90,8 +97,34 @@ class _PackageAwareClient:
             )
         return self._solver.complete(messages, tools, seed=seed, max_tokens=max_tokens)
 
+    def _answer_probe(self, prompt: str):
+        """Answer a probe item, correctly unless this package lost retention.
+
+        ``general_retention`` in the impairment set stands for a merge that
+        traded away general instruction following: the package still answers,
+        but pads the reply, which is exactly the failure the probe's exact-match
+        comparison is built to catch.
+        """
+        from capability_subnet.sandbox.model_client import ModelReply
+
+        expected = _PROBE_ANSWERS.get(prompt)
+        if expected is None:
+            return ModelReply(content=None, tool_calls=[], error="no probe answer registered")
+        if "general_retention" in self.impairments:
+            return ModelReply(content=f"Sure! The answer is {expected}.", tool_calls=[])
+        return ModelReply(content=expected, tool_calls=[])
+
 
 _INSTANCE_INDEX: dict[str, object] = {}
+
+#: Probe prompt -> expected answer, registered as each window's probe is drawn.
+#: The harness equivalent of the model simply knowing the answer.
+_PROBE_ANSWERS: dict[str, str] = {}
+
+
+def register_probe(items) -> None:
+    for item in items:
+        _PROBE_ANSWERS[item.prompt] = item.expected
 
 
 def _instance_for_conversation(observation: str):
@@ -124,6 +157,19 @@ def engine(tmp_path, tiny_snapshot, tiny_pool_dir):
     # patched. That also keeps the registry's cached module untouched, which
     # matters because it is shared across the session.
     workflow = dataclasses.replace(base, generate_instance=_tracking_generate)
+
+    # The probe is drawn inside the loop, so the harness learns its answers by
+    # wrapping the draw rather than by reaching into the engine.
+    import capability_subnet.backend.engine_loop as engine_loop_module
+
+    original_build_probe = engine_loop_module.build_probe
+
+    def _tracking_build_probe(seed, *args, **kwargs):
+        items = original_build_probe(seed, *args, **kwargs)
+        register_probe(items)
+        return items
+
+    engine_loop_module.build_probe = _tracking_build_probe
 
     settings = BackendSettings(
         state_dir=str(tmp_path / "state"),

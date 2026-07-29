@@ -31,7 +31,7 @@ report_dir: state/reports
 # The engine's own verified copy of every admitted recipe. A champion is
 # re-measured every window, so this must outlive the miner's own pointer — a
 # champion whose host goes down must not silently stop defending.
-recipe_dir: state/recipes
+recipe_dir: ""            # empty: <state_dir>/recipes
 
 # ---------------------------------------------------------------------------
 # Windows
@@ -59,7 +59,6 @@ workflow_id: industrial_maintenance_de_v1
 # automatically.
 serving_base_url: http://127.0.0.1:8000
 serving_model_name: candidate
-dispatch_budget: 600
 
 # PostgreSQL for the hidden maintenance snapshot. Leave empty to serve it from
 # an in-memory SQLite database, which is correct for development and not for a

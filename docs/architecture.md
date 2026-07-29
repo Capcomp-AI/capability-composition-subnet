@@ -157,18 +157,25 @@ A one-shot-per-hotkey rule is only defensible if the engine never spends that sh
 
 ## The dethrone rule
 
-Four independent bars, all of which must clear:
+Five independent bars, all of which must clear:
 
 1. **Per-axis dominance** on at least the required number of capability axes.
 2. **Not worse on every remaining axis.** This is the bar that stops a package trading a capability away for a better average.
-3. **An absolute end-to-end margin** over the *strongest reference*, not merely the incumbent.
-4. **Paired statistical significance** — a one-sided bootstrap lower confidence bound above zero on shared instances.
+3. **An absolute end-to-end margin** over the *strongest permanent reference*. This is the bar that says composition added value at all, and it never moves.
+4. **A defender's margin** over the incumbent, which starts small and decays to zero over roughly thirty days.
+5. **Paired statistical significance** — a one-sided bootstrap lower confidence bound above zero on shared instances.
+
+Bars 3 and 4 are separate on purpose, and conflating them was a real mistake with a specific consequence. When the incumbent counted among the references, every successive champion had to beat the previous one by a further three points of completion. Completion is bounded by one, so that staircase admits a few dozen dethrones in principle and stalls after a handful in practice — after which one package holds the throne permanently, no further work can be bought, and the network pays rent.
+
+The decay resolves the question the network cannot answer from the inside: an incumbent nothing has displaced for a month is either genuinely excellent or merely unopposed, and letting its advantage fall settles that in favour of the contest continuing.
 
 The test is **paired** because both packages ran on the same instances. Pairing removes instance difficulty from the comparison entirely: what gets resampled is the vector of per-instance differences, not two independent score distributions. That is a substantially tighter test, and it is only available because the engine controls which instances both sides saw.
 
 An axis with too few paired samples counts as **worse**, not as a tie. Absence of evidence that a challenger kept a capability is not evidence that it did.
 
 A loss is *decisive* — and terminates the hotkey — only when the challenger was genuinely measured. An axis with no paired samples at all means the engine failed to gather evidence, and terminating on that would punish a miner for an evaluation the engine did not complete.
+
+The same principle governs the hard gates, which are split into two sets. A candidate that used 40 GB genuinely failed the memory limit; a candidate on a host whose memory counter was unreadable has not been shown to fail anything. The second kind holds the candidate for a later window and leaves its single shot intact. A one-shot-per-hotkey rule is only defensible if the engine never charges a candidate for its own bad night.
 
 ---
 
@@ -187,9 +194,25 @@ So the network keeps a set of references on the board permanently:
 | Equal-weight DARE-TIES merge | The obvious stochastic variant |
 | Owner reference recipe | The operator's own published attempt |
 
-They are measured every window through **exactly the same code path** as candidates — if baselines were measured differently, "the challenger beat the strongest reference" would be a statement about two harnesses rather than two packages.
+They are measured through **exactly the same code path** as candidates — if baselines were measured differently, "the challenger beat the strongest reference" would be a statement about two harnesses rather than two packages.
+
+The base model, the three standard merges and the owner recipe are re-measured every window. The per-adapter single-adapter references are **rotated**, a few per window on a schedule derived from the window id. Measuring all of them every window is correct and costs most of a window's GPU budget before any challenger is looked at — and a window that cannot finish never evaluates anybody. Rotation keeps the "beat the best specialist" bar honest over time while leaving room to actually run the queue.
+
+The **incumbent is not one of them**. It is re-measured every window and reported alongside them, but it does not set the absolute bar; see the dethrone rule above for why.
 
 None of them can be terminated and **none of them earn emission**. If a reference holds the throne, the workflow share burns, because the network has not yet produced anything worth paying for.
+
+---
+
+## What a centralised engine is and is not trusted for
+
+Evaluation runs in one place. That is a real concentration of trust and it is worth stating plainly what it does and does not buy an operator.
+
+The operator **is** trusted to choose the hidden instances (from a secret root), to run the sandbox, and to publish honestly and promptly.
+
+The operator is **not** trusted to be believed. Every score is published with the trace it came from, every window's seeds are disclosed once it closes, and instance generation is a pure function of the seed — so the claim "this candidate scored 0.62" is checkable by anyone who can run a deterministic scorer, which is anyone with a laptop. Validators do this on every pass before paying, and burn when the record contradicts itself.
+
+What that leaves genuinely unaddressed: an operator who *withholds* disclosures entirely, or who is slow. Validators tolerate a missing disclosure rather than treating it as fraud — the opposite policy would make an outage indistinguishable from dishonesty — so a determined operator can degrade verification by simply not publishing. The counterweight is that validators refuse a vector more than `max_stale_windows` behind the chain head, so withholding cannot be sustained without also stopping emission.
 
 ---
 
@@ -230,13 +253,36 @@ Adapter hot-swapping is disabled. Restarting the runtime per candidate is slower
 ## Scoring
 
 ```
-Q = 0.60·end_to_end + 0.15·stage_balance + 0.10·ood
-  + 0.05·retention + 0.05·latency + 0.05·artifact_efficiency
+Q = 0.55·end_to_end + 0.15·stage_balance + 0.10·ood + 0.05·retention
+  + 0.05·latency + 0.05·token_efficiency + 0.05·artifact_efficiency
 ```
 
 Quality carries 85%, efficiency 15% — a cheap package that does not finish the job is worth less than an expensive one that does.
 
+**Token efficiency** is measured per *completed* instance, not per attempted one. Dividing by attempts would make a package that gives up after one turn the most efficient thing on the board; charging its tokens against the workflows it actually finished makes cheap failure expensive, which is the correct direction. An unfinished workflow has no value to divide a cost into.
+
+---
+
+## Who gets paid
+
+The dethrone rule decides who holds the throne. It is far too blunt to also decide who gets paid, because almost every submission that is ever evaluated will fail to dethrone — and a recipe is *one shot*, so a miner cannot iterate on it the way a code-submitting miner can. Paying a miner who moved completion from 0.41 to 0.58 exactly what it pays one that submitted a soup of distractors leaves the second attempt no better informed than the first, in a network whose entire purpose is to learn which adapters compose.
+
+So the throne is winner-takes-most and everything below it is graded:
+
+| Term | Weight | What it rewards |
+|---|---|---|
+| Quality | 50% | The qualified score above |
+| Improvement | 25% | Distance past the strongest permanent reference, scaled by the headroom that remained |
+| Proximity | 15% | How close it came to the champion |
+| Cost | 10% | Token spend and latency |
+
+Only candidates that cleared **every hard gate** are graded — this is not a consolation prize for producing something undeployable. If nobody qualifies, the graded pool burns rather than folding into the champion's share, because holding an uncontested throne is not an achievement. Each grade is published broken into its four terms, so a miner can act on it.
+
+Proximity is deliberately not a gate. Rewarding closeness alone would pay for copying the champion, which is why it is one term of four and why the anti-copy check runs *before* the evaluation rather than after it.
+
 **Stage balance** is a geometric mean of the per-stage means, and the choice of mean is doing real work: a package scoring 1.0 on six stages and 0.1 on the seventh lands far below one scoring 0.8 everywhere, even though their arithmetic means are close. The workflow needs every stage, so a package that abandoned one has not solved it.
+
+**Retention** is measured on a held-out general-capability probe, *not* on the workflow. That distinction is the whole reason the term exists. Comparing a candidate's workflow completion with the base model's cannot detect anything: a candidate only reaches the gate after beating the base by an absolute margin, so the ratio is always above one and the clamp returns exactly `1.0` for every candidate that could possibly be crowned. The probe asks short, exactly-scored questions about the behaviours aggressive merging actually destroys — following a format, not padding an answer, arithmetic, ordering, answering in the language it was addressed in — drawn per window from their own secret seed and asked of the base model on the same draw.
 
 ---
 

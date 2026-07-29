@@ -8,8 +8,13 @@ miniature base manifest.
 
 The result is useless for measuring quality — the weights mean nothing — and
 exactly right for exercising everything else: reconstruction, determinism,
-artifact hashing, size gates and the whole engine loop. Nothing here is ever used
-on a live network; the engine refuses to start against an unpinned base.
+artifact hashing, size gates and the whole engine loop.
+
+Nothing here can reach a live network. These adapters carry no certification
+record, and the engine's preflight refuses to start while any pool member is
+uncertified — so a synthetic pool fails closed rather than quietly scoring
+miners against random numbers. For the real pool, use
+``scripts/import_public_adapters.py``.
 """
 
 from __future__ import annotations

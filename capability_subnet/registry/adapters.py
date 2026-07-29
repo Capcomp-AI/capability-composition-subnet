@@ -122,6 +122,21 @@ class AdapterRegistry:
     def capability_adapters(self) -> tuple[str, ...]:
         return tuple(sorted(e.adapter_id for e in self.adapters if not e.is_distractor))
 
+    def retention_anchor(self) -> str | None:
+        """The adapter that exists to preserve general ability under merging.
+
+        Identified by declared capability rather than by name so repinning the
+        pool does not silently leave the miner tooling advising about an adapter
+        that is no longer there.
+        """
+        for entry in sorted(self.adapters, key=lambda e: e.adapter_id):
+            if entry.capability == "general_reasoning_retention":
+                return entry.adapter_id
+        return None
+
+    def adapters_with_capability(self, capability: str) -> tuple[str, ...]:
+        return tuple(sorted(e.adapter_id for e in self.adapters if e.capability == capability))
+
     def fully_certified(self) -> bool:
         return all(entry.certified for entry in self.adapters)
 

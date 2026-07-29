@@ -19,9 +19,14 @@ from pathlib import Path
 from capability_subnet.backend.scorer.aggregate import (
     EfficiencyInputs,
     aggregate_scores,
-    end_to_end_completion,
     measure_resources,
     valid_rows,
+)
+from capability_subnet.backend.scorer.retention import (
+    ProbeOutcome,
+    build_probe,
+    relative_retention,
+    run_probe,
 )
 from capability_subnet.common.schemas import CandidateScores, InstanceResult, Recipe
 from capability_subnet.merge_engine.engine import reconstruct
@@ -30,6 +35,25 @@ from capability_subnet.registry.snapshot import PoolSnapshot, load_snapshot
 from capability_subnet.sandbox.model_client import ModelClient
 from capability_subnet.sandbox.orchestrator import SandboxConfig, run_batch
 from capability_subnet.workflows import get_workflow
+
+#: Probe seed for local runs. Fixed and public: the engine draws its own from a
+#: secret root per window, so there is nothing here for a miner to tune against
+#: and no reason to hide it.
+LOCAL_PROBE_SEED = 20260729
+
+
+def probe_base_model(client: ModelClient, probe_seed: int | None = None) -> ProbeOutcome:
+    """Measure the unmodified base model on the probe.
+
+    Run this once against an endpoint serving the base model with no adapter,
+    then pass the result to :func:`evaluate_locally`. Without it the retention
+    component reads as a flat 1.0 and a package that has quietly lost general
+    instruction-following looks fine right up until the engine says otherwise.
+    """
+    return run_probe(
+        client, build_probe(probe_seed if probe_seed is not None else LOCAL_PROBE_SEED)
+    )
+
 
 log = logging.getLogger(__name__)
 
@@ -94,7 +118,8 @@ def evaluate_locally(
     pack_seed: int | None = None,
     snapshot: PoolSnapshot | None = None,
     sandbox_config: SandboxConfig | None = None,
-    base_e2e: float = 0.0,
+    probe_seed: int | None = None,
+    base_probe: ProbeOutcome | None = None,
 ) -> LocalResult:
     """Reconstruct a recipe and score it on public instances.
 
@@ -104,9 +129,13 @@ def evaluate_locally(
         instance_count: how many public instances to run. Fewer is faster; the
             variance of an end-to-end rate over twenty instances is wide enough
             that small differences between two recipes will not be visible.
-        base_e2e: the base model's completion, if it has been measured. Without
-            it the retention component reads as 1.0, which is optimistic — the
-            engine measures the base every window and will not be.
+        probe_seed: seed for the general-capability probe. Any value works
+            locally; the engine draws its own from a secret root per window, so
+            matching it is neither possible nor useful.
+        base_probe: the base model's outcome on the same probe. Without it the
+            retention component reads as 1.0, which is optimistic — the engine
+            measures the base every window and will not be. Measure the base
+            model once with :func:`probe_base_model` and pass the result in.
     """
     import random
 
@@ -136,6 +165,7 @@ def evaluate_locally(
     ]
 
     config = sandbox_config or SandboxConfig()
+    probe_items = build_probe(probe_seed if probe_seed is not None else LOCAL_PROBE_SEED)
     hidden_results = [outcome.result for outcome in run_batch(hidden, client, config=config)]
     ood_results = (
         [outcome.result for outcome in run_batch(ood, client, config=config)] if ood else []
@@ -145,11 +175,14 @@ def evaluate_locally(
         hidden_results, artifact_bytes=artifact_bytes, peak_vram_gb=config.peak_vram_gb
     )
 
+    probe = run_probe(client, probe_items)
+    retention = relative_retention(probe, base_probe) if base_probe is not None else 1.0
+
     scores = aggregate_scores(
         hidden_results,
         ood_results,
         workflow.critical_axes,
-        base_e2e=base_e2e or end_to_end_completion(hidden_results),
+        retention=retention,
         efficiency=EfficiencyInputs(
             artifact_bytes=artifact_bytes,
             peak_vram_gb=config.peak_vram_gb,

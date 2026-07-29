@@ -85,11 +85,13 @@ class OpenAICompatibleClient:
         *,
         api_key: str = "not-required",
         timeout: float = 120.0,
+        enable_thinking: bool = C.SANDBOX_ENABLE_THINKING,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.api_key = api_key
         self.timeout = timeout
+        self.enable_thinking = enable_thinking
 
     def complete(
         self,
@@ -110,6 +112,13 @@ class OpenAICompatibleClient:
             "top_p": C.SANDBOX_TOP_P,
             "seed": seed,
             "max_tokens": max_tokens,
+            # Qwen3's chat template defaults to thinking mode, which opens every
+            # reply with a <think> block. At this token budget a single such
+            # block consumes the whole allowance before the model has called one
+            # tool, so every instance would fail on a template default rather
+            # than on the merged package. Turned off explicitly, and part of the
+            # published contract because it changes what candidates are asked.
+            "chat_template_kwargs": {"enable_thinking": self.enable_thinking},
         }
 
         try:

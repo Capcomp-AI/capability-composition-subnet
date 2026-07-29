@@ -117,9 +117,12 @@ def build_contract(snapshot=None) -> dict[str, Any]:
             "max_output_tokens": C.MAX_OUTPUT_TOKENS,
             "temperature": C.SANDBOX_TEMPERATURE,
             "top_p": C.SANDBOX_TOP_P,
+            "enable_thinking": C.SANDBOX_ENABLE_THINKING,
             "note": (
                 "The loop, the system prompt and the tool schemas are identical for "
-                "every candidate. Sampling is greedy and seeded per instance."
+                "every candidate. Sampling is greedy and seeded per instance, and the "
+                "model's separate reasoning channel is disabled — one thinking block "
+                "would consume the whole output budget before the first tool call."
             ),
         },
         "stages": {

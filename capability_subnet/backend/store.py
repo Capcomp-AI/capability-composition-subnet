@@ -277,6 +277,25 @@ class Store:
             if report is not None:
                 self._insert_report(connection, report)
 
+    def clear_champion(self, *, reason: str) -> None:
+        """Vacate the throne.
+
+        Used when a champion can no longer be paid — its hotkey deregistered and
+        its UID belongs to someone else. Leaving it seated would burn every
+        window while still holding the dethrone bar at its score, so nothing
+        could displace it and nothing could be paid: a deadlock with no exit.
+        Vacating drops the bar back to the permanent references, which is where
+        it sits before anyone has won.
+
+        The champion-report pointer goes with it. A vector that named a champion
+        no record supports is exactly what the transaction in ``set_champion``
+        exists to prevent.
+        """
+        with self.transaction() as connection:
+            connection.execute("DELETE FROM champion WHERE id = 1")
+            connection.execute("DELETE FROM meta WHERE key = 'champion_report_sha256'")
+        log.info("champion cleared: %s", reason)
+
     # -- windows ------------------------------------------------------------
 
     def record_window(

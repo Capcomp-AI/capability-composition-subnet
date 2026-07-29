@@ -44,13 +44,25 @@ class SearchSpace:
     output_ranks: tuple[int, ...] = (32, 64)
     clamp_quantiles: tuple[float, ...] = (1.0, 0.99)
     emphasis_weights: tuple[float, ...] = (1.0, 1.15)
-    #: Adapters worth emphasising first. Structural stages gate end-to-end
-    #: success, so they are the cheapest place to look for a first improvement.
-    emphasis_candidates: tuple[str, ...] = (
-        "strict-json-v1",
-        "tool-calling-v1",
-        "safety-policy-v1",
+    #: Capabilities worth emphasising first, resolved to adapter ids against
+    #: whichever pool is in force. Structural stages gate end-to-end success, so
+    #: they are the cheapest place to look for a first improvement.
+    #:
+    #: Capabilities rather than adapter ids because the pool is repinnable: a
+    #: hardcoded id survives a repin as a name that matches nothing, and the
+    #: search then quietly stops emphasising anything at all.
+    emphasis_capabilities: tuple[str, ...] = (
+        "structured_output",
+        "tool_calling",
+        "resource_decision",
     )
+
+    def emphasis_candidates(self, snapshot: PoolSnapshot) -> tuple[str, ...]:
+        resolved: list[str] = []
+        for capability in self.emphasis_capabilities:
+            resolved.extend(snapshot.registry.adapters_with_capability(capability))
+        return tuple(dict.fromkeys(resolved))
+
     seeds: tuple[int, ...] = (0,)
 
 
@@ -88,23 +100,30 @@ def default_adapter_sets(snapshot: PoolSnapshot | None = None) -> list[list[str]
     capability adapters without the retention anchor, and the structural core.
     """
     pool = snapshot or load_snapshot()
-    capability = list(pool.registry.capability_adapters())
+    capability_ids = list(pool.registry.capability_adapters())
 
-    without_retention = [a for a in capability if a != "general-reasoning-retention-v1"]
-    structural = [
-        adapter
-        for adapter in capability
-        if adapter
-        in {
-            "strict-json-v1",
-            "tool-calling-v1",
-            "safety-policy-v1",
-            "german-technical-v1",
-            "general-reasoning-retention-v1",
+    anchor = pool.registry.retention_anchor()
+    without_retention = [a for a in capability_ids if a != anchor]
+    # The capabilities that decide whether the workflow finishes at all: produce
+    # a well-formed call, produce a schema-valid report, and keep the general
+    # ability to follow an instruction while doing it.
+    structural_capabilities = (
+        "structured_output",
+        "tool_calling",
+        "resource_decision",
+        "technical_domain_language",
+        "general_reasoning_retention",
+    )
+    structural = sorted(
+        {
+            adapter
+            for capability in structural_capabilities
+            for adapter in pool.registry.adapters_with_capability(capability)
+            if adapter in set(capability_ids)
         }
-    ]
+    )
 
-    return [capability, without_retention, structural, list(pool.adapter_ids)]
+    return [capability_ids, without_retention, structural, list(pool.adapter_ids)]
 
 
 def enumerate_recipes(
@@ -132,7 +151,7 @@ def enumerate_recipes(
                 weights = (
                     {
                         adapter: emphasis
-                        for adapter in space.emphasis_candidates
+                        for adapter in space.emphasis_candidates(pool)
                         if adapter in adapters
                     }
                     if emphasis != 1.0

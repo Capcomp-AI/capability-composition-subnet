@@ -388,6 +388,43 @@ def verify_weight_vector(
                 subject,
             )
 
+    if vector.mode == C.MODE_GRADED_CONTRIBUTION:
+        # A graded payment is a claim that the recipient cleared every hard gate
+        # and earned a grade. Both halves are checkable from the published
+        # reports, and neither is checked by the chain — so a mode that pays more
+        # people needs a rule that says who may be paid, or "graded" becomes a
+        # licence to pay anyone.
+        qualified = {
+            report.miner_hotkey: report
+            for report in reports
+            if report.gates_passed and report.miner_hotkey
+        }
+        for entry in paid:
+            if entry.role in ("burn", "queued"):
+                # The queue tail is deregistration protection, not payment for a
+                # result, so it is not required to have a passing report.
+                continue
+            if not entry.hotkey or not qualified:
+                continue
+            if entry.hotkey not in qualified:
+                result.add(
+                    "unqualified_recipient",
+                    "error",
+                    f"{entry.hotkey[:16]}… is paid a graded share but no published report "
+                    "shows it clearing every hard gate",
+                    subject,
+                )
+                continue
+            report = qualified[entry.hotkey]
+            if entry.role == "contributor" and report.contribution.get("contribution", 0.0) <= 0.0:
+                result.add(
+                    "ungraded_contributor",
+                    "error",
+                    f"{entry.hotkey[:16]}… is paid as a contributor but its report records "
+                    "no contribution grade",
+                    subject,
+                )
+
     if vector.mode == C.MODE_GRADED_TOP3:
         qualified = {
             report.miner_hotkey for report in reports if report.gates_passed and report.miner_hotkey

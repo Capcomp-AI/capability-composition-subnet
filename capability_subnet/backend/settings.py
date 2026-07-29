@@ -57,12 +57,27 @@ class BackendSettings:
 
     #: The engine's own verified copy of every admitted recipe. Champions are
     #: re-measured every window, so this must outlive the miner's own pointer.
-    recipe_dir: str = "state/recipes"
+    #:
+    #: Empty means "under state_dir", which is what almost every deployment
+    #: wants. Spelling the default as a second literal path was how admission and
+    #: the champion loader came to disagree the moment an operator moved
+    #: state_dir: both looked correct, and they only pointed at the same place
+    #: for the default value.
+    recipe_dir: str = ""
 
     # -- windows -------------------------------------------------------------
     window_blocks: int = C.DEFAULT_WINDOW_BLOCKS
     hidden_instances: int = C.DEFAULT_HIDDEN_INSTANCES
     ood_instances: int = C.DEFAULT_OOD_INSTANCES
+
+    #: Single-adapter references measured per window, rotated by window id.
+    #:
+    #: Zero or a value at least as large as the pool measures all of them, which
+    #: is correct and, at eleven adapters times a full instance draw, is most of
+    #: a window's GPU budget spent before any challenger is looked at. Rotating
+    #: keeps the "beat the best specialist" bar honest over time while leaving
+    #: room in the window to actually evaluate somebody.
+    single_adapter_rotation: int = 3
 
     #: Seed the per-window hidden instance draw is derived from. It must stay
     #: secret: publishing it would publish every future hidden instance.
@@ -70,9 +85,39 @@ class BackendSettings:
 
     # -- evaluation ----------------------------------------------------------
     workflow_id: str = C.DEFAULT_WORKFLOW_ID
+
+    #: How the candidate gets served. ``managed`` starts a vLLM process per
+    #: candidate with that candidate's adapter applied — the only mode in which
+    #: the engine actually measures the package it built. ``external`` points at
+    #: a runtime the operator manages and cannot apply an adapter, so it is for
+    #: development against the base model only.
+    serving_mode: str = "managed"
     serving_base_url: str = "http://127.0.0.1:8000"
     serving_model_name: str = "candidate"
-    dispatch_budget: int = C.DEFAULT_DISPATCH_BUDGET
+
+    #: Local path to the materialised base model. Required in managed mode.
+    base_model_path: str = ""
+    serving_host: str = "127.0.0.1"
+    serving_port: int = 8000
+    serving_gpu_index: int = 0
+    serving_startup_timeout: float = 900.0
+    serving_max_model_len: int = 16384
+    serving_gpu_memory_utilization: float = 0.90
+
+    #: Interpreter vLLM runs under. Empty uses the engine's own. Set it when
+    #: vLLM lives in its own virtualenv, which is common because it pins torch
+    #: versions tightly.
+    serving_python: str = ""
+
+    #: vLLM's parser for the base model's tool-call syntax. Qwen3 emits Hermes-style
+    #: calls. Without a parser vLLM never populates ``message.tool_calls`` and
+    #: every instance fails for a reason unrelated to the candidate.
+    tool_call_parser: str = "hermes"
+
+    #: Reasoning parser, when the served model emits a separate thinking channel.
+    #: Empty disables it. See ``sandbox_enable_thinking`` — this subnet turns
+    #: thinking off, so the default is empty.
+    reasoning_parser: str = ""
     postgres_dsn: str = ""
     evaluator_image_digest: str = "unpinned"
 
@@ -80,6 +125,17 @@ class BackendSettings:
     #: must agree before the candidate is evaluated. One worker disables the
     #: cross-check, which is acceptable only for local development.
     reconstruction_workers: int = 2
+
+    #: Where the merge arithmetic runs. ``cuda`` is ~30x faster on the trimming
+    #: methods, which must decompose a materialised update per projection.
+    #:
+    #: Consensus-relevant: cuSOLVER and LAPACK do not agree bit-for-bit, so an
+    #: artifact digest reproduces only on the same device class. Every published
+    #: report records the device it was built on, and every worker in one
+    #: deployment must use the same one — which the cross-worker digest check
+    #: enforces automatically.
+    merge_device: str = "cuda"
+    merge_gpu_index: int = 0
 
     #: Whether an unmeasurable peak-memory reading fails the resource gate. True
     #: on any host that is supposed to have a GPU: a broken counter must not let
@@ -98,12 +154,20 @@ class BackendSettings:
     min_dominant_axes: int = C.DEFAULT_MIN_DOMINANT_AXES
     min_axis_samples: int = C.DEFAULT_MIN_AXIS_SAMPLES
     end_to_end_margin: float = C.DEFAULT_END_TO_END_MARGIN
+    champion_margin: float = C.DEFAULT_CHAMPION_MARGIN
+    champion_margin_decay_blocks: int = C.CHAMPION_MARGIN_DECAY_BLOCKS
     strict_pareto: bool = False
 
     # -- incentive -----------------------------------------------------------
-    incentive_mode: str = C.MODE_WINNER_TAKE_ALL
+    incentive_mode: str = C.MODE_GRADED_CONTRIBUTION
+    champion_base_share: float = C.CHAMPION_BASE_SHARE
+    contribution_memory_windows: int = C.CONTRIBUTION_MEMORY_WINDOWS
     burn_percentage: float = C.DEFAULT_BURN_PERCENTAGE
     burn_uid: int = C.BURN_UID
+
+    #: Share of payable emission spread across queued and former champions, so a
+    #: miner waiting its turn is not pruned before it is ever evaluated.
+    tail_share: float = C.DEFAULT_TAIL_SHARE
 
     # -- api -----------------------------------------------------------------
     api_host: str = "0.0.0.0"
@@ -128,7 +192,7 @@ class BackendSettings:
 
     @property
     def recipe_path(self) -> Path:
-        return Path(self.recipe_dir)
+        return Path(self.recipe_dir) if self.recipe_dir else self.state_path / "recipes"
 
     def ensure_directories(self) -> None:
         for path in (
@@ -174,10 +238,33 @@ class BackendSettings:
                 "instances. That removes the only check on the engine's scoring "
                 "that does not require trusting the operator."
             )
-        if self.incentive_mode not in (C.MODE_WINNER_TAKE_ALL, C.MODE_GRADED_TOP3):
-            problems.append(f"unknown incentive_mode {self.incentive_mode!r}")
+        if self.merge_device not in ("cpu", "cuda"):
+            problems.append(f"unknown merge_device {self.merge_device!r}; expected 'cpu' or 'cuda'")
+        if self.serving_mode not in ("managed", "external"):
+            problems.append(
+                f"unknown serving_mode {self.serving_mode!r}; expected 'managed' or 'external'"
+            )
+        if self.serving_mode == "managed" and not self.base_model_path:
+            problems.append(
+                "serving_mode is 'managed' but base_model_path is unset, so there is no "
+                "model for the engine to start a runtime from."
+            )
+        if self.serving_mode == "external":
+            problems.append(
+                "serving_mode is 'external'. That mode cannot apply a candidate's adapter, "
+                "so every candidate and every reference would be measured against the same "
+                "static endpoint and no challenger could ever be distinguished. Use "
+                "'managed' for any deployment that pays emission."
+            )
+        if self.incentive_mode not in C.ALLOWED_INCENTIVE_MODES:
+            problems.append(
+                f"unknown incentive_mode {self.incentive_mode!r}; "
+                f"expected one of {list(C.ALLOWED_INCENTIVE_MODES)}"
+            )
         if not (0.0 <= self.burn_percentage <= 1.0):
             problems.append("burn_percentage must be between 0 and 1")
+        if not (0.0 <= self.tail_share < 1.0):
+            problems.append("tail_share must be at least 0 and below 1")
 
         return problems
 

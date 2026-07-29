@@ -8,7 +8,7 @@
 #   backend   — runs reconstruction, serving and sandboxed evaluation. This is
 #               operated by the subnet owner, not by the general public.
 
-version: "1.0.0"
+version: "2.0.0"
 
 miner:
   # A miner can do useful work with nothing but a CPU (recipe construction and
@@ -42,8 +42,11 @@ miner:
       upload: 50
 
 validator:
-  # The validator fetches a signed weight vector and submits it on-chain.
-  # It never loads a model. A small always-on VPS is sufficient.
+  # The validator fetches a signed weight vector, re-scores a closed window from
+  # the engine's published traces, and submits on-chain. It never loads a model
+  # and never reconstructs anything, and the base install excludes the tensor
+  # stack entirely — so a small always-on VPS is genuinely sufficient rather
+  # than nominally sufficient.
   cpu:
     min_cores: 2
     min_speed: 2.5

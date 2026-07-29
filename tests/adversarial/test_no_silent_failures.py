@@ -88,72 +88,126 @@ class TestUnmeasuredResourcesDoNotPass:
         assert read_peak_vram_gb() is None
 
 
-class TestCommitOrderIsNeverGuessed:
-    """Commit order assigns challenger roles, so a wrong block changes who runs."""
+class TestCommitOrderComesFromTheChain:
+    """Commit order assigns challenger roles, so where the block comes from matters.
 
-    def test_an_unreadable_block_is_skipped_rather_than_defaulted(self, caplog):
-        from capability_subnet.common.chain import read_commitments
-        from capability_subnet.common.commitments import encode_commitment
+    Under the 10.x SDK the block was a second, per-hotkey storage read that could
+    fail on its own, and a commitment whose block could not be read had to be
+    skipped — defaulting it to zero would have sorted it to the *front* of the
+    queue. The v11 metagraph carries each commitment's block inline, so that
+    failure mode is gone by construction and there is no default left to get
+    wrong. What remains testable is that the order is the chain's.
+    """
 
-        payload = encode_commitment(
-            "industrial_maintenance_de_v1", sha256_bytes(b"r"), "https://x.test/r.json"
+    @staticmethod
+    def _commitment(hotkey, uid, block, payload, value=None):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(
+            hotkey=hotkey, uid=uid, block=block, value=payload if value is None else value
         )
 
-        class _Subtensor:
-            def get_all_commitments(self, netuid):
-                return {"5Broken": payload}
+    @staticmethod
+    def _subtensor(commitments, *, unregistered=None, owner="5Owner"):
+        from types import SimpleNamespace
 
-            def get_commitment_metadata(self, netuid, hotkey):
-                raise RuntimeError("storage unavailable")
+        graph = SimpleNamespace(
+            block=1000,
+            hotkeys=[c.hotkey for c in commitments],
+            owner_hotkey=owner,
+            commitments={c.uid: c for c in commitments if c.uid is not None},
+            unregistered_commitments={c.hotkey: c for c in (unregistered or [])},
+        )
+        return SimpleNamespace(subnets=SimpleNamespace(metagraph=lambda netuid: graph))
 
-        with caplog.at_level(logging.WARNING):
-            results = read_commitments(_Subtensor(), 1)
-
-        # Not queued with a guessed block — which at zero would have sorted it to
-        # the *front* of the queue, ahead of every legitimate commitment.
-        assert results == []
-        assert any("could not be read" in record.message for record in caplog.records)
-
-    def test_a_malformed_block_value_is_also_skipped(self):
-        from capability_subnet.common.chain import read_commitments
+    def _payload(self, seed: bytes):
         from capability_subnet.common.commitments import encode_commitment
 
-        payload = encode_commitment(
-            "industrial_maintenance_de_v1", sha256_bytes(b"r"), "https://x.test/r.json"
+        return encode_commitment(
+            "industrial_maintenance_de_v1", sha256_bytes(seed), "https://x.test/r.json"
         )
 
-        class _Subtensor:
-            def get_all_commitments(self, netuid):
-                return {"5Odd": payload}
-
-            def get_commitment_metadata(self, netuid, hotkey):
-                return {"block": "not-a-number"}
-
-        assert read_commitments(_Subtensor(), 1) == []
-
-    def test_a_readable_block_is_queued_in_order(self):
+    def test_commitments_are_ordered_by_their_commit_block(self):
         from capability_subnet.common.chain import read_commitments
-        from capability_subnet.common.commitments import encode_commitment
 
-        payloads = {
-            "5Late": encode_commitment(
-                "industrial_maintenance_de_v1", sha256_bytes(b"a"), "https://x.test/a.json"
-            ),
-            "5Early": encode_commitment(
-                "industrial_maintenance_de_v1", sha256_bytes(b"b"), "https://x.test/b.json"
-            ),
-        }
-        blocks = {"5Late": 900, "5Early": 100}
+        late = self._commitment("5Late", 0, 900, self._payload(b"a"))
+        early = self._commitment("5Early", 1, 100, self._payload(b"b"))
 
-        class _Subtensor:
-            def get_all_commitments(self, netuid):
-                return payloads
-
-            def get_commitment_metadata(self, netuid, hotkey):
-                return {"block": blocks[hotkey]}
-
-        results = read_commitments(_Subtensor(), 1)
+        results = read_commitments(self._subtensor([late, early]), 1)
         assert [c.hotkey for c in results] == ["5Early", "5Late"]
+        assert [c.block for c in results] == [100, 900]
+
+    def test_a_sealed_commitment_is_held_rather_than_treated_as_malformed(self, caplog):
+        """A timelocked payload is unreadable *yet*, which is not a miner failure.
+
+        Counting it as malformed would drop it permanently; the chain decrypts
+        it at its reveal round and the next scan picks it up.
+        """
+        from capability_subnet.common.chain import read_commitments
+
+        sealed = self._commitment("5Sealed", 0, 100, None, value=None)
+        with caplog.at_level(logging.INFO):
+            results = read_commitments(self._subtensor([sealed]), 1)
+
+        assert results == []
+        assert any("sealed" in record.message for record in caplog.records)
+
+    def test_a_malformed_payload_does_not_poison_the_scan(self):
+        """One bad row must never stop the others from being queued."""
+        from capability_subnet.common.chain import read_commitments
+
+        good = self._commitment("5Good", 0, 100, self._payload(b"a"))
+        broken = self._commitment("5Broken", 1, 50, "capsub1|imde|not-base64|nope")
+
+        results = read_commitments(self._subtensor([good, broken]), 1)
+        assert [c.hotkey for c in results] == ["5Good"]
+
+    def test_a_deregistered_hotkey_keeps_its_commitment_visible(self):
+        """Anti-copy compares against every commitment ever admitted.
+
+        A hotkey that leaves must not retroactively free its recipe for the next
+        miner to claim as original.
+        """
+        from capability_subnet.common.chain import read_commitments
+
+        live = self._commitment("5Live", 0, 200, self._payload(b"a"))
+        gone = self._commitment("5Gone", None, 100, self._payload(b"b"))
+
+        results = read_commitments(self._subtensor([live], unregistered=[gone]), 1)
+        assert [c.hotkey for c in results] == ["5Gone", "5Live"]
+        assert results[0].uid is None
+
+
+class TestBurnGoesToTheOwnerNotUidZero:
+    """UID 0 is a neuron, not an incinerator."""
+
+    def test_the_owner_uid_is_resolved_from_the_metagraph(self):
+        from capability_subnet.common.chain import MetagraphView
+
+        view = MetagraphView(
+            netuid=1,
+            block=10,
+            hotkeys=["5FirstRegistered", "5Someone", "5Owner"],
+            owner_hotkey="5Owner",
+            commitments=[],
+        )
+        # Not 0: that slot belongs to whoever registered first, and weighting it
+        # pays that miner for nothing.
+        assert view.owner_uid() == 2
+
+    def test_an_owner_without_a_uid_reports_none(self):
+        from capability_subnet.common.chain import MetagraphView
+
+        view = MetagraphView(
+            netuid=1,
+            block=10,
+            hotkeys=["5Someone"],
+            owner_hotkey="5Owner",
+            commitments=[],
+        )
+        # The validator turns this into "submit nothing", which is the only safe
+        # answer when there is no address that burning could mean.
+        assert view.owner_uid() is None
 
 
 class TestAdmittedRecipesArePersisted:

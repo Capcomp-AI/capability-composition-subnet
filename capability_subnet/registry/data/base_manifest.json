@@ -1,11 +1,10 @@
 {
   "manifest_version": 1,
   "model_repo": "Qwen/Qwen3-8B",
-  "revision": "PIN_BEFORE_GENESIS",
-  "revision_pinned": false,
+  "revision": "b968826d9c46dd6066d109eabc6255188de91218",
+  "revision_pinned": true,
   "license": "Apache-2.0",
   "tokenizer_repo": "Qwen/Qwen3-8B",
-  "tokenizer_sha256": "PIN_BEFORE_GENESIS",
   "architecture": "Qwen3ForCausalLM",
   "dtype": "bfloat16",
   "num_hidden_layers": 36,
@@ -15,20 +14,51 @@
   "num_key_value_heads": 8,
   "head_dim": 128,
   "module_shapes": {
-    "q_proj": { "in_features": 4096, "out_features": 4096 },
-    "k_proj": { "in_features": 4096, "out_features": 1024 },
-    "v_proj": { "in_features": 4096, "out_features": 1024 },
-    "o_proj": { "in_features": 4096, "out_features": 4096 },
-    "gate_proj": { "in_features": 4096, "out_features": 12288 },
-    "up_proj": { "in_features": 4096, "out_features": 12288 },
-    "down_proj": { "in_features": 12288, "out_features": 4096 }
+    "q_proj": {
+      "in_features": 4096,
+      "out_features": 4096
+    },
+    "k_proj": {
+      "in_features": 4096,
+      "out_features": 1024
+    },
+    "v_proj": {
+      "in_features": 4096,
+      "out_features": 1024
+    },
+    "o_proj": {
+      "in_features": 4096,
+      "out_features": 4096
+    },
+    "gate_proj": {
+      "in_features": 4096,
+      "out_features": 12288
+    },
+    "up_proj": {
+      "in_features": 4096,
+      "out_features": 12288
+    },
+    "down_proj": {
+      "in_features": 12288,
+      "out_features": 4096
+    }
   },
   "layer_module_template": "base_model.model.model.layers.{layer}.{block}.{module}",
-  "attention_modules": ["q_proj", "k_proj", "v_proj", "o_proj"],
-  "mlp_modules": ["gate_proj", "up_proj", "down_proj"],
+  "attention_modules": [
+    "q_proj",
+    "k_proj",
+    "v_proj",
+    "o_proj"
+  ],
+  "mlp_modules": [
+    "gate_proj",
+    "up_proj",
+    "down_proj"
+  ],
   "notes": [
-    "The revision must be pinned to an immutable commit sha before genesis.",
-    "Every certified source adapter must declare the same revision.",
+    "Pinned to the immutable Qwen/Qwen3-8B commit above; verified against the Hugging Face API.",
+    "Every certified source adapter is normalised to target this revision by scripts/import_public_adapters.py.",
     "Changing the base model creates a new arena version, not a new window."
-  ]
+  ],
+  "tokenizer_revision": "b968826d9c46dd6066d109eabc6255188de91218"
 }

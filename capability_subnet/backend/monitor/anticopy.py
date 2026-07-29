@@ -102,9 +102,8 @@ def is_champion_artifact(store: Store, artifact_sha256: str) -> bool:
 
     Not a rejection on its own — the comparator will fail it anyway, since an
     identical package cannot beat itself by a margin. Detecting it explicitly
-    lets the engine skip a full evaluation and say so in the report, which is
-    both cheaper and clearer than letting it run and reporting a statistical
-    tie.
+    lets the engine say so in the report, which is clearer than reporting a
+    statistical tie and leaving the reader to work out why it was exact.
     """
     champion = store.get_champion()
     if champion is None or not champion.artifact_sha256:

@@ -49,9 +49,30 @@ class ComparatorConfig:
     min_dominant_axes: int = C.DEFAULT_MIN_DOMINANT_AXES
     min_axis_samples: int = C.DEFAULT_MIN_AXIS_SAMPLES
     end_to_end_margin: float = C.DEFAULT_END_TO_END_MARGIN
+    #: Margin over the *incumbent*, before decay. Separate from the reference
+    #: margin so beating the previous winner does not get permanently harder.
+    champion_margin: float = C.DEFAULT_CHAMPION_MARGIN
+    champion_margin_decay_blocks: int = C.CHAMPION_MARGIN_DECAY_BLOCKS
     bootstrap_resamples: int = C.BOOTSTRAP_RESAMPLES
     bootstrap_confidence: float = C.BOOTSTRAP_CONFIDENCE
     strict_pareto: bool = False
+
+
+def decayed_champion_margin(config: ComparatorConfig, *, blocks_held: int) -> float:
+    """The margin a challenger must clear over the incumbent right now.
+
+    Full at the moment of crowning, falling linearly to zero over the decay
+    window. A defender's advantage is worth having — it stops a copy of the
+    champion from trading places with it on noise — but it should be an
+    advantage for holding the throne *well*, not a freehold. An incumbent that
+    nothing has displaced for a month is either genuinely excellent or simply
+    unopposed, and the network cannot tell those apart from the inside; letting
+    the bar fall resolves it in favour of the contest continuing.
+    """
+    if config.champion_margin_decay_blocks <= 0:
+        return config.champion_margin
+    elapsed = max(0, blocks_held) / config.champion_margin_decay_blocks
+    return max(0.0, config.champion_margin * (1.0 - min(1.0, elapsed)))
 
 
 def compare_axis(
@@ -113,6 +134,7 @@ def compare(
     reference_id: str,
     config: ComparatorConfig | None = None,
     bootstrap_seed: int = 0,
+    champion_blocks_held: int = 0,
 ) -> ComparatorOutcome:
     """Decide whether ``challenger`` dethrones the incumbent.
 
@@ -124,6 +146,8 @@ def compare(
         axes: the workflow's capability axes.
         reference_id: which reference ``reference`` belongs to, for the report.
         bootstrap_seed: fixes the resampling so the verdict is reproducible.
+        champion_blocks_held: how long the incumbent has held the throne, which
+            sets how much of its defender's advantage remains.
 
     Returns:
         The full outcome: every axis verdict, the paired statistics, and the
@@ -137,9 +161,19 @@ def compare(
 
     required = len(axes) if config.strict_pareto else config.min_dominant_axes
 
+    champion_margin = decayed_champion_margin(config, blocks_held=champion_blocks_held)
+    champion_outcomes = outcome_map(champion)
     challenger_outcomes = outcome_map(challenger)
     reference_outcomes = outcome_map(reference)
     differences = paired_differences(challenger_outcomes, reference_outcomes)
+
+    shared_with_champion = sorted(set(challenger_outcomes) & set(champion_outcomes))
+    champion_margin_observed = (
+        sum(challenger_outcomes[k] for k in shared_with_champion) / len(shared_with_champion)
+        - sum(champion_outcomes[k] for k in shared_with_champion) / len(shared_with_champion)
+        if shared_with_champion
+        else 0.0
+    )
 
     shared = sorted(set(challenger_outcomes) & set(reference_outcomes))
     challenger_e2e = (
@@ -182,6 +216,11 @@ def compare(
             f"end-to-end margin {observed_margin:+.3f} over {reference_id} "
             f"below the required {config.end_to_end_margin:+.3f}"
         )
+    if shared_with_champion and champion_margin_observed < champion_margin:
+        reasons.append(
+            f"margin {champion_margin_observed:+.3f} over the incumbent below the "
+            f"{champion_margin:+.3f} it still holds ({champion_blocks_held} blocks in)"
+        )
     if not bootstrap.significant:
         reasons.append(
             f"paired lower bound {bootstrap.lower_confidence_bound:+.4f} is not above zero"
@@ -197,6 +236,8 @@ def compare(
         strict_pareto=config.strict_pareto,
         end_to_end_margin_required=config.end_to_end_margin,
         end_to_end_margin_observed=observed_margin,
+        champion_margin_required=champion_margin,
+        champion_margin_observed=champion_margin_observed,
         paired=paired,
         dethrones=dethrones,
         reason="dethrones the incumbent" if dethrones else "; ".join(reasons),

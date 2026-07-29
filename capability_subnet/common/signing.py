@@ -37,6 +37,10 @@ def sign_payload(keypair, payload: Signable) -> str:
 #: supports. It has moved between them, and a hard import of any single one
 #: turns a routine dependency bump into a crash inside signature verification.
 _KEYPAIR_LOCATIONS: tuple[tuple[str, str], ...] = (
+    # Bittensor 11 vendors the keypair; 10.x and earlier got it from
+    # bittensor-wallet. Both are tried so a validator keeps verifying across an
+    # SDK upgrade instead of silently refusing every payload.
+    ("bittensor.sp_core", "Keypair"),
     ("bittensor_wallet", "Keypair"),
     ("bittensor", "Keypair"),
     ("substrateinterface", "Keypair"),

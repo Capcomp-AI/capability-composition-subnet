@@ -19,11 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from capability_subnet.backend.executor.reconstruction import BuildOutcome, Reconstructor
-from capability_subnet.backend.executor.serving import (
-    ServingError,
-    read_peak_vram_gb,
-    reset_vram_peak,
-)
+from capability_subnet.backend.executor.serving import ServingError, VramSampler
 from capability_subnet.backend.scorer import gates
 from capability_subnet.backend.scorer.aggregate import (
     EfficiencyInputs,
@@ -31,6 +27,12 @@ from capability_subnet.backend.scorer.aggregate import (
     end_to_end_completion,
     measure_resources,
     valid_rows,
+)
+from capability_subnet.backend.scorer.retention import (
+    ProbeItem,
+    ProbeOutcome,
+    relative_retention,
+    run_probe,
 )
 from capability_subnet.common import constants as C
 from capability_subnet.common.schemas import (
@@ -82,6 +84,10 @@ class EvaluationOutput:
     artifact_bytes: int = 0
     build: BuildOutcome | None = None
     infrastructure_error: str | None = None
+    #: How this package did on the general-capability probe. Retained on the
+    #: output so the base model's outcome can be carried into every subsequent
+    #: comparison in the same window.
+    probe: ProbeOutcome = field(default_factory=ProbeOutcome)
     #: Traces retained for later disclosure, as (result, trace) pairs. Bounded,
     #: and chosen by instance identifier rather than by outcome so the engine
     #: cannot retain only the runs that flatter it.
@@ -177,7 +183,8 @@ class Evaluator:
         hidden_instances: list,
         ood_instances: list,
         *,
-        base_e2e: float = 0.0,
+        probe_items: list[ProbeItem] | None = None,
+        base_probe: ProbeOutcome | None = None,
         reference_latency_seconds: float = 0.0,
         strongest_reference_id: str = "",
         strongest_reference_score: float = 0.0,
@@ -187,8 +194,11 @@ class Evaluator:
         """Build, serve, run and score one package.
 
         Args:
-            base_e2e: the base model's completion on the same instances, which
-                the retention component is measured against.
+            probe_items: this window's general-capability probe. Asked of every
+                package on the same draw.
+            base_probe: the base model's outcome on that same probe, which
+                retention is measured against. ``None`` while the base model is
+                itself being measured.
             reference_latency_seconds: the incumbent's median instance duration.
             apply_comparison_gates: whether to apply the gates that compare
                 against other packages. References are measured with these off —
@@ -205,6 +215,14 @@ class Evaluator:
             output.infrastructure_error = str(exc)
             return output
         except ReconstructionError as exc:
+            if _is_resource_exhaustion(exc):
+                # The recipe is legal and the host ran out of memory building it.
+                # That is the engine's limit, not the miner's mistake, and
+                # scoring it zero would terminate a candidate for hardware it was
+                # never told about. Held instead, like any other engine failure.
+                output.infrastructure_error = f"reconstruction ran out of resources: {exc}"
+                return output
+
             # The recipe itself cannot be built. That is a candidate failure and
             # scores zero — recorded as a gate verdict rather than an exception,
             # so it reaches the published report like every other rejection.
@@ -238,8 +256,6 @@ class Evaluator:
             log.info("%s failed a structural gate; skipping evaluation", package.candidate_id)
             return output
 
-        reset_vram_peak(self.gpu_index)
-
         try:
             with self.server.serve(adapter_path) as handle:
                 client = handle.client()
@@ -249,22 +265,20 @@ class Evaluator:
                     peak_vram_gb=handle.peak_vram_gb,
                 )
 
-                hidden = run_batch(hidden_instances, client, config=config)
-                ood = run_batch(ood_instances, client, config=config) if ood_instances else []
+                # Sampled across the run rather than read once after start-up:
+                # the memory that decides whether a package fits is the KV cache
+                # under load, not the resident weights.
+                with VramSampler(self.gpu_index) as vram:
+                    hidden = run_batch(hidden_instances, client, config=config)
+                    ood = run_batch(ood_instances, client, config=config) if ood_instances else []
 
-                # Read the peak while the endpoint is still up: tearing it down
-                # releases the allocation and the counter goes with it.
-                #
-                # Either reading may be unavailable. None propagates rather than
-                # collapsing to zero, so the gate can tell "used no memory" from
-                # "we do not know" — the difference between a candidate that fits
-                # and one that was never measured.
-                readings = [
-                    value
-                    for value in (handle.peak_vram_gb, read_peak_vram_gb(self.gpu_index))
-                    if value is not None
-                ]
-                peak_vram = max(readings) if readings else None
+                    if probe_items:
+                        output.probe = run_probe(client, probe_items)
+
+                # None propagates rather than collapsing to zero, so the gate can
+                # tell "used no memory" from "we do not know" — the difference
+                # between a candidate that fits and one nobody measured.
+                peak_vram = vram.peak_gb
         except ServingError as exc:
             output.infrastructure_error = str(exc)
             return output
@@ -291,11 +305,16 @@ class Evaluator:
         )
 
         candidate_e2e = end_to_end_completion(output.hidden_results)
+        # Measured against the base model on the *same* probe draw. Without a
+        # base outcome — which is the case while the base model itself is being
+        # measured — there is nothing to be relative to, and 1.0 is the reading
+        # that neither credits nor penalises.
+        retention = relative_retention(output.probe, base_probe) if base_probe is not None else 1.0
         output.scores = aggregate_scores(
             output.hidden_results,
             output.ood_results,
             self.stages,
-            base_e2e=base_e2e,
+            retention=retention,
             efficiency=EfficiencyInputs(
                 artifact_bytes=size_bytes,
                 # An unmeasured package scores no efficiency credit here. The
@@ -353,6 +372,22 @@ class Evaluator:
             )
 
         return verdicts
+
+
+def _is_resource_exhaustion(exc: Exception) -> bool:
+    """Whether a reconstruction failure was the host running out of room.
+
+    Matched on the message because the underlying allocator error is wrapped by
+    the time it reaches here. Deliberately broad: misclassifying an out-of-memory
+    failure as a candidate failure ends a miner's single evaluation for something
+    it could not have known about, while misclassifying the reverse merely delays
+    a bad recipe's rejection to the next window.
+    """
+    text = str(exc).lower()
+    return any(
+        marker in text
+        for marker in ("out of memory", "outofmemory", "cuda error", "cannot allocate", "oom")
+    )
 
 
 def summarise_evaluation(output: EvaluationOutput) -> str:

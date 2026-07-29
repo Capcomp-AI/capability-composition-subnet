@@ -47,7 +47,7 @@ python -m capability_subnet.miner.cli contract --section champion_challenge
 python -m capability_subnet.miner.cli contract --section hard_gates
 ```
 
-The pool contains capability adapters **and two controlled distractors**. The distractors are selectable on purpose: recognising that a plausible-looking adapter actively hurts is part of the composition problem. One is a German legal-contract adapter — superficially relevant because the workflow is German, actually harmful. The other is creative writing, which is directly antagonistic to strict structured output.
+The pool contains capability adapters **and two controlled distractors**. The distractors are selectable on purpose: recognising that a plausible-looking adapter actively hurts is part of the composition problem. One is a legal-citation adapter — superficially relevant because it is formal and heavily structured, actually harmful here. The other is creative writing, which is directly antagonistic to strict structured output.
 
 ## 3. Understand the problem
 
@@ -147,7 +147,7 @@ from capability_subnet.miner.search import coarse_search, refine_layer_groups
 report = coarse_search(my_scoring_function, budget=24, shuffle_seed=1)
 refined = refine_layer_groups(
     report.best.recipe, my_scoring_function,
-    adapters=["text-to-sql-v1", "german-technical-v1"],
+    adapters=["industrial-ifc-v1", "embedded-engineering-v1"],
 )
 ```
 
@@ -226,7 +226,7 @@ The full evaluation report is published at `/reports` — every gate verdict, ev
 | What you are doing | What you need |
 |---|---|
 | Building and validating recipes | Any machine |
-| Reconstructing an artifact | ~32 GB RAM, no GPU required |
+| Reconstructing an artifact | ~32 GB RAM. A GPU is optional and ~30x faster on the trimming methods. |
 | Evaluating locally | A GPU that fits the base model in bfloat16 (24 GB+) |
 | Searching seriously | As much as you want to spend — this is where competition happens |
 
@@ -238,8 +238,21 @@ See [min_compute.yml](../min_compute.yml) for detail.
 
 **Choosing rank 128.** It exceeds the artifact-size gate against the pinned base model. Run `size` first.
 
-**Omitting the retention adapter.** The base-retention gate rejects packages that traded away general ability for workflow score. The retention anchor exists for exactly that.
+**Omitting the retention adapter.** The base-retention gate rejects packages that traded away general ability for workflow score. It is measured on a held-out probe of short, exactly-scored general instructions — arithmetic, ordering, exact formats, answering in the language you were addressed in — so a package can score well on the workflow and still fail it. The retention anchor exists for exactly that.
 
 **Tuning to the public pack.** The hidden set is drawn fresh each window and includes out-of-distribution mutations — renamed components, converted units, aliased database columns, reformatted fault codes. A package that memorised surface patterns fails on those, and out-of-distribution robustness carries 10% of the qualified score directly.
 
+**Assuming only the throne pays.** It does not. Every package that clears all
+hard gates is graded on quality, improvement over the strongest reference,
+proximity to the champion, and running cost — and earns a share of emission for
+several windows whether or not it dethroned anything. Getting close is worth
+something; producing something undeployable is not.
+
+**Ignoring token spend.** It is now a scored component, and it is measured per
+*completed* instance rather than per attempted one — so giving up early makes it
+worse, not better. Two packages that finish the same fraction of workflows are
+not equally valuable if one costs twice as much to run.
+
 **Committing before evaluating.** One shot per hotkey. There is no reason to spend it on a package you have not measured.
+
+**Assuming a loss is the end.** It is, if you were genuinely measured and genuinely lost. It is not when the engine could not evaluate you — an unreadable memory counter or too few scored instances holds your submission for a later window rather than terminating it. While it waits it earns a small share of emission, which is what keeps it from being deregistered before its turn comes.

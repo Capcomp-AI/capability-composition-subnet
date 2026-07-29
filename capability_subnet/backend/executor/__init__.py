@@ -6,7 +6,6 @@ from capability_subnet.backend.executor.reconstruction import (
     Reconstructor,
 )
 from capability_subnet.backend.executor.serving import (
-    DispatchBudget,
     ExternalServer,
     ManagedVllmServer,
     ServingError,
@@ -16,7 +15,6 @@ from capability_subnet.backend.executor.serving import (
 __all__ = [
     "ArtifactCache",
     "BuildOutcome",
-    "DispatchBudget",
     "ExternalServer",
     "ManagedVllmServer",
     "Reconstructor",

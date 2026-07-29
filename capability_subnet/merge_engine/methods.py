@@ -22,6 +22,7 @@ All arithmetic happens in delta space, in float32, one projection at a time.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
@@ -70,6 +71,17 @@ PIPELINES: dict[str, MergePipeline] = {
             "to the declared output rank."
         ),
     ),
+    # Deliberately the same pipeline as `svd`. Concatenating factorisations is
+    # algebraically the sum of the updates, so the two cannot produce different
+    # weights — and because the engine now decomposes exactly this concatenation
+    # rather than a materialised sum, they no longer even differ in rounding.
+    #
+    # Kept as an accepted spelling rather than removed, so recipes written
+    # against the published contract stay valid. `canonical_method` folds it
+    # into `svd` before anything hashes a recipe, which is what stops two miners
+    # who independently chose different names for the same package from
+    # colliding on the artifact digest and having the later one terminated for
+    # copying work it never saw.
     C.MERGE_CAT_SVD: MergePipeline(
         sparsify="none",
         sign_election="none",
@@ -77,9 +89,8 @@ PIPELINES: dict[str, MergePipeline] = {
         factor_space=False,
         description=(
             "Concatenates the adapters' factorisations and reduces the result. "
-            "Concatenating factors is algebraically the sum of the updates, so "
-            "this produces the same update as the plain delta-space sum; the "
-            "mandatory reduction back to the output rank is what makes it usable."
+            "An accepted alias of `svd`: concatenating factors is algebraically "
+            "the sum of the updates, so both names describe one package."
         ),
     ),
     C.MERGE_TIES_SVD: MergePipeline(
@@ -118,6 +129,21 @@ PIPELINES: dict[str, MergePipeline] = {
         description="Magnitude trimming followed by a plain weighted sum.",
     ),
 }
+
+
+#: Merge names that describe the same package, folded to one spelling.
+METHOD_ALIASES: dict[str, str] = {C.MERGE_CAT_SVD: C.MERGE_SVD}
+
+
+def canonical_method(method: str) -> str:
+    """The canonical spelling of ``method``.
+
+    Applied before a recipe is hashed so that two recipes describing the same
+    merge share a digest. Without it the anti-copy check sees them as distinct
+    submissions that happen to build identical bytes, and terminates whichever
+    arrived second for copying.
+    """
+    return METHOD_ALIASES.get(method, method)
 
 
 def pipeline_for(method: str) -> MergePipeline:
@@ -174,6 +200,13 @@ def random_drop_rescale(
     The generator is keyed on the recipe seed together with the identity of this
     specific tensor, so the mask does not depend on how many tensors were
     processed first.
+
+    The mask is always drawn on the CPU and then moved to wherever the delta
+    lives. That is not an oversight to optimise away: CUDA generators produce
+    different streams across driver and architecture versions, so drawing the
+    mask on the GPU would make a recipe's artifact depend on which card the
+    worker was assigned. Drawing it on the CPU and transferring it keeps the mask
+    identical on every machine while leaving the arithmetic on the accelerator.
     """
     if density >= 1.0:
         return delta
@@ -182,7 +215,7 @@ def random_drop_rescale(
 
     generator = generator_for(*seed_parts)
     keep_mask = torch.rand(delta.shape, generator=generator, dtype=WORK_DTYPE) < density
-    return torch.where(keep_mask, delta / density, torch.zeros_like(delta))
+    return torch.where(keep_mask.to(delta.device), delta / density, torch.zeros_like(delta))
 
 
 def sparsify(
@@ -267,7 +300,7 @@ def aggregate_disjoint_mean(stacked: torch.Tensor, elected: torch.Tensor) -> tor
 
 
 def merge_deltas(
-    deltas: list[torch.Tensor],
+    deltas: Callable[[int], torch.Tensor],
     coefficients: list[float],
     pipeline: MergePipeline,
     *,
@@ -277,10 +310,17 @@ def merge_deltas(
     site_name: str,
     adapter_ids: list[str],
 ) -> torch.Tensor:
-    """Run the full pipeline for one projection.
+    """Run the full pipeline for one projection, one adapter at a time.
 
     Args:
-        deltas: per-adapter effective updates, all the same shape.
+        deltas: called with an adapter's index, returns that adapter's effective
+            update. A callable rather than a list because holding every update
+            at once is what this function exists to avoid: at the pinned base
+            model's widest projection each one is 192 MB in float32, and a recipe
+            may select twelve. Materialising them together needs 2.3 GB for one
+            projection of one layer, and the intermediates the aggregation builds
+            on top of that took a 24 GB card out of memory — so a *legal* recipe
+            could not be built at all, and the failure looked like the miner's.
         coefficients: per-adapter coefficient, resolved for this layer group.
         pipeline: the resolved stage configuration.
         density: fraction retained by the sparsify stage, or ``None``.
@@ -291,36 +331,90 @@ def merge_deltas(
 
     Returns:
         The merged update for this projection, float32.
+
+    Peak memory is a small constant number of updates rather than one per
+    selected adapter, so reconstruction cost no longer depends on how many
+    adapters a miner chose.
     """
-    if len(deltas) != len(coefficients) or len(deltas) != len(adapter_ids):
-        raise ValueError("deltas, coefficients and adapter_ids must be the same length")
-    if not deltas:
+    if len(coefficients) != len(adapter_ids):
+        raise ValueError("coefficients and adapter_ids must be the same length")
+    if not adapter_ids:
         raise ValueError("nothing to merge")
 
-    # Sparsify each adapter independently, before the coefficient is applied.
-    # Applying the coefficient first would let a large coefficient protect
-    # entries that magnitude trimming should have discarded, which would make the
-    # density parameter mean different things at different coefficients.
-    processed: list[torch.Tensor] = []
-    for delta, coefficient, adapter_id in zip(deltas, coefficients, adapter_ids, strict=True):
+    def contribution(index: int) -> torch.Tensor:
+        """One adapter's sparsified, weighted update.
+
+        Sparsify happens before the coefficient is applied. Applying the
+        coefficient first would let a large coefficient protect entries that
+        magnitude trimming should have discarded, which would make the density
+        parameter mean different things at different coefficients.
+
+        Recomputed rather than cached between passes: every step is deterministic
+        given the seed and the tensor's identity, so the second pass sees exactly
+        what the first did, and recomputing a trim is far cheaper than holding
+        every update in memory to avoid it.
+        """
         trimmed = sparsify(
-            delta,
+            deltas(index),
             pipeline.sparsify,
             density,
-            seed_parts=(seed, adapter_id, site_name),
+            seed_parts=(seed, adapter_ids[index], site_name),
         )
-        processed.append(trimmed * coefficient)
+        return trimmed * coefficients[index]
 
-    stacked = torch.stack(processed, dim=0)
-    del processed
+    count = len(adapter_ids)
 
-    if pipeline.aggregate == "disjoint_mean":
-        if pipeline.sign_election == "none":
-            raise ValueError("disjoint mean aggregation requires sign election")
-        elected = elect_signs(stacked, sign_method or pipeline.sign_election)  # type: ignore[arg-type]
-        return aggregate_disjoint_mean(stacked, elected)
+    if pipeline.aggregate != "disjoint_mean":
+        total: torch.Tensor | None = None
+        for index in range(count):
+            piece = contribution(index)
+            total = piece if total is None else total.add_(piece)
+            del piece
+        assert total is not None  # count > 0 checked above
+        return total
 
-    return aggregate_sum(stacked)
+    if pipeline.sign_election == "none":
+        raise ValueError("disjoint mean aggregation requires sign election")
+
+    mode = sign_method or pipeline.sign_election
+
+    # First pass: the sign tally. `total` weighs each adapter by how much it
+    # wants to move, `frequency` gives each one vote.
+    tally: torch.Tensor | None = None
+    for index in range(count):
+        piece = contribution(index)
+        term = piece if mode == "total" else torch.sign(piece)
+        tally = term.clone() if tally is None else tally.add_(term)
+        del piece, term
+    assert tally is not None
+
+    elected = torch.where(
+        tally < 0,
+        torch.tensor(-1.0, dtype=tally.dtype, device=tally.device),
+        torch.tensor(1.0, dtype=tally.dtype, device=tally.device),
+    )
+    del tally
+
+    # Second pass: average only over the adapters that agree with the elected
+    # sign. Averaging rather than summing keeps the merged magnitude comparable
+    # to a single adapter's — two adapters that both want to move an entry the
+    # same way should reinforce each other's confidence, not double the step.
+    accumulated: torch.Tensor | None = None
+    agreeing: torch.Tensor | None = None
+    for index in range(count):
+        piece = contribution(index)
+        agrees = torch.sign(piece) == elected
+        contributionwise = torch.where(agrees, piece, torch.zeros_like(piece))
+        counted = agrees.to(piece.dtype)
+        accumulated = (
+            contributionwise if accumulated is None else accumulated.add_(contributionwise)
+        )
+        agreeing = counted if agreeing is None else agreeing.add_(counted)
+        del piece, agrees, contributionwise, counted
+    assert accumulated is not None and agreeing is not None
+
+    # Entries where nothing agreed average to zero rather than dividing by zero.
+    return accumulated.div_(agreeing.clamp_(min=1.0))
 
 
 def describe(method: str) -> str:

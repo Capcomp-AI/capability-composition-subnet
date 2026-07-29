@@ -113,24 +113,37 @@ def owner_reference_recipe(snapshot: PoolSnapshot) -> Recipe:
     # adapter that a repinned pool no longer contains would make this recipe
     # unbuildable, and the reference set would vanish exactly when the network
     # most needs a bar to clear.
-    emphasis = {
-        "strict-json-v1": 1.15,
-        "tool-calling-v1": 1.10,
-        "safety-policy-v1": 1.10,
-        "german-technical-v1": 1.05,
-        "general-reasoning-retention-v1": 0.90,
+    # Stated as capabilities rather than adapter ids, and resolved against the
+    # pool actually in force. Naming ids directly meant a repinned pool left this
+    # recipe weighting adapters that no longer existed — every coefficient
+    # filtered away, the reference silently degrading to an equal-weight merge,
+    # and the bar quietly dropping at exactly the moment the network most needs
+    # one.
+    by_capability = {
+        "structured_output": 1.15,
+        "tool_calling": 1.10,
+        "resource_decision": 1.10,
+        "technical_domain_language": 1.05,
+        "general_reasoning_retention": 0.90,
     }
-    depth_emphasis = {
-        # Reading the manual is an early-layer behaviour…
-        "group_0": {"german-technical-v1": 1.20},
-        # …while writing SQL and code is a late-layer one.
-        "group_3": {"text-to-sql-v1": 1.20, "python-diagnostics-v1": 1.15},
-    }
+    emphasis: dict[str, float] = {}
+    for capability, weight in by_capability.items():
+        for adapter_id in snapshot.registry.adapters_with_capability(capability):
+            if adapter_id in present:
+                emphasis[adapter_id] = weight
 
-    overrides = {
-        group: {adapter: weight for adapter, weight in weights.items() if adapter in present}
-        for group, weights in depth_emphasis.items()
-    }
+    # Reading and interpreting the source material is an early-layer behaviour…
+    depth_emphasis: dict[str, dict[str, float]] = {"group_0": {}, "group_3": {}}
+    for adapter_id in snapshot.registry.adapters_with_capability("technical_domain_language"):
+        if adapter_id in present:
+            depth_emphasis["group_0"][adapter_id] = 1.20
+    # …while generating code and structured output is a late-layer one.
+    for capability in ("python_code_generation", "structured_output"):
+        for adapter_id in snapshot.registry.adapters_with_capability(capability):
+            if adapter_id in present:
+                depth_emphasis["group_3"][adapter_id] = 1.15
+
+    overrides = {group: weights for group, weights in depth_emphasis.items() if weights}
 
     return Recipe(
         workflow_id=snapshot.registry.workflow_id,
@@ -143,10 +156,8 @@ def owner_reference_recipe(snapshot: PoolSnapshot) -> Recipe:
             majority_sign_method="total",
             random_seed=REFERENCE_SEED,
         ),
-        global_weights={
-            adapter: weight for adapter, weight in emphasis.items() if adapter in present
-        },
-        layer_group_overrides={group: weights for group, weights in overrides.items() if weights},
+        global_weights=emphasis,
+        layer_group_overrides=overrides,
         compression=CompressionSpec(
             output_rank=snapshot.registry.canonical_rank, svd_clamp_quantile=0.995
         ),
@@ -234,13 +245,24 @@ def single_adapter_references(snapshot: PoolSnapshot) -> list[ReferencePackage]:
     ]
 
 
-def collapse_single_adapters(scores: dict[str, float]) -> dict[str, float]:
+def collapse_single_adapters(
+    scores: dict[str, float], *, include_incumbent: bool = True
+) -> dict[str, float]:
     """Fold the per-adapter references into one ``best single adapter`` entry.
 
     A challenger has to beat the best specialist, not each one individually, so
     the reference set the comparator sees carries a single collapsed entry. The
     per-adapter numbers stay in the report, because which specialist was
     strongest is one of the more useful things the network learns each window.
+
+    Args:
+        include_incumbent: whether the reigning champion counts as a reference.
+            False when picking the bar a challenger must clear by the absolute
+            margin. The permanent references answer "did composition add value
+            at all", and that question does not get harder because someone
+            already answered it — folding the incumbent in made every successive
+            champion clear the previous one by a further fixed margin, which
+            walks the bar up until nothing can move it.
     """
     collapsed: dict[str, float] = {}
     singles: dict[str, float] = {}
@@ -248,6 +270,8 @@ def collapse_single_adapters(scores: dict[str, float]) -> dict[str, float]:
     for name, value in scores.items():
         if name.startswith(BEST_SINGLE + ":"):
             singles[name] = value
+        elif name == INCUMBENT and not include_incumbent:
+            continue
         else:
             collapsed[name] = value
 

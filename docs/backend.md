@@ -30,13 +30,21 @@ cp backend.example.yaml backend.yaml
 cp .env.example .env
 ```
 
-### The four things you must change
+### The things you must change
 
 The engine **refuses to start** until these are set, because each one, left at its default, would make its own results indefensible.
 
-**1. Pin the base model.** Edit `capability_subnet/registry/data/base_manifest.json` and replace `PIN_BEFORE_GENESIS` with an immutable upstream commit. Every certified adapter must declare the same revision.
+**1. Materialise the pool.** The base model is already pinned to an immutable commit; the certified adapters have to be fetched and normalised before anything can be reconstructed:
 
-**2. Generate a hidden seed root.**
+```bash
+python scripts/import_public_adapters.py --out pool --write-registry
+```
+
+This fetches exactly two files per adapter at the pinned upstream revision — the config and the weights, nothing else — refuses any upstream whose config has drifted from what the registry recorded, re-factorises the update to the canonical rank, and writes each artifact digest back into the registry. Then measure each adapter and record it with `capability-registry certify`; the engine refuses to start while any adapter is uncertified.
+
+**2. Point `base_model_path` at a local copy of the base model.** Managed serving starts a runtime per candidate from it, and evaluation runs with `HF_HUB_OFFLINE=1` — a candidate evaluation must never reach the network.
+
+**3. Generate a hidden seed root.**
 
 ```bash
 python3 -c "import secrets; print(secrets.randbits(63))"
@@ -44,7 +52,7 @@ python3 -c "import secrets; print(secrets.randbits(63))"
 
 Put it in `.env` as `CAPSUB_HIDDEN_SEED_ROOT`. **Anyone who learns this can predict every future hidden instance.** Keep it out of version control, out of logs, and off the API.
 
-**3. Pin the evaluator image digest.**
+**4. Pin the evaluator image digest.**
 
 ```bash
 docker inspect --format='{{index .RepoDigests 0}}' capability-subnet/engine:latest
@@ -52,7 +60,7 @@ docker inspect --format='{{index .RepoDigests 0}}' capability-subnet/engine:late
 
 It is written into every published report, so a report identifies the exact software that produced it.
 
-**4. Set `min_commit_block`** to the block the arena opened at, so commitments from a previous arena version cannot enter the queue.
+**5. Set `min_commit_block`** to the block the arena opened at, so commitments from a previous arena version cannot enter the queue.
 
 Then verify:
 
@@ -68,9 +76,11 @@ Preflight lists every remaining problem at once rather than one per restart.
 
 The pool is the foundation. An adapter enters it only after passing every admission gate, because the merge engine loads these tensors into a process that also holds hidden evaluation material — an adapter file is untrusted input until proven to be nothing but finite numbers of the expected shape.
 
+The gates run against the file `import_public_adapters.py` wrote, not against anything upstream published. That is deliberate: the importer fetches only the config and the weights, so a repository that also ships scripts, pickles or stray tensors contributes none of them, and what gets certified is what will actually be loaded.
+
 ```bash
 python -m capability_subnet.registry.cli certify /path/to/adapter \
-    --adapter-id german-technical-v1 \
+    --adapter-id embedded-engineering-v1 \
     --license Apache-2.0 --allows-derivatives \
     --capability-score 0.82 \
     --base-retention 0.991
@@ -170,6 +180,78 @@ Every field can be overridden with `CAPSUB_<FIELD_NAME>`. Full annotated referen
 | `hidden_instances` | `100` | Canonical instances per window. |
 | `ood_instances` | `30` | Out-of-distribution instances per window. |
 | `hidden_seed_root` | — | **Secret.** Set it. |
+| `single_adapter_rotation` | `3` | Single-adapter references measured per window, rotated by window id. `0` measures all of them. |
+
+`single_adapter_rotation` is a throughput knob with a real trade behind it.
+Measuring every single-adapter reference each window is the most defensible
+thing to do and, at one adapter per full instance draw, consumes most of a
+window's GPU budget before a single challenger is looked at — and a window that
+cannot finish never evaluates anybody. Rotating keeps the "beat the best
+specialist" bar honest over time while leaving room to run the queue. Set it to
+`0` only if your hardware can genuinely afford the full sweep every window.
+
+### Serving
+
+| Field | Default | Notes |
+|---|---|---|
+| `serving_mode` | `managed` | `managed` starts a vLLM process per candidate with that candidate's adapter applied |
+| `base_model_path` | — | Local path to the pinned base model. Required in managed mode. |
+| `serving_gpu_index` | `0` | GPU assigned to the candidate endpoint |
+| `serving_max_model_len` | `16384` | Context window |
+| `serving_gpu_memory_utilization` | `0.90` | Fraction of the card vLLM may claim |
+| `serving_python` | `""` | Interpreter vLLM runs under; empty uses the engine's own |
+| `tool_call_parser` | `hermes` | Qwen3 emits Hermes-style tool calls |
+| `reasoning_parser` | `""` | Empty: this subnet disables the model's thinking channel |
+
+Set `serving_python` when vLLM lives in its own virtualenv, which is common:
+vLLM pins torch tightly enough that operators routinely keep it separate from
+the engine. Empty means "the interpreter the engine runs under".
+
+The engine probes vLLM's `--help` for optional flags rather than assuming them,
+because vLLM removes options between releases without a deprecation window and
+an unknown option is an immediate argparse exit — presenting as every candidate
+being unservable. Flags the protocol depends on are *not* probed: a build
+without `--enable-auto-tool-choice` cannot run this workflow, and failing loudly
+at start-up is the right outcome.
+
+**Use `managed`.** The `external` mode points at a runtime it does not own and
+therefore cannot apply a candidate's adapter — every candidate and every
+reference would be measured against whatever process is already running, all of
+them would post identical scores, no challenger could ever be distinguished, and
+the network would burn its emission with no report explaining why. The engine
+refuses to start in `external` mode for exactly that reason; it exists for
+development against the base model alone.
+
+**A faulty GPU anywhere in the machine can make higher-indexed ones unreachable.**
+Device enumeration walks the physical indices in order, so a card NVML cannot
+describe stops the walk — every GPU above it then reports as absent, and vLLM
+fails with `local rank 0 is out of bounds for 0 devices` rather than anything
+naming the real cause. If `nvidia-smi -i <n>` reports "No devices were found"
+for any card, treat every index above it as unusable until that card is repaired
+or removed, and keep `serving_gpu_index` and `merge_gpu_index` below it. A host
+fault rather than a subnet one, but it presents as the engine being unable to
+serve anything.
+
+`tool_call_parser` is not optional either. Without it vLLM renders the tool
+schemas into the prompt but never parses the reply, so `message.tool_calls`
+comes back empty and `tool_choice: "auto"` is rejected outright — every instance
+fails for a reason that has nothing to do with the candidate.
+
+### Reconstruction
+
+| Field | Default | Notes |
+|---|---|---|
+| `merge_device` | `cuda` | Where the merge arithmetic runs |
+| `merge_gpu_index` | `0` | GPU used for reconstruction |
+| `reconstruction_workers` | `2` | Independent rebuilds whose digests must agree |
+
+`merge_device` is consensus-relevant. The trimming methods materialise a full
+update per projection and must decompose it densely; on the pinned base model
+that is roughly six minutes per build on a GPU against nearly three hours on a
+CPU. But cuSOLVER and LAPACK do not agree bit-for-bit, so an artifact digest
+reproduces only on the same device class. Every published report records the
+device it was built on, and **every worker in one deployment must use the same
+one** — which the cross-worker digest check enforces automatically, by failing.
 
 ### Comparator
 
@@ -179,20 +261,51 @@ Every field can be overridden with `CAPSUB_<FIELD_NAME>`. Full annotated referen
 | `axis_tolerance` | `0.01` | Relative band that still counts as not-worse |
 | `min_dominant_axes` | `1` | Axes a challenger must dominate |
 | `min_axis_samples` | `20` | Fewer paired samples than this counts as worse |
-| `end_to_end_margin` | `0.03` | Absolute completion margin over the strongest reference |
+| `end_to_end_margin` | `0.03` | Absolute completion margin over the strongest **permanent reference** |
+| `champion_margin` | `0.01` | Defender's advantage over the incumbent, at the moment it is crowned |
+| `champion_margin_decay_blocks` | `216000` | Blocks over which that advantage falls to zero (~30 days) |
 | `strict_pareto` | `false` | `true` requires dominance on *every* axis |
 
 Raising `end_to_end_margin` makes the throne harder to take and improvements more meaningful; lowering it risks crowning noise. Do not tune it in response to a specific candidate.
 
+`champion_margin` is deliberately separate from `end_to_end_margin`, and setting them equal recreates a bug rather than simplifying the configuration: the incumbent would then effectively count as a reference, every successive champion would have to beat the previous one by a further fixed margin, and the bar would walk upward until nothing could move it. Setting `champion_margin_decay_blocks` to `0` disables the decay and reintroduces a permanent defender's advantage — an incumbent that nothing displaces then holds the throne indefinitely.
+
 ### Incentive
 
-| Field | Default |
-|---|---|
-| `incentive_mode` | `winner_take_all` (or `graded_top3`) |
-| `burn_percentage` | `0.0` — the operational safety valve |
-| `burn_uid` | `0` |
+| Field | Default | Notes |
+|---|---|---|
+| `incentive_mode` | `graded_contribution` | or `winner_take_all`, `graded_top3` |
+| `champion_base_share` | `0.55` | The champion's fixed cut under the graded mode |
+| `contribution_memory_windows` | `7` | How long a graded result keeps earning |
+| `tail_share` | `0.20` | Spread across queued miners as a linear taper |
+| `burn_percentage` | `0.0` | The operational safety valve |
+| `burn_uid` | `0` | Fallback only — see below |
+
+`graded_contribution` is the default because winner-take-all discards the
+network's most useful signal. Almost every submission that is ever evaluated
+will fail to dethrone, and a recipe is one shot — a miner cannot iterate on it
+the way a code-submitting miner can. Paying a miner who moved completion from
+0.41 to 0.58 exactly what it pays one that submitted a distractor soup tells
+neither of them anything, and the second attempt is no better informed than the
+first.
+
+The throne is still the prize: the champion takes `champion_base_share` of the
+payable emission outright. Everything below it is split by a grade blending the
+qualified score (50%), improvement over the strongest permanent reference (25%),
+proximity to the champion (15%) and running cost — tokens and latency (10%).
+Only candidates that cleared **every hard gate** are graded; this is not a
+consolation prize for producing something undeployable. If nobody qualifies, the
+graded pool burns rather than folding into the champion's share, because holding
+an uncontested throne is not an achievement.
+
+Each candidate's grade and its four terms are published on its report, so a
+miner that earned a partial share can see which part of its package earned it.
 
 `burn_percentage` is what you reach for during an incident: it routes part of the share to burn without changing who the champion is, which is better than stopping the engine and freezing emission entirely.
+
+`tail_share` is not payment for work. Bittensor prunes by lowest emission, so a miner holding exactly zero is the first the chain evicts — and under a strict winner-take-all split that is every challenger still waiting to be evaluated. The engine evaluates roughly one challenger per window, so that wait is long enough to matter, and a queue that empties itself is a subnet with one participant. Setting it to `0` restores pure winner-take-all and reintroduces that failure.
+
+`burn_uid` is a **fallback for offline tooling only**. Live components resolve the subnet owner's UID from the metagraph instead, because UID 0 is not an incinerator — it belongs to whichever neuron registered into the first slot, and weighting it pays that miner for nothing. A validator that cannot resolve the owner submits nothing at all rather than paying a stranger.
 
 ---
 

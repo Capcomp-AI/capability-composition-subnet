@@ -29,11 +29,11 @@ One JSON document. Not a model, not weights, not code.
   "workflow_id": "industrial_maintenance_de_v1",
   "base_revision": "<pinned commit>",
   "source_snapshot_sha256": "sha256:...",
-  "selected_adapters": ["german-technical-v1", "text-to-sql-v1", "..."],
+  "selected_adapters": ["embedded-engineering-v1", "industrial-ifc-v1", "..."],
   "merge": { "combination_type": "dare_ties_svd", "density": 0.35,
              "majority_sign_method": "total", "random_seed": 937152 },
-  "global_weights": { "text-to-sql-v1": 1.20, "safety-policy-v1": 1.15 },
-  "layer_group_overrides": { "group_2": { "text-to-sql-v1": 1.30 } },
+  "global_weights": { "industrial-ifc-v1": 1.20, "constrained-selection-v1": 1.15 },
+  "layer_group_overrides": { "group_2": { "industrial-ifc-v1": 1.30 } },
   "compression": { "output_rank": 64, "svd_clamp_quantile": 0.99 }
 }
 ```
@@ -72,14 +72,34 @@ A challenger must clear four independent bars:
 |---|---|
 | **Per-axis dominance** | Clearly better on at least the required number of capability axes |
 | **No abandoned capability** | Not worse on *every* remaining axis |
-| **Absolute margin** | Beat the **strongest reference** — not just the incumbent — by 3 points of completion |
+| **Absolute margin** | Beat the **strongest permanent reference** by 3 points of completion |
+| **Defender's advantage** | Beat the incumbent by a further margin that decays to zero over ~30 days |
 | **Statistical significance** | Paired bootstrap lower confidence bound above zero on shared instances |
 
 The second bar is the one that matters most. It stops a package from trading away, say, safety compliance for a better SQL score: the average would improve and the package would be worse at the job.
 
 The third bar is what keeps the network honest at genesis. Standard, non-learned baselines sit on the board permanently — the base model, the best single adapter, three equal-weight merges, and the operator's own published recipe. **If a miner cannot beat all of them, composition has not added value and nobody gets paid.** A reference on the throne earns nothing; the share burns.
 
-**One shot per hotkey.** A decisive loss terminates the challenger permanently. Copying a published recipe costs a registration and buys nothing, because dethroning requires a genuine margin and a copy reproduces the champion's scores exactly.
+The incumbent is deliberately *not* one of the permanent references. Folding it in would mean every successive champion had to beat the previous one by a further three points — and since completion is bounded by one, that staircase stalls after a handful of dethrones, after which one package holds the throne forever and the network buys nothing more. The incumbent instead gets its own, smaller margin that decays: a defender's advantage for holding the throne well, not a freehold.
+
+**One shot per hotkey.** A decisive loss terminates the challenger permanently. That rule is only defensible if the engine never spends a candidate's shot on its own bad night, so failures that indict the *engine* — an unreadable memory counter, too few scored instances — hold the candidate for a later window instead of ending it.
+
+### Losing well is worth something
+
+Winner-take-all throws away the network's most useful signal. Almost every submission that is ever evaluated will fail to take the throne, and a recipe is *one shot* — a miner cannot iterate on it the way a code-submitting miner can. Paying a miner who moved end-to-end completion from 0.41 to 0.58 exactly what it pays one that submitted a soup of distractors tells neither of them anything.
+
+So the throne is winner-takes-most, and everything below it is **graded**:
+
+| Term | Weight | What it rewards |
+|---|---|---|
+| Quality | 50% | The qualified score — completion, stage balance, OOD, retention, latency, tokens, size |
+| Improvement | 25% | How far past the strongest non-learned reference it got |
+| Proximity | 15% | How close it came to the champion — a near miss is not a wasted registration |
+| Cost | 10% | Token spend and latency, because two packages that finish equally are not equally valuable |
+
+Only packages that cleared **every hard gate** are graded. This is not a consolation prize for producing something undeployable, and if nobody qualifies the graded pool burns rather than becoming a bonus for an uncontested champion. Every grade is published broken into its four terms, so a miner can see what earned it.
+
+Miners still waiting in the queue earn a small tapered share on top. Not payment for work: Bittensor prunes by lowest emission, so a strict winner-take-all split makes every unevaluated challenger the first thing the chain evicts.
 
 ## The V1 workflow: Industrial Maintenance DE
 
@@ -90,7 +110,7 @@ manual interpretation → fault extraction → maintenance SQL → diagnostic Py
     → inventory action → safety validation → strict final JSON
 ```
 
-Eight capabilities in one dependent chain — German technical language, structured log extraction, fault reasoning, text-to-SQL, code generation, tool calling, safety-policy compliance, strict structured output. Later steps consume earlier outputs, so it cannot be decomposed into independent benchmark questions.
+Seven scored capability axes in one dependent chain — manual interpretation, fault extraction, maintenance SQL, diagnostic Python, inventory action, safety validation, strict final JSON. Later steps consume earlier outputs, so it cannot be decomposed into independent benchmark questions.
 
 **No language model decides the result.** Manual facts come from generator metadata. Fault codes come from a deterministic machine schema. SQL is judged by executing it against a hidden PostgreSQL snapshot. Python is judged by hidden test cases the agent never sees. Inventory is judged by the simulator's final state, safety by a deterministic rule engine, and the final report by JSON Schema plus exact value comparison.
 
@@ -100,7 +120,13 @@ That determinism is not fastidiousness — it is what makes the paired statistic
 
 ```bash
 git clone <repository-url> lora-merger && cd lora-merger
-pip install -e ".[dev]"
+
+# Install what your role needs. The base install is deliberately small —
+# a validator never touches the tensor stack, so it does not download one.
+pip install -e .              # validator, auditor  (~50 MB)
+pip install -e ".[miner]"     # + reconstruction and local evaluation
+pip install -e ".[backend]"   # + serving, sandbox services, NVML
+pip install -e ".[dev]"       # everything, plus test and lint tooling
 
 # What is the arena?
 python -m capability_subnet.miner.cli pool          # the frozen certified adapter pool
@@ -122,6 +148,7 @@ Then read the guide for your role:
 | You are a… | Read | You need |
 |---|---|---|
 | **Miner** | [docs/miner.md](docs/miner.md) | Any hardware. A GPU only if you want to evaluate locally. |
+| **Pool operator** | [`scripts/import_public_adapters.py`](scripts/import_public_adapters.py) | Materialises the certified pool from its pinned upstream sources. |
 | **Validator** | [docs/validator.md](docs/validator.md) | A small VPS. **No GPU.** |
 | **Subnet operator** | [docs/backend.md](docs/backend.md) | GPU hosts, Docker, PostgreSQL. |
 
@@ -129,9 +156,16 @@ Then read the guide for your role:
 
 Validators do not reconstruct, serve or score anything. They fetch the signed weight vector the engine publishes, verify it, and set weights.
 
-That is a real trade: it concentrates evaluation in one operator. What keeps it honest is that a validator is **not a relay**. Before touching the chain it verifies the operator signature against an allow-list it controls, checks the vector against the chain it can see (does the champion still hold that UID? is the engine stalled?), and **burns rather than submitting anything it cannot verify**.
+That is a real trade: it concentrates evaluation in one operator. What keeps it honest is that a validator is **not a relay**. Before touching the chain it:
 
-Beyond that, anyone can check the record without a GPU:
+1. verifies the operator signature against an allow-list it controls,
+2. checks the vector against the chain it can see — does the champion still hold that UID? is the engine stalled?
+3. **re-scores a closed window from the engine's own published traces**, and
+4. **burns rather than submitting anything it cannot verify.**
+
+Step 3 is the one that turns a signature into evidence. A signature proves the operator produced a vector; it says nothing about whether the evaluation behind it was honest. Because instance generation is a pure function of the seed and the scorer is deterministic, a validator regenerates exactly the problems the candidates faced and re-runs the scoring over the published traces — on a VPS, with no GPU and no model. **An engine whose scores do not follow from its own traces does not get paid.**
+
+Every validator does this automatically. Beyond that, anyone can check the record by hand, also without a GPU:
 
 ```bash
 capability-audit window --window <n>    # do the reports and the weight vector agree?
@@ -154,6 +188,7 @@ A published score that does not follow from its published trace is caught.
 | [Workflow reference](docs/workflow.md) | The V1 workflow, its stages and how each is scored |
 | [Recipe reference](docs/recipe.md) | Every field, bound and merge method |
 | [Security model](docs/security.md) | Threats, defences and what is deliberately not defended |
+| [Repositories](docs/repositories.md) | What is public, what an operator keeps private, and why |
 | [Deployment](docs/deployment.md) | Local, testnet and mainnet |
 | [FAQ](docs/faq.md) | Common questions |
 | [Changelog](CHANGELOG.md) | Release history, including what an audit pass found |
@@ -177,6 +212,27 @@ capability_subnet/
 ## Status and honest limits
 
 This is a V1 protocol, and it is deliberately narrow: one base model, one adapter pool, one workflow, one declarative recipe format, no routing, no distillation, no miner-hosted inference.
+
+**First measurement on the real pool.** Forty exactly-scored general-capability probe items against the pinned base model, on a GPU:
+
+| package | probe | retention | output tokens | 0.98 gate |
+|---|---|---|---|---|
+| best single adapter | 36/40 | 1.000 | 241 | pass |
+| **base model** | **35/40** | **1.000** | **250** | pass |
+| equal-weight TIES merge | 34/40 | 0.971 | 252 | **rejected** |
+| operator's tuned recipe | 32/40 | 0.914 | 264 | **rejected** |
+| equal-weight SVD merge | 10/40 | 0.286 | 861 | **rejected** |
+| equal-weight linear merge | 0/40 | 0.000 | 1280 | **rejected** |
+
+Two results matter. **Interference-aware merging is the difference between working and not** — the same ten adapters summed linearly retain *nothing*, while TIES retains 0.971. And **the operator's tuned recipe lost to the untuned equal-weight merge**, which is the question this subnet exists to ask.
+
+The tuned recipe emphasises the structured-output and tool-calling adapters to buy workflow capability, and the probe does not measure workflow capability — so this shows the cost of that trade with the benefit invisible. It is the trade the retention gate exists to catch, and it caught it. A collapsed package also announces itself in cost: 5x the base model's output tokens, because it answers terse instructions with prose.
+
+Read the limit with the result. This is the retention probe, not the workflow: it shows that a merge destroyed general ability, and cannot show that composition added workflow value.
+
+**Every merge measured is rejected by the retention gate** — the best of them misses a 0.98 floor by nine thousandths. As configured against this pool the network would crown nobody and burn indefinitely. That is a calibration decision to make before genesis, and it is now an informed one: either the floor comes down to something a real merge can clear, or the pool gains an adapter actually trained to preserve capability under merging. Lowering the floor without fixing the pool would be choosing not to look.
+
+**The pool is assembled from public adapters, and it does not cover every axis.** Every member is a real, permissively licensed LoRA trained on the pinned base model, verified and normalised to the canonical rank. But no public Qwen3-8B adapter exists for German technical language, and none for text-to-SQL that is both permissively licensed and trained on the pinned base rather than a quantised mirror. Those two axes are currently carried by the base model alone, which caps what composition can be shown to add on this workflow. Closing them means training the adapters rather than finding them.
 
 Narrowness is the point. It makes the subnet measurable, secure and reproducible with technology that already exists. The open questions it is designed to answer — and might answer *no* to — are:
 

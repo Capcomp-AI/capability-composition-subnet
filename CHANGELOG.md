@@ -13,7 +13,265 @@ weight vector.
 
 ## [Unreleased]
 
-Nothing yet.
+### Measured
+
+First run of the real pool against the real pinned base model on a GPU. Forty
+exactly-scored general-capability probe items, greedy decoding, thinking
+disabled — the same items and the same settings the engine uses.
+
+| package | probe | retention | output tokens | 0.98 gate |
+|---|---|---|---|---|
+| best single adapter | 36/40 | 1.000 | 241 | pass |
+| **base model** | **35/40** | **1.000** | **250** | pass |
+| equal-weight TIES merge | 34/40 | 0.971 | 252 | **rejected** |
+| operator's tuned recipe | 32/40 | 0.914 | 264 | **rejected** |
+| equal-weight SVD merge | 10/40 | 0.286 | 861 | **rejected** |
+| equal-weight linear merge | 0/40 | 0.000 | 1280 | **rejected** |
+
+Four findings, all actionable:
+
+**Tuning lost to the equal-weight merge.** The operator's own reference recipe —
+hand-chosen coefficients, layer-group emphasis, density 0.45, clamp 0.995 —
+retains *less* than the same method run with every coefficient at 1.0. That is
+the question this subnet exists to ask, and on this measurement the answer is
+no.
+
+Read it precisely, because it is not "tuning does not work". The tuned recipe
+emphasises the structured-output and tool-calling adapters, which is meant to
+buy workflow capability, and the probe does not measure workflow capability. So
+what the number shows is the *cost* side of that trade with the benefit side
+invisible — a package paying general ability for task ability, which is exactly
+the trade the retention gate exists to detect. It caught it.
+
+**Interference-aware merging is not a refinement, it is the difference between
+working and not.** TIES with sign election retains 0.971; the same ten adapters
+summed linearly retain **0.000** — the package cannot follow a one-line
+instruction at all. The gap is the whole result.
+
+**A collapsed package announces itself in token spend.** The linear merge burns
+5.1x the base model's output tokens and the SVD merge 3.4x, because they answer
+terse instructions with prose instead of answers. The token-efficiency component
+added in this release scores exactly that, and it would have separated these
+packages even without the retention probe.
+
+**The pool's designated retention anchor was the most destructive adapter in
+it.** `general-instruction-v1` scored 0/40 on its own, with the identical
+failure fingerprint as the linear merge — which the linear merge inherited from
+it. It has been reclassified as a controlled distractor on the evidence, and
+this pool now has no retention anchor, which is the honest state: no public
+Qwen3-8B adapter was trained to preserve capability under merging.
+
+Measured `base_retention` is now recorded for all twelve adapters.
+`capability_score` deliberately is not — the probe measures retention, not
+whether an adapter is good at its declared capability, and inventing that number
+is precisely what the certification gate exists to prevent.
+
+Read the limit as well as the result: the probe is a *necessary* condition, not
+the workflow. It can show that a merge destroyed general ability; it cannot show
+that composition added workflow value.
+
+**Every merge measured is rejected by the retention gate** — the best, TIES at
+0.971, misses a 0.98 floor. As configured against this pool the network would
+crown nobody and burn indefinitely. That is a calibration decision the operator
+has to make before genesis, and it is now an informed one: either the floor
+comes down to something a real merge can clear, or the pool gets an adapter that
+was actually trained to preserve capability under merging. Lowering the floor
+without fixing the pool would be choosing not to look.
+
+### Fixed — consensus
+
+Both of these were found by building the real pool on a real GPU. Neither was
+visible to a CPU-only test suite, and both would have surfaced on the first
+production window rather than in review.
+
+- **The stochastic merges could not run on a GPU at all.** The DARE family draws
+  its drop mask on the CPU by design — CUDA generators differ across drivers and
+  architectures, so a GPU-drawn mask would make an artifact depend on which card
+  a worker was assigned — and the mask was then applied to a CUDA delta without
+  being moved to it. Every `dare_*` reconstruction failed on the first
+  projection. The mask is still drawn on the CPU; it is now transferred.
+- **A legal recipe could exhaust the engine's memory.** The merge stacked every
+  selected adapter's full update at once: twelve adapters at the base model's
+  widest projection is 2.3 GB in float32 before the aggregation allocates
+  anything, and ten took a 24 GB card out of memory. Since
+  `MAX_SELECTED_ADAPTERS` is 12, a recipe that passed every validation check
+  could not be built — and `ReconstructionError` is classed as a *miner* failure,
+  so it would have terminated that miner's single evaluation for a limit it was
+  never told about.
+
+  The merge now streams one adapter at a time. Sum aggregation accumulates;
+  sign-elected aggregation makes two passes, recomputing each contribution
+  rather than holding it, which is exact because every step is deterministic
+  given the seed. Peak memory no longer depends on how many adapters a miner
+  selected. **This changes artifact bytes** — accumulation order differs from a
+  single stacked reduction — hence the consensus marking.
+- **A serving start-up failure now explains itself.** The message attached the
+  last 2000 characters of the runtime's log, which reliably hid the cause: vLLM
+  prints thousands of lines of banner and shutdown noise around the exception
+  that killed it, so every distinct failure — out of memory, an unrecognised
+  option, an unreachable GPU — arrived as the same fragment of a file path. The
+  cause is now extracted by matching exception markers, deduplicated across
+  worker and parent, and an unmatched log says it is falling back rather than
+  presenting its tail as the reason.
+- **vLLM options are probed rather than assumed.** `--disable-log-requests` was
+  removed rather than deprecated in vLLM 0.26, and an unknown option is an
+  immediate argparse exit — so the engine could not serve *anything* against a
+  current vLLM. Optional flags are now checked against the runtime's own
+  `--help`. Flags the protocol depends on are deliberately not probed: a build
+  without `--enable-auto-tool-choice` cannot run this workflow, and failing
+  loudly at start-up is correct.
+- `serving_python` selects the interpreter vLLM runs under, for the common
+  deployment where it lives in its own virtualenv.
+- Out-of-memory during reconstruction is now an *engine* failure, so a candidate
+  is held rather than terminated when the host runs out of room.
+
+### Added
+
+- **Validators re-score a closed window before paying.** The disclosure and
+  replay machinery already existed and was already exposed over the API;
+  nothing consumed it. A published record that nobody reads before paying is
+  documentation, not a control. Validators now regenerate a closed window's
+  instances from their seeds, re-run the deterministic scorer over the
+  published traces, and **burn if the engine's scores do not follow from its
+  own traces**. No GPU and no model — the same VPS as before. A window that has
+  not been disclosed yet is not treated as dishonesty; that would make an
+  outage indistinguishable from fraud. `--neuron.no_spot_check` disables it.
+- **Losing well is worth something.** `graded_contribution` is the new default
+  incentive mode. The champion still takes a fixed share outright, but every
+  candidate that cleared *every hard gate* is graded on quality (50%),
+  improvement over the strongest permanent reference (25%), proximity to the
+  champion (15%) and running cost (10%), and earns a proportional share for a
+  bounded number of windows.
+
+  Winner-take-all discarded the network's most useful signal: almost every
+  submission that is ever evaluated fails to dethrone, a recipe is one shot, and
+  paying a miner who moved completion from 0.41 to 0.58 exactly what it pays one
+  that submitted a distractor soup leaves the second attempt no better informed
+  than the first. If nobody qualifies the graded pool burns rather than becoming
+  a bonus for an uncontested champion. Each grade is published broken into its
+  four terms. `verify_weight_vector` gained a matching rule, because a mode that
+  pays more people needs a rule about who may be paid.
+- **Token spend is scored.** It was measured and reported but never scored, so a
+  package that reached the same answer twice as expensively ranked identically.
+  Counted per *completed* instance rather than per attempted one — dividing by
+  attempts rewards giving up early.
+- **Workflows are pluggable.** Discovery now goes through the
+  `capability_subnet.workflows` entry point group, so a workflow can ship as its
+  own distribution without forking this repository. Intended for the one case
+  that genuinely needs it: a workflow built on a customer's real business
+  process, whose generator cannot be published. Such a workflow declares
+  `publicly_verifiable=False` and the engine says so loudly — a workflow nobody
+  can install is a workflow nobody can replay. See `docs/repositories.md`.
+- `tests/unit/test_layering.py` enforces the dependency boundary that the
+  packaging change below depends on, so it cannot regress silently.
+
+### Changed
+
+- **The base install no longer contains the tensor stack.** `torch`, `numpy`
+  and `safetensors` moved to a `merge` extra, pulled in by `[miner]`,
+  `[backend]` and `[registry]`. A validator was downloading 1.7 GB of tensor
+  library it never imports, against a documented 20 GB VPS; the base install is
+  now roughly 50 MB. The layering this reflects was already true in the import
+  graph — `common`, `workflows`, `miner`, `validator`, `audit` and `platform`
+  have no module-level path to a heavy dependency — and only `pyproject.toml`
+  contradicted it.
+- `[sandbox]` extra added for the tool services, which run in their own
+  container and need neither the tensor stack nor the chain SDK.
+
+## [2.0.0] — 2026-07-29
+
+A launch-blocking pass. The previous release could not have run: its adapter
+pool did not exist, its engine never served the artifact it built, and its
+declared SDK dependency resolved to an API that no longer had the methods the
+code called. Everything below either removes one of those blockers or fixes a
+rule that would have emptied the subnet once it did run.
+
+### Changed — consensus
+
+**The pool is real.** Twelve public Qwen3-8B LoRA adapters, each verified
+against the Hugging Face API to declare `Qwen/Qwen3-8B` as its base, full
+canonical target coverage, `bias: none`, and no DoRA, rslora or
+`modules_to_save`. The base model is pinned to `b968826d`. Adapters that failed
+inspection were rejected rather than adapted: three otherwise-attractive
+candidates are built on a different base model, a 4-bit quantised mirror, and an
+unverifiable local path respectively. `scripts/import_public_adapters.py`
+fetches only the config and the weights, refuses any upstream whose config has
+drifted from what the registry recorded, and normalises the update to the
+canonical rank.
+
+**Retention measures something else.** The gate compared the candidate's
+*workflow* completion with the base model's, but a candidate only reaches the
+gate after beating the base by an absolute margin — so the ratio was always
+above one and the clamp returned exactly `1.0` for every candidate that could
+possibly be crowned. Retention is now a held-out, deterministically-scored
+general-capability probe drawn per window from its own seed.
+
+**The bar no longer ratchets.** The incumbent counted among the references a
+challenger had to clear by three points, so every successive champion had to
+beat the previous one by a further three. Completion is bounded by one, so that
+staircase stalls after a handful of dethrones and then one package holds the
+throne permanently. The absolute margin now applies to the permanent references
+only; the incumbent gets a separate, smaller margin that decays to zero over
+roughly thirty days.
+
+**Thinking mode is off.** Qwen3's chat template enables it by default, and one
+`<think>` block consumes the whole output budget before the agent calls a tool.
+Now explicit, and published in the contract.
+
+**`svd` and `cat_svd` are one package.** They always resolved to the same
+pipeline and built identical bytes, so two miners who independently chose
+different names collided and the later was terminated for copying. Folded to a
+canonical spelling before a recipe is hashed.
+
+**Reconstruction is exact and fast.** A merged update with no sparsification is
+a sum of low-rank products, so it is now decomposed from the factors rather than
+from a materialised matrix — exact to 6e-7 and ~2800x faster on the real
+projections. The trimming methods still need a dense decomposition and now run
+on the GPU: 6 minutes per build against 2.8 hours. cuSOLVER and LAPACK do not
+agree bit-for-bit, so `merge_device` is recorded in every published report and
+every worker in one deployment must use the same one.
+
+### Fixed
+
+- **The engine now serves the artifact it builds.** `service.py` hardwired
+  `ExternalServer`, which discards the adapter path, so every candidate and
+  every reference would have been scored against one static endpoint —
+  identical scores, no challenger ever distinguishable, emission burned forever.
+  `ManagedVllmServer` is selectable via `serving_mode` and is the default;
+  `ExternalServer` now refuses an adapter instead of silently ignoring it.
+- **vLLM tool-calling is configured.** Without `--enable-auto-tool-choice` and a
+  `--tool-call-parser`, `message.tool_calls` is never populated and
+  `tool_choice: "auto"` is rejected outright.
+- **Bittensor 11.** The 10.x `Subtensor` methods the code called do not exist in
+  11.x. Commitments, weights, the metagraph, wallets and the config layer are
+  rewritten against the intent/read API, and the dependency is pinned below 12.
+- **Infrastructure failures no longer spend a miner's one shot.** An unreadable
+  memory counter, too few scored instances or a latency figure computed from no
+  completed runs are the engine's failures; they now hold the candidate instead
+  of terminating it.
+- **Peak VRAM is measured where the model actually runs.** It was read with
+  `torch.cuda.max_memory_allocated` in the engine process while the model ran in
+  a separate vLLM subprocess, so it reported essentially zero — and with the
+  measurement required, every candidate failed the gate. Now sampled across the
+  run through NVML.
+- **Queued miners are no longer pruned before evaluation.** Bittensor evicts by
+  lowest emission, and winner-take-all gave every waiting challenger exactly
+  zero. A tapered tail share keeps the queue alive.
+- **Burn goes to the subnet owner.** UID 0 is whichever neuron registered first,
+  not an incinerator. Resolved from the metagraph; a validator that cannot
+  resolve it submits nothing rather than paying a stranger.
+- **A deregistered champion no longer deadlocks the subnet.** Its UID belongs to
+  someone else, so every window burned while the dethrone bar stayed pinned to a
+  package nobody could be paid for. The throne is now vacated.
+- **`recipe_dir` derives from `state_dir`.** Admission wrote to one path and the
+  champion loader read from another; they agreed only on the default.
+- **`retained_energy` measured nothing.** Computed after truncation, so it
+  reported perfect retention at every output rank.
+- The vLLM subprocess inherits its environment and uses `sys.executable`, so a
+  venv or conda deployment can find vLLM at all.
+- The anti-copy recipe check runs before evaluation rather than after it.
+- Reference measurement rotates the single-adapter baselines, so opening a
+  window no longer consumes most of it before any challenger is evaluated.
 
 ## [1.0.0] — 2026-07-25
 

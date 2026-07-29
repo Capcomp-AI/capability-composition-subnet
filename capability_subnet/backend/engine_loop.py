@@ -49,11 +49,22 @@ from capability_subnet.backend.reports.publisher import (
     build_report,
     compatibility_record,
 )
+from capability_subnet.backend.scorer import gates
 from capability_subnet.backend.scorer.aggregate import percentile, valid_rows
+from capability_subnet.backend.scorer.contribution import (
+    ContributionInputs,
+    contribution_score,
+    explain,
+)
+from capability_subnet.backend.scorer.retention import build_probe
 from capability_subnet.backend.scorer.sampler import build_instances, draw_window
 from capability_subnet.backend.settings import BackendSettings
 from capability_subnet.backend.store import Store
-from capability_subnet.backend.weights.weight_writer import graded_top3, winner_take_all
+from capability_subnet.backend.weights.weight_writer import (
+    graded_contribution,
+    graded_top3,
+    winner_take_all,
+)
 from capability_subnet.common import constants as C
 from capability_subnet.common.chain import window_id_for_block
 from capability_subnet.common.schemas import ChampionRecord, QueueEntry, Recipe
@@ -74,8 +85,12 @@ class WindowState:
     reference_scores: dict[str, float] = field(default_factory=dict)
     #: Sample rows, so the comparator can pair against them.
     reference_results: dict[str, list] = field(default_factory=dict)
-    base_e2e: float = 0.0
     incumbent_latency_seconds: float = 0.0
+    #: This window's general-capability probe, and the base model's result on
+    #: it. Every package in the window is asked the same items so retention is a
+    #: paired comparison like every other comparison here.
+    probe_items: list = field(default_factory=list)
+    base_probe: object = None
     #: References that could not be measured this window, and why.
     missing_references: dict[str, str] = field(default_factory=dict)
     #: Whether the base model itself was measured. Retention is relative to it,
@@ -83,7 +98,16 @@ class WindowState:
     base_measured: bool = False
 
     def strongest(self) -> tuple[str, float]:
-        return strongest_reference(ref.collapse_single_adapters(self.reference_scores))
+        """The permanent reference a challenger must clear by the absolute margin.
+
+        The incumbent is excluded on purpose. This bar means "composition beat
+        what you get without doing any composition research", and it must stay
+        where it is: the incumbent is dealt with separately, by the champion
+        margin, which decays.
+        """
+        return strongest_reference(
+            ref.collapse_single_adapters(self.reference_scores, include_incumbent=False)
+        )
 
     def bar_is_complete(self) -> tuple[bool, str]:
         """Whether this window can legitimately crown anyone.
@@ -102,7 +126,7 @@ class WindowState:
         if self.missing_references:
             names = ", ".join(sorted(self.missing_references))
             return False, f"{len(self.missing_references)} reference(s) unmeasured: {names}"
-        return True, "every reference was measured"
+        return True, "every reference scheduled for this window was measured"
 
 
 class EngineLoop:
@@ -125,6 +149,9 @@ class EngineLoop:
         self.evaluator = evaluator
         self.publisher = publisher
         self.window: WindowState | None = None
+        #: Latest metagraph view, refreshed by the service each pass. None until
+        #: the first chain read, and in dry runs.
+        self.metagraph = None
 
         self.comparator_config = ComparatorConfig(
             axis_margin=settings.axis_margin,
@@ -132,6 +159,8 @@ class EngineLoop:
             min_dominant_axes=settings.min_dominant_axes,
             min_axis_samples=settings.min_axis_samples,
             end_to_end_margin=settings.end_to_end_margin,
+            champion_margin=settings.champion_margin,
+            champion_margin_decay_blocks=settings.champion_margin_decay_blocks,
             strict_pareto=settings.strict_pareto,
         )
 
@@ -157,39 +186,81 @@ class EngineLoop:
         )
 
         hidden, ood = build_instances(sample, self.workflow)
-        state = WindowState(window_id=window_id, hidden_instances=hidden, ood_instances=ood)
+        state = WindowState(
+            window_id=window_id,
+            hidden_instances=hidden,
+            ood_instances=ood,
+            # Drawn from the window's own seed, so nobody can tune to a fixed
+            # probe and an auditor can regenerate exactly what was asked.
+            probe_items=build_probe(sample.probe_seed),
+        )
 
         self._measure_references(state, block)
         self.window = state
         return state
 
-    def _measure_references(self, state: WindowState, block: int) -> None:
-        """Re-measure every permanent reference and the incumbent.
+    def _reference_packages(self, state: WindowState) -> list[EvaluablePackage]:
+        """Which references to measure on this window's instances.
 
-        This is the expensive part of opening a window, and it is not optional:
-        a challenger compared against last window's reference numbers would be
-        compared against a different instance set, and the paired statistics
-        would be meaningless.
+        The full set is the base model, one entry per capability adapter, three
+        standard merges and the operator's own recipe — fifteen packages against
+        every instance in the draw, run one at a time, before a single challenger
+        is touched. At the latency this subnet gates on, that alone can exceed
+        the window it is supposed to fit inside, and a window that cannot finish
+        never evaluates anybody.
+
+        Only the strongest contenders are re-measured every window. The rest are
+        rotated on a fixed schedule derived from the window id, so each is
+        refreshed regularly and which ones are refreshed is not something the
+        operator chooses. Any reference not measured this window keeps its most
+        recent score for reporting but is excluded from the bar, because a bar
+        set from a different instance set is not a paired comparison — which is
+        the property the whole design rests on.
         """
         packages: list[EvaluablePackage] = [
             EvaluablePackage(candidate_id=ref.BASE_MODEL, is_base=True)
         ]
-        packages += [
+
+        singles = [
             EvaluablePackage(candidate_id=reference.reference_id, adapter_id=reference.adapter_id)
             for reference in ref.single_adapter_references(self.snapshot)
         ]
-        packages += [
+        merges = [
             EvaluablePackage(candidate_id=reference.reference_id, recipe=reference.recipe)
             for reference in ref.build_references(self.snapshot)
             if reference.kind == "recipe"
         ]
+
+        # The merges and the owner recipe are the bar that actually binds — they
+        # are what "composition adds value" is measured against — so they are
+        # never rotated out.
+        packages += merges
+
+        rotation = self.settings.single_adapter_rotation
+        if rotation <= 0 or rotation >= len(singles):
+            packages += singles
+        else:
+            offset = (state.window_id * rotation) % max(1, len(singles))
+            packages += [singles[(offset + i) % len(singles)] for i in range(rotation)]
+
+        return packages
+
+    def _measure_references(self, state: WindowState, block: int) -> None:
+        """Measure this window's reference set and the incumbent.
+
+        Not optional and not reusable across windows: a challenger compared
+        against last window's reference numbers would be compared against a
+        different instance set, and the paired statistics would be meaningless.
+        """
+        packages = self._reference_packages(state)
 
         for package in packages:
             output = self.evaluator.evaluate(
                 package,
                 state.hidden_instances,
                 state.ood_instances,
-                base_e2e=state.base_e2e,
+                probe_items=state.probe_items,
+                base_probe=state.base_probe,
                 apply_comparison_gates=False,
             )
             if not output.usable:
@@ -209,7 +280,7 @@ class EngineLoop:
             self._retain_traces(state.window_id, package.candidate_id, output)
 
             if package.candidate_id == ref.BASE_MODEL:
-                state.base_e2e = output.scores.end_to_end
+                state.base_probe = output.probe
                 state.base_measured = True
 
             log.info("window %d %s", state.window_id, summarise_evaluation(output))
@@ -221,6 +292,18 @@ class EngineLoop:
         champion = self.store.get_champion()
         if champion is None:
             log.info("no champion holds the throne")
+            return
+
+        if not self._champion_still_registered(champion):
+            # Its UID now belongs to someone else, so no validator will submit a
+            # vector naming it and every window burns. Leaving it enthroned would
+            # also keep the dethrone bar pinned to a package nobody can be paid
+            # for — a deadlock that resolves only by vacating the throne.
+            log.warning(
+                "champion %s is no longer registered; vacating the throne",
+                champion.hotkey[:12],
+            )
+            self.store.clear_champion(reason="champion deregistered")
             return
 
         package = self._package_for_champion(champion)
@@ -236,7 +319,8 @@ class EngineLoop:
             package,
             state.hidden_instances,
             state.ood_instances,
-            base_e2e=state.base_e2e,
+            probe_items=state.probe_items,
+            base_probe=state.base_probe,
             apply_comparison_gates=False,
         )
         if not output.usable:
@@ -251,6 +335,19 @@ class EngineLoop:
         state.incumbent_latency_seconds = percentile(durations, 0.5)
 
         log.info("window %d incumbent %s", state.window_id, summarise_evaluation(output))
+
+    def _champion_still_registered(self, champion: ChampionRecord) -> bool:
+        """Whether the champion's hotkey still holds the UID it was crowned on.
+
+        References are never registered and never paid, so they are exempt. With
+        no metagraph read yet the answer is "assume yes": vacating a throne on
+        missing information would be worse than defending one window too long.
+        """
+        if champion.is_reference or ref.is_reference(champion.candidate_id):
+            return True
+        if self.metagraph is None:
+            return True
+        return self.metagraph.uid_of(champion.hotkey) is not None
 
     def _retain_traces(self, window_id: int, candidate_id: str, output) -> None:
         """Keep the sampled traces so this window can be re-scored once closed."""
@@ -361,7 +458,12 @@ class EngineLoop:
 
         from capability_subnet.backend.monitor.fetch import FetchError, LocalRecipeSource
 
-        source = LocalRecipeSource(self.settings.state_path / "recipes")
+        # settings.recipe_path, not a path rebuilt from state_dir. Admission
+        # writes to the configured directory; re-deriving it here meant that the
+        # moment an operator moved recipe_dir, every challenger was held forever
+        # and every champion became unrebuildable — with the two paths agreeing
+        # on the default, so nothing showed up in testing.
+        source = LocalRecipeSource(self.settings.recipe_path)
         try:
             fetched = source.fetch("local", recipe_sha256)
         except FetchError as exc:
@@ -393,6 +495,25 @@ class EngineLoop:
             return None
 
         self.store.set_status(entry.hotkey, "evaluating")
+
+        # Recipe-digest copy check first, before anything touches a GPU. The
+        # artifact check still runs after reconstruction — two differently
+        # worded recipes can build identical weights — but catching the
+        # verbatim case here means a copier costs a cheap hash lookup instead
+        # of a full instance sweep.
+        from capability_subnet.backend.monitor.anticopy import check_for_copy
+
+        recipe_copy = check_for_copy(
+            self.store,
+            hotkey=entry.hotkey,
+            recipe_sha256=entry.recipe_sha256,
+            first_block=entry.first_block,
+        )
+        if recipe_copy.is_copy:
+            log.info("%s: terminated before evaluation (%s)", entry.hotkey[:12], recipe_copy.detail)
+            self.store.set_status(entry.hotkey, "terminated", recipe_copy.detail)
+            return None
+
         reference_id, reference_score = state.strongest()
 
         package = EvaluablePackage(
@@ -406,7 +527,8 @@ class EngineLoop:
             package,
             state.hidden_instances,
             state.ood_instances,
-            base_e2e=state.base_e2e,
+            probe_items=state.probe_items,
+            base_probe=state.base_probe,
             reference_latency_seconds=state.incumbent_latency_seconds,
             strongest_reference_id=reference_id,
             strongest_reference_score=reference_score,
@@ -439,7 +561,27 @@ class EngineLoop:
         reference_score: float,
     ) -> None:
         """Apply the gates and the dethrone rule, then publish."""
-        from capability_subnet.backend.monitor.anticopy import check_artifact_copy
+        from capability_subnet.backend.monitor.anticopy import (
+            check_artifact_copy,
+            is_champion_artifact,
+        )
+
+        if is_champion_artifact(self.store, output.artifact_sha256 or ""):
+            # Byte-identical to the reigning champion. It cannot beat itself by
+            # a margin, so the outcome is settled; saying *why* beats publishing
+            # a statistical tie and leaving the reader to infer it.
+            self._finish(
+                entry,
+                recipe,
+                output,
+                state,
+                block,
+                verdict="terminated",
+                reason="reconstructs to exactly the reigning champion's artifact",
+                reference_id=reference_id,
+                reference_score=reference_score,
+            )
+            return
 
         copy_verdict = check_artifact_copy(
             self.store,
@@ -462,8 +604,21 @@ class EngineLoop:
             )
             return
 
-        if not output.gates_passed:
-            failed = ", ".join(v.name for v in output.gate_verdicts if not v.passed)
+        # An engine failure and a candidate failure both block a crowning, and
+        # only one of them may end a candidate's run. Infrastructure first: a
+        # candidate held for an unreadable memory counter keeps its shot, and a
+        # candidate that genuinely failed a limit does not get to hide behind a
+        # co-occurring engine fault.
+        infrastructure = gates.infrastructure_failures(output.gate_verdicts)
+        if infrastructure:
+            detail = "; ".join(f"{v.name}: {v.detail}" for v in infrastructure)
+            log.error("holding %s: %s", entry.hotkey[:12], detail)
+            self.store.set_status(entry.hotkey, "queued", f"engine could not evaluate: {detail}")
+            return
+
+        candidate_failed = gates.candidate_failures(output.gate_verdicts)
+        if candidate_failed or not output.gates_passed:
+            failed = ", ".join(v.name for v in candidate_failed) or "no gates were evaluated"
             self._finish(
                 entry,
                 recipe,
@@ -492,6 +647,9 @@ class EngineLoop:
             # including beating the strongest reference, which it just did.
             champion_results = state.reference_results.get(ref.BASE_MODEL, [])
 
+        champion = self.store.get_champion()
+        blocks_held = max(0, block - champion.crowned_at_block) if champion else 0
+
         outcome = compare(
             output.hidden_results,
             champion_results,
@@ -500,6 +658,7 @@ class EngineLoop:
             reference_id=reference_id,
             config=self.comparator_config,
             bootstrap_seed=state.window_id,
+            champion_blocks_held=blocks_held,
         )
 
         if outcome.dethrones:
@@ -642,6 +801,15 @@ class EngineLoop:
             comparator=comparator,
             verdict=verdict,
             verdict_reason=reason,
+            contribution=explain(
+                ContributionInputs(
+                    scores=output.scores,
+                    reference_e2e=reference_score,
+                    champion_e2e=state.reference_scores.get(ref.INCUMBENT),
+                )
+            )
+            if output.gates_passed
+            else {},
         )
 
     # -- weights ------------------------------------------------------------
@@ -652,7 +820,22 @@ class EngineLoop:
         champion = self.store.get_champion()
         report_digest = self.store.get_meta("champion_report_sha256")
 
-        if self.settings.incentive_mode == C.MODE_GRADED_TOP3:
+        if self.settings.incentive_mode == C.MODE_GRADED_CONTRIBUTION:
+            vector = graded_contribution(
+                champion,
+                self._recent_contributors(window_id),
+                window_id=window_id,
+                block=block,
+                spec_version=self.workflow_spec_version,
+                champion_base_share=self.settings.champion_base_share,
+                burn_percentage=self.settings.burn_percentage,
+                burn_uid=self._burn_uid(),
+                champion_report_sha256=report_digest,
+                workflow_id=self.workflow.workflow_id,
+                tail=self._survival_tail(),
+                tail_share=self.settings.tail_share,
+            )
+        elif self.settings.incentive_mode == C.MODE_GRADED_TOP3:
             ranked = self._ranked_qualified(window_id)
             vector = graded_top3(
                 ranked,
@@ -660,7 +843,7 @@ class EngineLoop:
                 block=block,
                 spec_version=self.workflow_spec_version,
                 burn_percentage=self.settings.burn_percentage,
-                burn_uid=self.settings.burn_uid,
+                burn_uid=self._burn_uid(),
                 workflow_id=self.workflow.workflow_id,
             )
         else:
@@ -670,9 +853,11 @@ class EngineLoop:
                 block=block,
                 spec_version=self.workflow_spec_version,
                 burn_percentage=self.settings.burn_percentage,
-                burn_uid=self.settings.burn_uid,
+                burn_uid=self._burn_uid(),
                 champion_report_sha256=report_digest,
                 workflow_id=self.workflow.workflow_id,
+                tail=self._survival_tail(),
+                tail_share=self.settings.tail_share,
             )
 
         if self.publisher.keypair is not None:
@@ -687,11 +872,90 @@ class EngineLoop:
             ", ".join(f"uid {e.uid}={e.weight:.3f}" for e in vector.entries),
         )
 
+    def _burn_uid(self) -> int:
+        """Where burned emission goes.
+
+        The subnet owner's UID when the metagraph can resolve it. The configured
+        value is a fallback for offline and dry runs only: UID 0 is a neuron
+        like any other, and paying it is not burning.
+        """
+        if self.metagraph is not None:
+            owner = self.metagraph.owner_uid()
+            if owner is not None:
+                return owner
+            log.warning(
+                "the subnet owner holds no UID; falling back to the configured burn uid %d",
+                self.settings.burn_uid,
+            )
+        return self.settings.burn_uid
+
+    def _survival_tail(self) -> list[tuple[int, str]]:
+        """Queued miners, in the order they will be evaluated.
+
+        Front of the queue first, because the taper pays the front most and the
+        front is what the engine is about to spend a window on. A hotkey that
+        has since deregistered is dropped — its UID belongs to someone else now,
+        and the validator would refuse the vector for naming it.
+        """
+        entries = self.store.list_queue(status="queued")
+        tail: list[tuple[int, str]] = []
+        for entry in entries:
+            if entry.uid is None or not entry.hotkey:
+                continue
+            if self.metagraph is not None and self.metagraph.uid_of(entry.hotkey) != entry.uid:
+                continue
+            tail.append((entry.uid, entry.hotkey))
+        return tail
+
     @property
     def workflow_spec_version(self) -> int:
         from capability_subnet import __spec_version__
 
         return __spec_version__
+
+    def _recent_contributors(self, window_id: int) -> list[tuple[int, str, float]]:
+        """Everyone whose recent evaluation cleared every hard gate, with a grade.
+
+        Looks back over a bounded number of windows rather than only the current
+        one. A candidate's grade is a statement about the window it was measured
+        in, and the engine evaluates roughly one candidate per window — so paying
+        only the current window would make a miner's reward depend on the
+        accident of when the queue reached it. Paying indefinitely would let an
+        early result collect rent after the network moved past it.
+
+        Only the best grade per hotkey counts, so a miner cannot accumulate
+        share by being measured repeatedly.
+        """
+        oldest = max(0, window_id - self.settings.contribution_memory_windows + 1)
+        best: dict[str, tuple[int, str, float]] = {}
+
+        for window in range(oldest, window_id + 1):
+            for digest, report in self.store.list_reports(window_id=window, limit=200):
+                del digest
+                if report.miner_uid is None or not report.miner_hotkey:
+                    continue
+                if ref.is_reference(report.candidate_id) or not report.gates_passed:
+                    continue
+
+                grade = contribution_score(
+                    ContributionInputs(
+                        scores=report.scores,
+                        reference_e2e=report.strongest_reference_score,
+                        champion_e2e=report.baseline_scores.get(ref.INCUMBENT),
+                    )
+                )
+                existing = best.get(report.miner_hotkey)
+                if existing is None or grade > existing[2]:
+                    best[report.miner_hotkey] = (report.miner_uid, report.miner_hotkey, grade)
+
+        contributors = list(best.values())
+        if self.metagraph is not None:
+            # A hotkey that deregistered no longer owns its UID, and a vector
+            # naming it would be refused by every validator.
+            contributors = [
+                item for item in contributors if self.metagraph.uid_of(item[1]) == item[0]
+            ]
+        return contributors
 
     def _ranked_qualified(self, window_id: int) -> list[tuple[int, str]]:
         """Qualified miners for the graded split, best first.

@@ -85,6 +85,12 @@ def factorize(
 
     u, s, vh = torch.linalg.svd(work, full_matrices=False)
 
+    # Measured over the *whole* spectrum, before truncation. Taking it after
+    # would compare the kept components against themselves and report perfect
+    # retention for every rank, which is exactly the number a miner tuning
+    # `output_rank` must not be given.
+    total_energy = float((s * s).sum().item())
+
     available = int(s.shape[0])
     keep = min(output_rank, available)
 
@@ -94,7 +100,6 @@ def factorize(
 
     u, vh = canonicalize_svd_signs(u, vh)
 
-    total_energy = float((s * s).sum().item())
     s, clamped_components = _clamp_singular_values(s, clamp_quantile)
     retained_energy = float((s * s).sum().item())
 
@@ -117,6 +122,108 @@ def factorize(
     return Factorization(
         lora_a=lora_a,
         lora_b=lora_b,
+        effective_rank=effective_rank,
+        retained_energy=energy_ratio,
+        clamped_components=clamped_components,
+    )
+
+
+def factorize_product(
+    lora_b: torch.Tensor,
+    lora_a: torch.Tensor,
+    output_rank: int,
+    *,
+    clamp_quantile: float = 1.0,
+    scale: float = 1.0,
+) -> Factorization:
+    """Decompose ``scale · lora_b @ lora_a`` without ever forming the product.
+
+    A dense decomposition of the materialised update is the obvious
+    implementation and the wrong one whenever the update is known to be low
+    rank. ``lora_b @ lora_a`` has rank at most ``k`` — the shared inner
+    dimension — so all but ``k`` of its singular values are exactly zero, and a
+    full decomposition spends its entire cost computing them. On the real base
+    model that is the difference between two minutes and two milliseconds per
+    projection, at ``12288 × 4096``.
+
+    The identity used here is standard: thin-QR each factor, decompose the tiny
+    ``k × k`` core, and rotate the result back.
+
+        B = Q_b R_b,  Aᵀ = Q_a R_a          (thin QR, k columns each)
+        B A = Q_b (R_b R_aᵀ) Q_aᵀ           (an exact rewrite, nothing dropped)
+        R_b R_aᵀ = U_c S V_cᵀ               (a k × k decomposition)
+        ⇒ U = Q_b U_c,  Vᵀ = V_cᵀ Q_aᵀ
+
+    ``Q_b`` and ``Q_a`` have orthonormal columns, so the singular values of the
+    core *are* the singular values of the product — this is exact, not an
+    approximation, and it agrees with the dense path to floating-point rounding.
+
+    Args:
+        lora_b: ``(out_features, k)``.
+        lora_a: ``(k, in_features)``.
+        output_rank: rank of the emitted pair.
+        clamp_quantile: as in :func:`factorize`.
+        scale: folded into the singular values, so an upstream ``alpha / r``
+            never has to materialise a scaled copy of either factor.
+    """
+    if lora_b.ndim != 2 or lora_a.ndim != 2:
+        raise ValueError(
+            f"expected two 2-D factors, got {tuple(lora_b.shape)} and {tuple(lora_a.shape)}"
+        )
+    if lora_b.shape[1] != lora_a.shape[0]:
+        raise ValueError(
+            f"inner dimensions disagree: lora_b is {tuple(lora_b.shape)}, "
+            f"lora_a is {tuple(lora_a.shape)}"
+        )
+    if output_rank <= 0:
+        raise ValueError(f"output_rank must be positive, got {output_rank}")
+
+    b_work = lora_b.to(WORK_DTYPE)
+    a_work = lora_a.to(WORK_DTYPE)
+    out_features = b_work.shape[0]
+    in_features = a_work.shape[1]
+
+    q_b, r_b = torch.linalg.qr(b_work, mode="reduced")
+    q_a, r_a = torch.linalg.qr(a_work.transpose(0, 1), mode="reduced")
+
+    core = (r_b @ r_a.transpose(0, 1)) * scale
+    u_core, s, vh_core = torch.linalg.svd(core, full_matrices=False)
+
+    # As in `factorize`: the whole spectrum, before truncation. Here it is the
+    # number that tells an operator whether normalising a rank-128 public
+    # adapter down to the canonical rank actually threw anything away.
+    total_energy = float((s * s).sum().item())
+
+    keep = min(output_rank, int(s.shape[0]))
+    u = q_b @ u_core[:, :keep]
+    vh = vh_core[:keep, :] @ q_a.transpose(0, 1)
+    s = s[:keep]
+
+    u, vh = canonicalize_svd_signs(u, vh)
+
+    s, clamped_components = _clamp_singular_values(s, clamp_quantile)
+    retained_energy = float((s * s).sum().item())
+
+    root = torch.sqrt(s.clamp(min=0.0))
+    lora_b_out = u * root.unsqueeze(0)
+    lora_a_out = vh * root.unsqueeze(1)
+
+    effective_rank = int((s > 0).sum().item())
+
+    if keep < output_rank:
+        pad = output_rank - keep
+        lora_b_out = torch.cat(
+            [lora_b_out, torch.zeros((out_features, pad), dtype=WORK_DTYPE)], dim=1
+        )
+        lora_a_out = torch.cat(
+            [lora_a_out, torch.zeros((pad, in_features), dtype=WORK_DTYPE)], dim=0
+        )
+
+    energy_ratio = 1.0 if total_energy <= 0.0 else retained_energy / total_energy
+
+    return Factorization(
+        lora_a=lora_a_out,
+        lora_b=lora_b_out,
         effective_rank=effective_rank,
         retained_energy=energy_ratio,
         clamped_components=clamped_components,

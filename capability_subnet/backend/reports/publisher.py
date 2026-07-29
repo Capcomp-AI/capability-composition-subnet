@@ -51,6 +51,7 @@ def build_report(
     comparator: ComparatorOutcome | None = None,
     verdict: str = "held",
     verdict_reason: str = "",
+    contribution: dict[str, float] | None = None,
     extra_gates: list[GateVerdict] | None = None,
 ) -> EvaluationReport:
     """Assemble the report for one evaluation."""
@@ -76,6 +77,7 @@ def build_report(
         comparator=comparator,
         verdict=verdict,  # type: ignore[arg-type]
         verdict_reason=verdict_reason,
+        contribution=dict(contribution or {}),
     )
 
 

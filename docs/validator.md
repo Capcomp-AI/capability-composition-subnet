@@ -1,6 +1,8 @@
 # Validator guide
 
-Running a validator on this subnet costs a small VPS. No GPU, no model, no adapter pool, no evaluation.
+Running a validator on this subnet costs a small VPS. No GPU, no model, no adapter pool, no reconstruction.
+
+That does not make it a relay. Before it pays anyone, a validator **re-scores a closed window from the engine's own published traces** — regenerating the instances from their seeds and re-running the deterministic scorer over what the engine said happened. A score that does not follow from its own trace is caught by the party about to pay for it. Install size is under 50 MB: the base package deliberately excludes the tensor stack, because a validator never touches it.
 
 That is unusual, and it is worth understanding *why* before you run one — because the thing you are actually providing is not compute.
 
@@ -90,12 +92,20 @@ python neurons/validator.py --wallet.name <coldkey> --wallet.hotkey <hotkey>
 | `--neuron.weight_interval` | `300` | Minimum blocks between submissions |
 | `--neuron.poll_interval` | `60` | Seconds between polls |
 | `--neuron.burn_percentage` | `0.0` | Additional fraction *you* route to burn |
+| `--neuron.no_spot_check` | off | Stop re-scoring the last closed window before paying |
 | `--neuron.max_stale_windows` | `3` | Refuse a vector this far behind the head |
 | `--neuron.disable_set_weights` | off | Compute and log without submitting |
 
 ### Your own burn
 
 `--neuron.burn_percentage` lets you burn **more** than the engine asked for, never less.
+
+Burned emission goes to the **subnet owner's UID**, resolved from the metagraph
+on every pass. It is not UID 0: that slot belongs to whichever neuron registered
+into it first, so weighting it would pay that miner rather than burning
+anything. If the owner holds no UID at all, this validator submits nothing for
+that pass — there is no address that "burn" could honestly mean, and paying an
+arbitrary neuron is worse than skipping a window.
 
 Allowing less would let a validator quietly override an operator's incident response. Allowing more is you declining to pay a champion you do not trust, with your own stake — which is a decision you are entitled to make, and one of the few levers you have if you disagree with an evaluation.
 
@@ -181,7 +191,10 @@ The current window is never disclosed — its challenger is still sitting that t
 | Engine does not report its window length | **Burns** — freshness cannot be established, so it is not assumed. |
 | Weights malformed (bad sum, duplicate UID, out-of-range) | **Burns.** |
 | Chain rate limit | Treated as a no-op, retried next interval. |
-| Healthy vector | Applies your burn setting, submits. |
+| Healthy vector | Re-scores the last closed window, then applies your burn setting and submits. |
+| Graded payments | Every non-champion recipient must have a published report showing it cleared all hard gates and carries a contribution grade; `capability-audit` checks this. |
+| Window does not re-score | **Burns.** The engine's published scores contradict its own published traces. |
+| Window not yet disclosed | Submits. Absence of a disclosure is absence of evidence, not proof of dishonesty — treating it otherwise would turn an outage into a punishment and give validators a reason to race the disclosure. |
 
 Burning is the deliberate fallback rather than resubmitting the last known-good vector, because a dead engine must not pin emission to a stale champion forever.
 

@@ -230,17 +230,42 @@ class TestWeightPublication:
 
         vector = store.latest_weights()
         assert vector is not None
-        assert vector.entries[0].uid == C.BURN_UID
+        # Nothing has been evaluated, so there is nothing to grade and nobody
+        # queued: the whole share burns.
+        assert [e.uid for e in vector.entries] == [C.BURN_UID]
 
-    def test_a_champion_receives_the_whole_share(self, engine):
+    def test_a_champion_takes_the_base_share_and_the_rest_burns(self, engine):
+        """Under the graded mode an uncontested champion is not paid everything.
+
+        The graded pool exists to pay demonstrated contribution. With no
+        qualified contributors it is burned rather than folded into the
+        champion's share — holding an uncontested throne is not an achievement
+        the network should pay a bonus for.
+        """
         loop, store, _, _ = engine
+        store.set_champion(ChampionRecord(candidate_id="5Winner", hotkey="5Winner", uid=6))
+        loop.publish_weights(block=250)
+
+        vector = store.latest_weights()
+        by_uid = {e.uid: e.weight for e in vector.entries}
+        assert by_uid[6] == pytest.approx(loop.settings.champion_base_share)
+        assert by_uid[C.BURN_UID] == pytest.approx(1.0 - loop.settings.champion_base_share)
+        assert vector.champion_hotkey == "5Winner"
+
+    def test_winner_take_all_remains_available(self, engine):
+        """The old mode is still selectable, and still pays everything."""
+        import dataclasses
+
+        loop, store, _, _ = engine
+        loop.settings = dataclasses.replace(
+            loop.settings, incentive_mode=C.MODE_WINNER_TAKE_ALL, tail_share=0.0
+        )
         store.set_champion(ChampionRecord(candidate_id="5Winner", hotkey="5Winner", uid=6))
         loop.publish_weights(block=250)
 
         vector = store.latest_weights()
         assert vector.entries[0].uid == 6
         assert vector.entries[0].weight == pytest.approx(1.0)
-        assert vector.champion_hotkey == "5Winner"
 
     def test_the_published_vector_is_well_formed(self, engine):
         loop, store, _, _ = engine
@@ -346,7 +371,11 @@ class TestPublishedSurfaces:
         client = TestClient(create_app(settings))
 
         assert client.get("/health").json()["status"] == "ok"
-        assert client.get("/weights").json()["entries"][0]["uid"] == 6
+        # Looked up by uid rather than by position: entries are ordered by uid
+        # for the chain's benefit, so indexing the first one asserts an ordering
+        # the protocol never promised.
+        entries = {e["uid"]: e for e in client.get("/weights").json()["entries"]}
+        assert entries[6]["role"] == "champion"
         assert client.get("/champion").json()["hotkey"] == "5Winner"
         assert client.get("/queue").json()["count"] >= 0
         assert "workflow_id" in client.get("/contract").json()

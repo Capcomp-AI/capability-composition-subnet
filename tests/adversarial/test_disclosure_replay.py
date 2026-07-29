@@ -224,3 +224,82 @@ class TestDisclosureBoundaries:
 
         response = client.get(f"/windows/{current - 1}/disclosure")
         assert response.status_code in (404, 409)
+
+
+class TestTheValidatorRefusesToPayForAFabricatedWindow:
+    """The spot check is what makes a validator a verifier rather than a relay.
+
+    Replay was already correct and already exposed over the API; nothing
+    consumed it. A published record nobody reads before paying is documentation,
+    not a control — so these tests cover the path where refusing actually costs
+    the operator something.
+    """
+
+    @staticmethod
+    def _client(disclosure):
+        """A backend client whose disclosure endpoint returns ``disclosure``.
+
+        A stand-in rather than a live engine: what is under test is the
+        validator's decision, and threading a real HTTP server through it would
+        test the server.
+        """
+
+        class _Client:
+            def fetch_disclosure(self, window_id):
+                if disclosure is None:
+                    from capability_subnet.validator.client import BackendUnavailable
+
+                    raise BackendUnavailable(f"window {window_id} is not disclosed")
+                return disclosure
+
+        return _Client()
+
+    def test_an_honest_window_passes(self, scored_run):
+        from capability_subnet.validator.client import spot_check_window
+
+        instance, trace, result = scored_run
+        ok, detail = spot_check_window(
+            self._client(disclosure_for(instance, trace, result)), window_id=7
+        )
+        assert ok, detail
+        assert "re-scored to the same result" in detail
+
+    def test_a_window_whose_scores_do_not_follow_from_its_traces_is_refused(self, scored_run):
+        """The failure the whole published record exists to make detectable."""
+        from capability_subnet.validator.client import spot_check_window
+
+        instance, trace, result = scored_run
+        doctored = result.model_copy(deep=True)
+        doctored.end_to_end_success = not result.end_to_end_success
+
+        ok, detail = spot_check_window(
+            self._client(
+                disclosure_for(instance, trace, result, entry={"claimed_result": doctored})
+            ),
+            window_id=7,
+        )
+        assert not ok
+        assert "does not re-score" in detail
+
+    def test_an_undisclosed_window_is_not_treated_as_dishonesty(self, scored_run):
+        """Absence of a disclosure is absence of evidence.
+
+        A window the engine has not published yet, or an engine briefly
+        unreachable, must not cost the champion its emission — that would turn
+        an ordinary outage into a punishment and give validators an incentive to
+        race the disclosure.
+        """
+        from capability_subnet.validator.client import spot_check_window
+
+        ok, detail = spot_check_window(self._client(None), window_id=7)
+        assert ok
+        assert "not available" in detail
+
+    def test_the_spot_check_needs_no_tensor_stack(self):
+        """It runs on the VPS the validator is documented to be."""
+        import inspect
+
+        from capability_subnet.validator import client
+
+        source = inspect.getsource(client)
+        assert "import torch" not in source

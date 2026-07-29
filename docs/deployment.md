@@ -30,7 +30,9 @@ The scripted reference solver knows every answer, so anything less than 20/20 me
 ./scripts/run_dev_engine.sh
 ```
 
-This builds a synthetic adapter pool (structurally identical to the real one, random weights), generates a small public pack, runs one engine pass in dry-run mode, and renders the dashboard. Then:
+This builds a *synthetic* adapter pool — structurally identical to the real one, random weights — generates a small public pack, runs one engine pass in dry-run mode, and renders the dashboard. It exercises reconstruction, hashing and the loop without downloading four gigabytes of real weights, and it cannot reach a live network: synthetic adapters carry no certification record, and preflight refuses to start while any pool member is uncertified.
+
+For the real pool, `make import-pool` fetches and normalises the certified adapters from their pinned upstream sources. Then:
 
 ```bash
 CAPSUB_STATE_DIR=.dev-state python -m capability_subnet.backend.api

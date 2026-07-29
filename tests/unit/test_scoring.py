@@ -19,7 +19,6 @@ from capability_subnet.backend.scorer.aggregate import (
     EfficiencyInputs,
     aggregate_scores,
     artifact_efficiency,
-    base_retention,
     end_to_end_completion,
     latency_efficiency,
     percentile,
@@ -66,13 +65,18 @@ class TestAggregation:
 
         assert stage_balance(one_zero, STAGES) > stage_balance(two_zeros, STAGES) > 0.0
 
-    def test_retention_is_capped_at_one(self):
-        assert base_retention(0.9, 0.5) == 1.0
-        assert base_retention(0.45, 0.9) == pytest.approx(0.5)
-
-    def test_retention_against_a_base_that_completes_nothing(self):
-        # There is nothing to have destroyed, so the gate must not fire.
-        assert base_retention(0.0, 0.0) == 1.0
+    # Retention itself is no longer derived from workflow completion — it is a
+    # held-out probe, covered in test_incentive_and_retention.py. What remains
+    # testable here is that the aggregate simply carries the value it is given.
+    def test_the_aggregate_carries_the_retention_it_is_given(self):
+        scores = aggregate_scores(
+            make_results(FULL),
+            [],
+            STAGES,
+            retention=0.5,
+            efficiency=EfficiencyInputs(artifact_bytes=0, peak_vram_gb=0.0),
+        )
+        assert scores.retention == 0.5
 
     def test_latency_efficiency_is_relative_and_capped(self):
         assert latency_efficiency(10.0, 20.0) == 1.0  # faster than the reference
@@ -99,7 +103,7 @@ class TestAggregation:
             make_results(FULL, count=20, success_rate=1.0, seconds=5.0),
             make_results(FULL, count=10, success_rate=1.0, prefix="ood"),
             STAGES,
-            base_e2e=1.0,
+            retention=1.0,
             efficiency=EfficiencyInputs(artifact_bytes=0, peak_vram_gb=0.0, reference_seconds=5.0),
         )
         # A perfect package on every component scores exactly 1.
@@ -112,7 +116,7 @@ class TestAggregation:
             make_results(dict.fromkeys(STAGES, 0.0), count=20, success_rate=0.0),
             [],
             STAGES,
-            base_e2e=1.0,
+            retention=1.0,
             efficiency=EfficiencyInputs(
                 artifact_bytes=0, peak_vram_gb=0.0, reference_seconds=100.0
             ),
@@ -121,7 +125,7 @@ class TestAggregation:
             make_results(FULL, count=20, success_rate=1.0, seconds=30.0),
             [],
             STAGES,
-            base_e2e=1.0,
+            retention=1.0,
             efficiency=EfficiencyInputs(
                 artifact_bytes=C.MAX_ARTIFACT_BYTES,
                 peak_vram_gb=C.MAX_PEAK_VRAM_GB,

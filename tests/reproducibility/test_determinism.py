@@ -235,3 +235,68 @@ class TestInstanceDeterminism:
         assert (
             sum(1 for value in readings if value > truth.warn_threshold) == truth.exceedance_count
         )
+
+
+class TestTheMergeRunsOnEitherDevice:
+    """Every method must survive the device the engine is configured for.
+
+    These were CPU-only until a real GPU build failed on the first projection:
+    the DARE family draws its drop mask on the CPU *by design* — CUDA generators
+    differ across drivers and architectures, so a GPU-drawn mask would make an
+    artifact depend on which card the worker was assigned — and the mask was
+    then applied to a CUDA delta without being moved. Nothing in a CPU-only
+    suite can see that.
+    """
+
+    @staticmethod
+    def _devices():
+        import torch
+
+        return ["cpu"] + (["cuda"] if torch.cuda.is_available() else [])
+
+    @pytest.mark.parametrize(
+        "method",
+        [
+            C.MERGE_LINEAR,
+            C.MERGE_SVD,
+            C.MERGE_TIES_SVD,
+            C.MERGE_DARE_TIES_SVD,
+            C.MERGE_DARE_LINEAR_SVD,
+            C.MERGE_MAGNITUDE_PRUNE_SVD,
+        ],
+    )
+    def test_every_method_reconstructs_on_every_available_device(
+        self, method, tiny_snapshot, tiny_source, recipe_factory
+    ):
+        from capability_subnet.merge_engine.engine import reconstruct
+
+        needs_density = method in C.DENSITY_METHODS
+        recipe = recipe_factory(
+            combination_type=method,
+            density=0.5 if needs_density else None,
+            sign_method="total" if method in (C.MERGE_TIES_SVD, C.MERGE_DARE_TIES_SVD) else None,
+        )
+
+        for device in self._devices():
+            result = reconstruct(recipe, tiny_snapshot, tiny_source, device=device)
+            assert result.artifact_sha256.startswith("sha256:")
+            assert result.stats.merge_device == device
+
+    def test_the_stochastic_mask_is_drawn_on_the_cpu_whatever_the_device(self):
+        """The property the device fix must not break.
+
+        A mask drawn on the GPU would be a different mask on a different card,
+        and the artifact digest would stop being reproducible across a
+        deployment's own workers.
+        """
+        import torch
+
+        from capability_subnet.merge_engine.methods import random_drop_rescale
+
+        cpu_delta = torch.ones(64, 64)
+        on_cpu = random_drop_rescale(cpu_delta, 0.5, seed_parts=(1, "a", "site"))
+
+        if torch.cuda.is_available():
+            on_gpu = random_drop_rescale(cpu_delta.cuda(), 0.5, seed_parts=(1, "a", "site"))
+            # Same mask, same survivors, same rescaling — only the device differs.
+            assert torch.equal(on_cpu, on_gpu.cpu())

@@ -1,4 +1,4 @@
-.PHONY: help install install-dev install-backend lint fmt test test-fast test-repro \
+.PHONY: help install install-dev install-backend import-pool lint fmt test test-fast test-repro \
         public-pack registry-snapshot backend backend-api validator miner-validate \
         docker-sandbox-up docker-sandbox-down clean
 
@@ -35,6 +35,9 @@ test-repro: ## Reconstruction determinism suite only
 
 public-pack: ## Regenerate the public workflow pack from its published seed
 	$(PY) -m capability_subnet.workflows.cli generate-public-pack --out $(PACK_DIR)
+
+import-pool: ## Fetch and normalise the certified pool from its pinned upstream sources
+	$(PY) scripts/import_public_adapters.py --out pool --write-registry
 
 registry-snapshot: ## Print the frozen certified adapter snapshot digest
 	$(PY) -m capability_subnet.registry.cli snapshot

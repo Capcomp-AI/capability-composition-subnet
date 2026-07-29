@@ -123,6 +123,25 @@ class BackendClient:
     def fetch_champion(self) -> dict:
         return self._get("/champion")
 
+    def fetch_disclosure(self, window_id: int):
+        """The published instances and traces for one closed window.
+
+        Raises:
+            BackendUnavailable: if the window is not disclosed or the payload is
+                not a valid disclosure.
+            SignatureError: if it is not signed by a trusted operator.
+        """
+        from capability_subnet.common.schemas import WindowDisclosure
+
+        payload = self._get(f"/windows/{window_id}/disclosure")
+        try:
+            disclosure = WindowDisclosure.model_validate(payload)
+        except Exception as exc:  # noqa: BLE001
+            raise BackendUnavailable(f"malformed disclosure: {exc}") from exc
+
+        require_trusted_signature(disclosure, self.trusted_signers)
+        return disclosure
+
 
 def validate_vector(
     vector: WeightVector,
@@ -210,6 +229,50 @@ def validate_vector(
     return problems
 
 
+def spot_check_window(client: BackendClient, window_id: int) -> tuple[bool, str]:
+    """Re-score a closed window from its own published traces.
+
+    This is the check that turns "the operator says so" into something a
+    validator can answer for itself. Instance generation is a pure function of
+    the seed and the scorer is deterministic, so a validator regenerates exactly
+    the problems the candidates faced and re-runs the scoring over the traces
+    the engine published. A score that does not follow from its own trace is
+    caught here, by whoever is about to pay for it.
+
+    It needs no GPU and no model: nothing is reconstructed and nothing is
+    served, which is what keeps a validator a small VPS while still making it a
+    verifier rather than a relay.
+
+    Returns:
+        ``(ok, detail)``. ``ok`` is False only when the engine's own published
+        record contradicts itself — a window that has not been disclosed yet, or
+        an engine that cannot be reached, is not evidence of dishonesty and does
+        not fail the check.
+    """
+    from capability_subnet.audit.replay import replay_disclosure
+
+    try:
+        disclosure = client.fetch_disclosure(window_id)
+    except SignatureError as exc:
+        return False, f"the disclosure for window {window_id} is not attributable: {exc}"
+    except BackendUnavailable as exc:
+        # Not yet disclosed, or the engine is unreachable. Neither is a finding.
+        log.info("skipping the spot check for window %d: %s", window_id, exc)
+        return True, f"window {window_id} is not available to re-score"
+
+    outcome, result = replay_disclosure(disclosure)
+
+    if outcome.disagreed:
+        return False, (
+            f"window {window_id} does not re-score to its published result: "
+            f"{outcome.summary()}. First disagreement: {outcome.disagreed[0]}"
+        )
+    if not result.ok:
+        return False, f"window {window_id} failed replay verification: {result.summary()}"
+
+    return True, f"window {window_id}: {outcome.summary()}"
+
+
 def safe_fallback(burn_uid: int, vector: WeightVector) -> WeightVector:
     """The vector to submit when a fetched one cannot be trusted.
 
@@ -235,5 +298,6 @@ __all__ = [
     "SignatureError",
     "ValidationProblem",
     "safe_fallback",
+    "spot_check_window",
     "validate_vector",
 ]

@@ -14,29 +14,40 @@ well-formed.
 from __future__ import annotations
 
 import statistics
-from dataclasses import dataclass
 
 from capability_subnet.backend.scorer.aggregate import percentile, valid_rows
 from capability_subnet.common import constants as C
 from capability_subnet.common.schemas import CandidateScores, GateVerdict, InstanceResult
 
-
-@dataclass(frozen=True, slots=True)
-class GateContext:
-    """Everything the behavioural gates need."""
-
-    artifact_bytes: int
-    peak_vram_gb: float
-    hidden_results: list[InstanceResult]
-    scores: CandidateScores
-    strongest_reference_id: str
-    strongest_reference_score: float
-    stage_thresholds: dict[str, float]
-    base_retention_measured: float
+#: Gates whose failure says something about the *engine*, not the candidate.
+#:
+#: The distinction decides whether a hotkey's single evaluation is spent. A
+#: candidate that used 40 GB genuinely failed the memory limit; a candidate on a
+#: host whose NVML counter was unreadable has not been shown to fail anything,
+#: and terminating it would spend its one shot on the operator's bad night. The
+#: same holds for too few scored instances and for a latency figure computed
+#: from no completed runs.
+#:
+#: A one-shot-per-hotkey rule is only defensible if the engine never charges a
+#: candidate for its own failures, so this set is consulted before any
+#: termination.
+INFRASTRUCTURE_GATES: frozenset[str] = frozenset(
+    {"sample_sufficiency", "peak_vram_unmeasured", "latency_unmeasured", "reconstruction"}
+)
 
 
 def gate(name: str, passed: bool, detail: str = "", **kwargs) -> GateVerdict:
     return GateVerdict(name=name, passed=passed, detail=detail, **kwargs)
+
+
+def infrastructure_failures(verdicts: list[GateVerdict]) -> list[GateVerdict]:
+    """Failed gates that indict the engine rather than the candidate."""
+    return [v for v in verdicts if not v.passed and v.name in INFRASTRUCTURE_GATES]
+
+
+def candidate_failures(verdicts: list[GateVerdict]) -> list[GateVerdict]:
+    """Failed gates the candidate is genuinely responsible for."""
+    return [v for v in verdicts if not v.passed and v.name not in INFRASTRUCTURE_GATES]
 
 
 # ---------------------------------------------------------------------------
@@ -138,8 +149,11 @@ def gate_peak_vram(peak_vram_gb: float | None, *, require_measurement: bool = Tr
             is not meaningful in the first place.
     """
     if peak_vram_gb is None:
+        # Named apart from the real limit check so the scheduler can tell "this
+        # package needs too much memory" from "this host could not tell us".
+        # Both block a crowning; only the first may end a candidate's run.
         return gate(
-            "peak_vram",
+            "peak_vram_unmeasured",
             not require_measurement,
             "peak GPU memory could not be measured on this host"
             + ("; refusing to certify the resource limit" if require_measurement else ""),
@@ -159,20 +173,32 @@ def gate_peak_vram(peak_vram_gb: float | None, *, require_measurement: bool = Tr
 
 def gate_latency(hidden_results: list[InstanceResult]) -> GateVerdict:
     durations = sorted(row.wall_seconds for row in valid_rows(hidden_results))
+    if not durations:
+        # No scored run means no latency was observed. That is the engine
+        # failing to gather evidence, not the candidate being slow, and it gets
+        # an infrastructure-named verdict so it cannot end a candidate's run.
+        return gate(
+            "latency_unmeasured",
+            False,
+            "no completed instances to measure latency from",
+            measured=0.0,
+            limit=C.MAX_P95_WORKFLOW_SECONDS,
+        )
+
     p95 = percentile(durations, 0.95)
-    passed = bool(durations) and p95 <= C.MAX_P95_WORKFLOW_SECONDS
-    detail = (
-        f"p95 {p95:.1f}s against a {C.MAX_P95_WORKFLOW_SECONDS:.0f}s limit"
-        if durations
-        else "no completed instances to measure"
+    return gate(
+        "latency",
+        p95 <= C.MAX_P95_WORKFLOW_SECONDS,
+        f"p95 {p95:.1f}s against a {C.MAX_P95_WORKFLOW_SECONDS:.0f}s limit",
+        measured=p95,
+        limit=C.MAX_P95_WORKFLOW_SECONDS,
     )
-    return gate("latency", passed, detail, measured=p95, limit=C.MAX_P95_WORKFLOW_SECONDS)
 
 
 def gate_agent_limits(hidden_results: list[InstanceResult]) -> GateVerdict:
     rows = valid_rows(hidden_results)
     if not rows:
-        return gate("agent_limits", False, "no completed instances to measure")
+        return gate("latency_unmeasured", False, "no completed instances to measure")
 
     worst_turns = max(row.turns_used for row in rows)
     worst_tokens = max(row.output_tokens for row in rows)

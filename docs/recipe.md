@@ -20,13 +20,13 @@ python -m capability_subnet.miner.cli contract --section recipe
   "source_snapshot_sha256": "sha256:...",
 
   "selected_adapters": [
-    "german-technical-v1",
-    "maintenance-fault-extraction-v1",
-    "text-to-sql-v1",
-    "python-diagnostics-v1",
-    "tool-calling-v1",
-    "safety-policy-v1",
-    "strict-json-v1"
+    "embedded-engineering-v1",
+    "chained-reasoning-v1",
+    "industrial-ifc-v1",
+    "code-generation-v1",
+    "action-planner-v1",
+    "constrained-selection-v1",
+    "structured-explanation-v1"
   ],
 
   "merge": {
@@ -37,12 +37,12 @@ python -m capability_subnet.miner.cli contract --section recipe
   },
 
   "global_weights": {
-    "text-to-sql-v1": 1.20,
-    "safety-policy-v1": 1.15
+    "industrial-ifc-v1": 1.20,
+    "constrained-selection-v1": 1.15
   },
 
   "layer_group_overrides": {
-    "group_2": { "text-to-sql-v1": 1.30 }
+    "group_2": { "industrial-ifc-v1": 1.30 }
   },
 
   "compression": {
@@ -99,7 +99,7 @@ Supplying a parameter a method does not use is an error, not a silent ignore. Th
 
 Per-adapter coefficient across the whole model. Range **`-2.0 … 2.0`**. Unlisted adapters default to `1.0`. Only selected adapters may appear.
 
-Negative coefficients are legal and occasionally useful — subtracting an adapter's update is a real operation — but they interact badly with the base-retention gate.
+Negative coefficients are legal and occasionally useful — subtracting an adapter's update is a real operation — but they interact badly with the base-retention gate, which measures general instruction-following on a held-out probe rather than anything about this workflow.
 
 ### `layer_group_overrides`
 
@@ -176,7 +176,7 @@ layer group override  →  global weight  →  1.0
 ```
 
 ```python
-recipe.effective_weight("text-to-sql-v1", "group_2")
+recipe.effective_weight("industrial-ifc-v1", "group_2")
 ```
 
 ---
@@ -216,9 +216,15 @@ Any failure zeroes the candidate.
 | Agent limits | ≤ 12 turns, ≤ 8192 output tokens |
 | Safety | Zero critical unsafe actions |
 | Stage floors | Every critical stage above its floor |
-| Base retention | ≥ 98% relative retention |
-| Baseline | Exceeds the strongest reference by the margin |
+| Base retention | ≥ 98% of the base model's score on the general-capability probe |
+| Baseline | Exceeds the strongest **permanent reference** by the absolute margin |
+| Defender's margin | Exceeds the incumbent by its remaining, decaying margin |
 | Statistics | Paired lower confidence bound above zero |
+
+Two of these fail *without* ending your run, because they say the engine could
+not measure you rather than that you fell short: an unreadable GPU memory
+counter, and too few instances scored to compare on. Those hold your submission
+for a later window with its single shot intact.
 
 ---
 

@@ -36,7 +36,7 @@ If a reference holds the throne, the workflow share burns.
 
 ### What hardware do I need?
 
-Building and validating recipes: any machine. Reconstructing an artifact: ~32 GB RAM, no GPU. Evaluating locally: a GPU that fits the base model in bfloat16. Searching seriously: as much as you want to spend — that is where the competition is.
+Building and validating recipes: any machine. Reconstructing an artifact: ~32 GB RAM; a GPU is optional but roughly thirty times faster on the trimming methods, which have to decompose a full update per projection. Evaluating locally: a GPU that fits the base model in bfloat16. Searching seriously: as much as you want to spend — that is where the competition is.
 
 ### Can I really only submit once?
 
@@ -66,7 +66,7 @@ Almost certainly not — but they are selectable on purpose. One is a German leg
 
 ### Can I use negative coefficients?
 
-Yes, within `-2.0 … 2.0`. Subtracting an adapter's update is a real operation. It interacts badly with the base-retention gate, so measure it.
+Yes, within `-2.0 … 2.0`. Subtracting an adapter's update is a real operation. It interacts badly with the base-retention gate — which measures general instruction-following on a held-out probe, not anything about this workflow — so measure it.
 
 ### How much do local scores predict hidden scores?
 
@@ -175,3 +175,45 @@ The engine keeps its own copy of every admitted recipe under `state/recipes/`, s
 ### Can I run the engine without Docker?
 
 Yes, but the container boundaries are the primary isolation for candidate-written code. The in-process resource limits are defence in depth, not a substitute.
+
+### Do I earn anything while I wait in the queue?
+
+A small, tapered share — most at the front of the queue, least at the back. It
+is not payment for work: Bittensor prunes by lowest emission, so a miner holding
+exactly zero is the first the chain evicts. The engine evaluates roughly one
+challenger per window, so without it you could be deregistered before your
+single evaluation ever ran.
+
+### The champion looks unbeatable. Is the subnet finished?
+
+No. The margin a challenger must clear over the *incumbent* decays to zero over
+roughly thirty days, so an unopposed champion progressively loses its defender's
+advantage. What does not decay is the margin over the permanent references —
+beating an off-the-shelf equal-weight merge is the bar that says composition
+added value at all, and that question does not get easier because someone
+already answered it once.
+
+### I did not take the throne. Did I earn anything?
+
+Yes, if your package cleared every hard gate. The champion takes a fixed share
+and everything below it is graded on quality, how far past the strongest
+permanent reference you got, how close you came to the champion, and what your
+package costs to run. That grade earns a proportional share for several windows,
+and it is published broken into its four terms so you can see what earned it.
+
+Clearing the gates is the threshold, and it is not negotiable. Grading applies
+within the qualified set — it is not a consolation prize for producing something
+undeployable.
+
+### Does the subnet owner run code the rest of us cannot see?
+
+Not for anything that decides a score. The engine, the workflow generators and
+the scorers are all in this repository, and they have to be: the reason to
+believe a single operator's numbers is that anyone can regenerate a closed
+window's instances from their published seeds and re-run the scoring over the
+published traces. Move the scorer somewhere private and that check stops
+existing.
+
+What an operator does keep private is the hidden seed root, wallet material,
+filled-in configuration, host inventory and runbooks — operations, not protocol.
+See [repositories.md](repositories.md).

@@ -71,22 +71,6 @@ def stage_balance(results: list[InstanceResult], stages: tuple[str, ...]) -> flo
     return math.exp(log_sum / len(means))
 
 
-def base_retention(candidate_e2e: float, base_e2e: float) -> float:
-    """Relative retention against the unmodified base model.
-
-    Capped at 1: a package that beats the base model has retained everything the
-    base could do, and rewarding it twice for the same improvement (once through
-    completion, once through retention) would double-count.
-    """
-    if base_e2e <= 0.0:
-        # A base model that completes nothing gives no retention signal. Treating
-        # that as full retention is the conservative reading: the gate exists to
-        # catch packages that *destroyed* general ability, and there is nothing to
-        # destroy in a baseline that already scores zero.
-        return 1.0
-    return min(1.0, candidate_e2e / base_e2e)
-
-
 def latency_efficiency(candidate_seconds: float, reference_seconds: float) -> float:
     """How the candidate's workflow latency compares with the reference."""
     if candidate_seconds <= 0.0:
@@ -94,6 +78,30 @@ def latency_efficiency(candidate_seconds: float, reference_seconds: float) -> fl
     if reference_seconds <= 0.0:
         return 1.0
     return min(1.0, reference_seconds / candidate_seconds)
+
+
+def token_efficiency(results: list[InstanceResult]) -> float:
+    """Output tokens spent per *completed* instance, against a fixed budget.
+
+    Per completed instance rather than per attempted one, because dividing by
+    attempts rewards failing early: a package that gives up after one turn spends
+    almost nothing and would score best on a naive mean. Charging its tokens
+    against the instances it actually finished makes cheap failure expensive,
+    which is the correct direction — an unfinished workflow has no value to
+    divide the cost into.
+
+    A package that completes nothing scores zero here, not one.
+    """
+    rows = valid_rows(results)
+    completed = [row for row in rows if row.end_to_end_success]
+    if not completed:
+        return 0.0
+
+    spent = sum(row.output_tokens for row in rows)
+    per_completion = spent / len(completed)
+    if per_completion <= 0.0:
+        return 1.0
+    return min(1.0, C.REFERENCE_OUTPUT_TOKENS / per_completion)
 
 
 def artifact_efficiency(artifact_bytes: int, peak_vram_gb: float) -> float:
@@ -142,7 +150,7 @@ def aggregate_scores(
     ood_results: list[InstanceResult],
     stages: tuple[str, ...],
     *,
-    base_e2e: float,
+    retention: float,
     efficiency: EfficiencyInputs,
 ) -> CandidateScores:
     """Compute every component and the qualified score.
@@ -151,7 +159,10 @@ def aggregate_scores(
         hidden_results: rows from the canonical hidden instances.
         ood_results: rows from the out-of-distribution instances.
         stages: the workflow's capability axes.
-        base_e2e: the base model's completion on the same hidden instances.
+        retention: probe score relative to the base model's, from
+            :func:`retention.relative_retention`. Passed in rather than derived
+            here because it is measured on a different set of questions than the
+            workflow, which is the whole point of it.
         efficiency: measured deployment cost.
     """
     rows = valid_rows(hidden_results)
@@ -159,11 +170,11 @@ def aggregate_scores(
     completion = end_to_end_completion(hidden_results)
     balance = stage_balance(hidden_results, stages)
     ood = end_to_end_completion(ood_results)
-    retention = base_retention(completion, base_e2e)
 
     durations = sorted(row.wall_seconds for row in rows)
     latency = latency_efficiency(percentile(durations, 0.5), efficiency.reference_seconds)
     artifact = artifact_efficiency(efficiency.artifact_bytes, efficiency.peak_vram_gb)
+    tokens = token_efficiency(hidden_results)
 
     qualified = (
         C.WEIGHT_END_TO_END * completion
@@ -171,6 +182,7 @@ def aggregate_scores(
         + C.WEIGHT_OOD * ood
         + C.WEIGHT_RETENTION * retention
         + C.WEIGHT_LATENCY * latency
+        + C.WEIGHT_TOKEN_EFFICIENCY * tokens
         + C.WEIGHT_ARTIFACT_EFFICIENCY * artifact
     )
 
@@ -180,6 +192,7 @@ def aggregate_scores(
         ood=ood,
         retention=retention,
         latency=latency,
+        token_efficiency=tokens,
         artifact_efficiency=artifact,
         qualified_score=min(1.0, qualified),
         per_stage_means=per_stage_means(hidden_results, stages),

@@ -7,6 +7,15 @@ reason about storage layouts or SDK version differences. Two things matter here:
   at* — commit order is what assigns challenger roles, so the block is not
   optional metadata,
 * writing weights with sane retry and rate-limit handling.
+
+This module targets the **Bittensor 11 SDK**, which replaced the method-per-call
+``Subtensor`` of the 10.x line with two surfaces: typed *reads* grouped into
+namespaces (``subtensor.subnets.metagraph(...)``) and *intents* submitted
+through ``subtensor.execute(...)``. The shape of the change matters here rather
+than just the spelling: a v11 metagraph carries every neuron's commitment
+inline, so the per-hotkey "when was this committed" round trip the 10.x code
+needed is gone, and with it the failure mode where a commitment could not be
+queued because its block could not be read.
 """
 
 from __future__ import annotations
@@ -28,6 +37,9 @@ if TYPE_CHECKING:  # pragma: no cover - import cycle avoidance for type checkers
 
 log = logging.getLogger(__name__)
 
+#: Largest payload the Commitments pallet accepts in one ``Raw`` field.
+MAX_RAW_FIELD_BYTES = 128
+
 
 @dataclass(frozen=True, slots=True)
 class ChainCommitment:
@@ -40,123 +52,129 @@ class ChainCommitment:
     payload: CommitmentPayload
 
 
-def read_commitments(
-    subtensor: bt.Subtensor,
-    netuid: int,
-    *,
-    metagraph: bt.Metagraph | None = None,
-    min_block: int = 0,
-) -> list[ChainCommitment]:
-    """Read and decode every commitment belonging to this subnet.
+@dataclass(frozen=True, slots=True)
+class MetagraphView:
+    """The subset of a metagraph this subnet actually uses.
 
-    Malformed and foreign commitments are skipped with a debug log rather than
-    raising — a single bad row must never poison a scan.
-
-    Returns:
-        Commitments sorted by the block they were made at, earliest first. That
-        ordering is the queue order the scheduler uses.
+    Carried as a plain snapshot rather than a live SDK object so the engine,
+    the validator and the tests all read the same shape, and so a metagraph
+    fetched once per pass cannot change under a caller mid-decision.
     """
-    try:
-        raw_commitments: dict[str, str] = subtensor.get_all_commitments(netuid)
-    except Exception:
-        log.exception("failed to read commitments for netuid %s", netuid)
-        return []
 
-    uid_by_hotkey: dict[str, int] = {}
-    if metagraph is not None:
-        uid_by_hotkey = {hk: uid for uid, hk in enumerate(metagraph.hotkeys)}
+    netuid: int
+    block: int
+    hotkeys: list[str]
+    owner_hotkey: str
+    commitments: list[ChainCommitment]
 
-    results: list[ChainCommitment] = []
+    @property
+    def size(self) -> int:
+        return len(self.hotkeys)
+
+    def uid_of(self, hotkey: str) -> int | None:
+        try:
+            return self.hotkeys.index(hotkey)
+        except ValueError:
+            return None
+
+    def owner_uid(self) -> int | None:
+        """UID of the subnet owner's hotkey, when it holds one.
+
+        This is the burn target. UID 0 is *not* a burn address — it is whichever
+        neuron happens to occupy the first slot — so routing emission there pays
+        a stranger. Resolving the owner from the metagraph is the only way to
+        burn to something the operator actually controls.
+        """
+        return self.uid_of(self.owner_hotkey)
+
+
+def fetch_metagraph(subtensor: bt.Subtensor, netuid: int) -> MetagraphView:
+    """Read the metagraph and every commitment on it in one call.
+
+    Raises:
+        ChainError: propagated from the SDK. A caller that cannot read the
+            metagraph must not proceed on a stale one without knowing.
+    """
+    graph = subtensor.subnets.metagraph(netuid=netuid)
+
+    commitments: list[ChainCommitment] = []
     skipped = 0
-    unreadable = 0
-    for hotkey, raw in raw_commitments.items():
-        if not is_subnet_commitment(raw):
+    sealed = 0
+
+    # Registered neurons first, then commitments whose hotkey has since
+    # deregistered. The latter are kept because anti-copy compares against every
+    # commitment ever admitted, and a hotkey leaving must not retroactively free
+    # its recipe for someone else to claim.
+    records: list[tuple[Any, int | None]] = [
+        (record, uid) for uid, record in sorted(graph.commitments.items())
+    ]
+    records += [(record, None) for _, record in sorted(graph.unregistered_commitments.items())]
+
+    for record, uid in records:
+        value = record.value
+        if value is None:
+            # A timelocked payload the chain has not decrypted yet. It is not
+            # malformed, it is simply not readable, and it will be on the next
+            # pass — so it is neither skipped nor counted against the miner.
+            sealed += 1
+            continue
+        if not is_subnet_commitment(value):
             continue
         try:
-            payload = decode_commitment(raw)
+            payload = decode_commitment(value)
         except CommitmentError as exc:
             skipped += 1
-            log.debug("skipping malformed commitment from %s: %s", hotkey[:12], exc)
+            log.debug("skipping malformed commitment from %s: %s", record.hotkey[:12], exc)
             continue
 
-        block = _commitment_block(subtensor, netuid, hotkey)
-        if block is None:
-            # Commit order decides who challenges next, so a commitment whose
-            # block cannot be read has no defensible place in the queue. Skipping
-            # it leaves it eligible for the next scan; guessing a block would
-            # either hand it the front of the queue or silently drop it, and both
-            # have happened in systems that defaulted this to zero.
-            unreadable += 1
-            log.warning(
-                "skipping %s this pass: its commitment block could not be read", hotkey[:12]
-            )
-            continue
-
-        if block < min_block:
-            continue
-
-        results.append(
+        commitments.append(
             ChainCommitment(
-                hotkey=hotkey,
-                uid=uid_by_hotkey.get(hotkey),
-                block=block,
-                raw=raw,
+                hotkey=record.hotkey,
+                uid=uid if uid is not None else record.uid,
+                block=int(record.block),
+                raw=value,
                 payload=payload,
             )
         )
 
     if skipped:
         log.info("skipped %d malformed commitments on netuid %s", skipped, netuid)
-    if unreadable:
-        # Loud, because a persistent count here means miners are silently unable
-        # to enter the queue.
-        log.warning(
-            "%d commitments on netuid %s had an unreadable block and were not queued this pass",
-            unreadable,
-            netuid,
-        )
+    if sealed:
+        log.info("%d commitments on netuid %s are still sealed", sealed, netuid)
 
-    results.sort(key=lambda c: (c.block, c.hotkey))
-    return results
+    commitments.sort(key=lambda c: (c.block, c.hotkey))
+
+    return MetagraphView(
+        netuid=netuid,
+        block=int(graph.block),
+        hotkeys=list(graph.hotkeys),
+        owner_hotkey=str(graph.owner_hotkey),
+        commitments=commitments,
+    )
 
 
-def _commitment_block(subtensor: bt.Subtensor, netuid: int, hotkey: str) -> int | None:
-    """Block at which ``hotkey``'s current commitment was written.
+def read_commitments(
+    subtensor: bt.Subtensor,
+    netuid: int,
+    *,
+    min_block: int = 0,
+) -> list[ChainCommitment]:
+    """Every commitment belonging to this subnet, in commit order.
 
     Returns:
-        The block, or ``None`` when it cannot be determined.
-
-    ``None`` rather than a default. Commit order is what assigns challenger
-    roles, so a wrong block is not a cosmetic inaccuracy — it changes who is
-    evaluated next. A zero default sorts to the *front* of an ascending queue
-    and would hand priority to exactly the commitments the engine understands
-    least, while a large default would silently bury them. Neither is
-    acceptable, so the caller skips and retries instead.
+        Commitments sorted by the block they were made at, earliest first. That
+        ordering is the queue order the scheduler uses.
     """
     try:
-        metadata: Any = subtensor.get_commitment_metadata(netuid, hotkey)
+        view = fetch_metagraph(subtensor, netuid)
     except Exception:
-        log.warning("could not read commitment metadata for %s", hotkey[:12], exc_info=True)
-        return None
+        log.exception("failed to read commitments for netuid %s", netuid)
+        return []
+    return [c for c in view.commitments if c.block >= min_block]
 
-    if not isinstance(metadata, dict):
-        log.warning(
-            "commitment metadata for %s has an unexpected shape (%s); cannot determine its block",
-            hotkey[:12],
-            type(metadata).__name__,
-        )
-        return None
 
-    block = metadata.get("block")
-    if block is None:
-        log.warning("commitment metadata for %s carries no block", hotkey[:12])
-        return None
-
-    try:
-        return int(block)
-    except (TypeError, ValueError):
-        log.warning("commitment block for %s is not an integer: %r", hotkey[:12], block)
-        return None
+def is_registered(view: MetagraphView, hotkey: str) -> bool:
+    return hotkey in view.hotkeys
 
 
 def write_commitment(
@@ -170,21 +188,44 @@ def write_commitment(
 ) -> tuple[bool, str]:
     """Publish a recipe commitment on-chain.
 
+    v11 exposes no ``set_commitment`` intent, so the Commitments call is
+    composed directly and submitted through the raw-call escape hatch. The
+    payload goes in a single ``Raw<len>`` field, which is what the pallet's
+    ``CommitmentInfo`` expects and what :func:`read_commitments` decodes back.
+
+    Signed with the **hotkey**: a commitment is a statement by the neuron, and
+    the default signer is the coldkey.
+
     Returns:
         ``(success, message)``. The message is the chain's response on failure
         and the encoded payload on success.
     """
     payload = encode_commitment(workflow_id, recipe_sha256, recipe_uri)
-    log.info("committing %d-byte payload on netuid %s", len(payload.encode()), netuid)
+    raw = payload.encode("utf-8")
+
+    if len(raw) > MAX_RAW_FIELD_BYTES:
+        return False, (
+            f"commitment payload is {len(raw)} bytes, above the "
+            f"{MAX_RAW_FIELD_BYTES}-byte field limit"
+        )
+
+    from bittensor._generated import calls
+
+    log.info("committing %d-byte payload on netuid %s", len(raw), netuid)
+    call = calls.Commitments.set_commitment(
+        netuid=netuid,
+        info={"fields": [[{f"Raw{len(raw)}": raw}]]},
+    )
+
     try:
-        response = subtensor.set_commitment(wallet=wallet, netuid=netuid, data=payload)
+        result = subtensor.submit_call(call, wallet, signer="hotkey")
     except Exception as exc:  # noqa: BLE001 - reported to the operator verbatim
         log.exception("set_commitment raised")
         return False, str(exc)
 
-    success = bool(getattr(response, "success", False))
-    message = getattr(response, "message", "") or ""
-    return (True, payload) if success else (False, message or "set_commitment failed")
+    if bool(getattr(result, "success", False)):
+        return True, payload
+    return False, str(getattr(result, "message", "") or "set_commitment failed")
 
 
 def submit_weights(
@@ -195,48 +236,61 @@ def submit_weights(
     weights: list[float],
     *,
     version_key: int,
-    wait_for_inclusion: bool = False,
-    wait_for_finalization: bool = False,
 ) -> tuple[bool, str]:
     """Submit a weight vector.
 
-    The SDK's own rate-limit guard returns ``success=False`` with an empty
-    message when the validator has set weights too recently. That is a no-op,
-    not an error, and is reported as such so callers do not retry in a tight
-    loop.
+    v11's ``SetWeights`` intent conforms the vector to the subnet's own
+    hyperparameters — max-weight clipping, u16 quantisation, minimum weight
+    count — and picks the plaintext or timelocked commit-reveal path from the
+    subnet's on-chain configuration. None of that is decided here, which is the
+    point: a validator that hard-coded one path would break the day the subnet
+    owner enabled the other.
+
+    Rate limiting is reported rather than raised, so callers do not retry in a
+    tight loop against a limit that only clears with time.
     """
     if len(uids) != len(weights):
         raise ValueError(f"uids/weights length mismatch: {len(uids)} vs {len(weights)}")
     if not uids:
         raise ValueError("refusing to submit an empty weight vector")
 
+    import bittensor as bt_sdk
+
     try:
-        response = subtensor.set_weights(
-            wallet=wallet,
-            netuid=netuid,
-            uids=uids,
-            weights=weights,
-            version_key=version_key,
-            wait_for_inclusion=wait_for_inclusion,
-            wait_for_finalization=wait_for_finalization,
+        result = subtensor.execute(
+            bt_sdk.SetWeights(netuid=netuid, uids=uids, weights=weights, version_key=version_key),
+            wallet,
         )
     except Exception as exc:  # noqa: BLE001
+        message = str(exc)
+        if _is_rate_limit(message):
+            return False, "rate limited"
         log.exception("set_weights raised")
-        return False, str(exc)
+        return False, message
 
-    success = bool(getattr(response, "success", False))
-    message = getattr(response, "message", "") or ""
-    if success:
+    if bool(getattr(result, "success", False)):
         return True, "weights set"
-    if not message:
-        return False, "rate limited"
-    return False, message
+
+    message = str(getattr(result, "message", "") or "set_weights failed")
+    return False, "rate limited" if _is_rate_limit(message) else message
+
+
+def _is_rate_limit(message: str) -> bool:
+    """Whether a failure is the chain's own weight rate limit.
+
+    Matched on the message because the SDK surfaces it as an ordinary error.
+    Treating it as a failure would have the validator retry every pass until the
+    limit cleared; treating it as success would advance state that never landed.
+    It is neither, so it gets its own answer.
+    """
+    lowered = message.lower()
+    return "rate limit" in lowered or "settingweightstoofast" in lowered.replace(" ", "")
 
 
 def current_block(subtensor: bt.Subtensor) -> int:
     """Chain head, or 0 if the endpoint is unreachable."""
     try:
-        return int(subtensor.get_current_block())
+        return int(subtensor.block)
     except Exception:
         log.warning("could not read chain head", exc_info=True)
         return 0

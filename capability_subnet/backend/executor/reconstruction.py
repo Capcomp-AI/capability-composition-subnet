@@ -92,11 +92,13 @@ class Reconstructor:
         cache: ArtifactCache,
         *,
         workers: int = 2,
+        device: str = "cpu",
     ) -> None:
         self.snapshot = snapshot
         self.source = source
         self.cache = cache
         self.workers = max(1, workers)
+        self.device = device
         if self.workers < 2:
             log.warning(
                 "running with a single reconstruction worker; the cross-worker artifact "
@@ -113,7 +115,7 @@ class Reconstructor:
         """
         # A dry build computes the digest without writing, which is how the cache
         # is consulted: the artifact's address is not known until it is built.
-        probe = reconstruct(recipe, self.snapshot, self.source, output_dir=None)
+        probe = reconstruct(recipe, self.snapshot, self.source, output_dir=None, device=self.device)
         digest = probe.artifact_sha256
 
         if self.cache.contains(digest):
@@ -131,7 +133,9 @@ class Reconstructor:
         agreed, detail = self._cross_check(recipe, probe)
 
         target = self.cache.path_for(digest)
-        written = reconstruct(recipe, self.snapshot, self.source, output_dir=target)
+        written = reconstruct(
+            recipe, self.snapshot, self.source, output_dir=target, device=self.device
+        )
 
         if written.artifact_sha256 != digest:
             # The in-memory digest and the written file disagree, which means the
@@ -169,6 +173,7 @@ class Reconstructor:
                 self.source,
                 output_dir=None,
                 threads=1 + index,
+                device=self.device,
             )
             digests.add(repeat.artifact_sha256)
 

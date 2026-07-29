@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 import sys
 
-from capability_subnet.common.chain import write_commitment
+from capability_subnet.common.chain import fetch_metagraph, is_registered, write_commitment
 from capability_subnet.common.commitments import CommitmentError, encode_commitment
 from capability_subnet.common.config import build_config
 from capability_subnet.common.logging import setup_logging
@@ -36,17 +36,20 @@ class MinerNeuron:
 
         self.config = config or build_config("miner")
         setup_logging(getattr(self.config, "log_level", "INFO"))
+        self._graph = None
 
         self.snapshot = load_snapshot()
-        self.wallet = bt.wallet(config=self.config)
-        self.subtensor = bt.Subtensor(config=self.config)
+        self.wallet = bt.Wallet(
+            self.config.wallet_name,
+            self.config.wallet_hotkey,
+            path=self.config.wallet_path,
+        )
+        self.subtensor = bt.Subtensor(self.config.network)
 
     # -- checks -------------------------------------------------------------
 
     def check_registered(self) -> bool:
-        registered = self.subtensor.is_hotkey_registered(
-            netuid=self.config.netuid, hotkey_ss58=self.wallet.hotkey.ss58_address
-        )
+        registered = is_registered(self._metagraph(), self.wallet.hotkey.ss58_address)
         if not registered:
             log.error(
                 "%s is not registered on netuid %s. Register it with "
@@ -56,6 +59,18 @@ class MinerNeuron:
             )
         return registered
 
+    def _metagraph(self):
+        """Read the metagraph once per invocation and reuse it.
+
+        The miner is a one-shot command, so a single read serves both the
+        registration check and the existing-commitment check. Two reads could
+        disagree, and disagreeing about whether a hotkey is registered is not a
+        thing a submission path should do.
+        """
+        if self._graph is None:
+            self._graph = fetch_metagraph(self.subtensor, self.config.netuid)
+        return self._graph
+
     def already_committed(self) -> str | None:
         """This hotkey's existing commitment, if it has one.
 
@@ -63,22 +78,17 @@ class MinerNeuron:
         commitment is not an error on-chain — it simply will not be evaluated.
         Checking first turns a silently wasted transaction into a clear message.
         """
-        from capability_subnet.common.commitments import decode_commitment, is_subnet_commitment
-
         try:
-            commitments = self.subtensor.get_all_commitments(self.config.netuid)
+            view = self._metagraph()
         except Exception:  # noqa: BLE001
             log.warning("could not read existing commitments", exc_info=True)
             return None
 
-        raw = commitments.get(self.wallet.hotkey.ss58_address)
-        if not raw or not is_subnet_commitment(raw):
-            return None
-
-        try:
-            return decode_commitment(raw).recipe_sha256
-        except CommitmentError:
-            return None
+        hotkey = self.wallet.hotkey.ss58_address
+        for commitment in view.commitments:
+            if commitment.hotkey == hotkey:
+                return commitment.payload.recipe_sha256
+        return None
 
     # -- submit -------------------------------------------------------------
 

@@ -22,13 +22,13 @@ from types import FrameType
 from capability_subnet.backend.engine_loop import EngineLoop
 from capability_subnet.backend.evaluation import Evaluator
 from capability_subnet.backend.executor.reconstruction import ArtifactCache, Reconstructor
-from capability_subnet.backend.executor.serving import ExternalServer
+from capability_subnet.backend.executor.serving import ExternalServer, ManagedVllmServer
 from capability_subnet.backend.monitor.admission import admit_new_commitments
 from capability_subnet.backend.monitor.fetch import LocalRecipeSource
 from capability_subnet.backend.reports.publisher import ReportPublisher
 from capability_subnet.backend.settings import BackendSettings, load_settings
 from capability_subnet.backend.store import Store
-from capability_subnet.common.chain import current_block, read_commitments
+from capability_subnet.common.chain import current_block, fetch_metagraph
 from capability_subnet.common.logging import setup_logging
 from capability_subnet.merge_engine.loader import SafetensorsAdapterSource
 from capability_subnet.registry.base_model import require_pinned
@@ -37,6 +37,36 @@ from capability_subnet.sandbox.orchestrator import SandboxConfig
 from capability_subnet.workflows import get_workflow
 
 log = logging.getLogger(__name__)
+
+
+def _build_server(settings: BackendSettings):
+    """The serving backend this deployment evaluates against.
+
+    Managed is the default and the only mode that measures the artifact the
+    engine just reconstructed: it starts a runtime per candidate with that
+    candidate's adapter baked in. External exists for development against the
+    base model and refuses outright if handed an adapter.
+    """
+    if settings.serving_mode == "external":
+        log.warning(
+            "serving_mode is 'external'; candidates cannot be applied and only "
+            "base-model runs will succeed"
+        )
+        return ExternalServer(settings.serving_base_url, settings.serving_model_name)
+
+    return ManagedVllmServer(
+        base_model_path=settings.base_model_path,
+        model_name=settings.serving_model_name,
+        host=settings.serving_host,
+        port=settings.serving_port,
+        gpu_index=settings.serving_gpu_index,
+        startup_timeout=settings.serving_startup_timeout,
+        max_model_len=settings.serving_max_model_len,
+        tool_call_parser=settings.tool_call_parser,
+        reasoning_parser=settings.reasoning_parser,
+        gpu_memory_utilization=settings.serving_gpu_memory_utilization,
+        python_executable=settings.serving_python,
+    )
 
 
 class EngineService:
@@ -59,8 +89,8 @@ class EngineService:
         if not settings.dry_run:
             import bittensor as bt
 
-            self.wallet = bt.wallet(name=settings.wallet_name, hotkey=settings.wallet_hotkey)
-            self.subtensor = bt.Subtensor(network=settings.chain_endpoint or settings.network)
+            self.wallet = bt.Wallet(settings.wallet_name, settings.wallet_hotkey)
+            self.subtensor = bt.Subtensor(settings.chain_endpoint or settings.network)
             keypair = self.wallet.hotkey
 
         self.publisher = ReportPublisher(settings.report_dir, keypair)
@@ -69,12 +99,16 @@ class EngineService:
         source = SafetensorsAdapterSource(settings.adapter_pool_dir)
         cache = ArtifactCache(settings.artifact_cache_dir)
         reconstructor = Reconstructor(
-            self.snapshot, source, cache, workers=settings.reconstruction_workers
+            self.snapshot,
+            source,
+            cache,
+            workers=settings.reconstruction_workers,
+            device=settings.merge_device,
         )
 
         evaluator = Evaluator(
             reconstructor=reconstructor,
-            server=ExternalServer(settings.serving_base_url, settings.serving_model_name),
+            server=_build_server(settings),
             adapter_pool_dir=settings.adapter_pool_dir,
             sandbox_config=SandboxConfig(postgres_dsn=settings.postgres_dsn or None),
             stages=self.workflow.critical_axes,
@@ -163,19 +197,20 @@ class EngineService:
         if self.subtensor is None:
             return 0
 
-        metagraph = self.subtensor.metagraph(self.settings.netuid)
-        commitments = read_commitments(
-            self.subtensor,
-            self.settings.netuid,
-            metagraph=metagraph,
-            min_block=self.settings.min_commit_block,
-        )
+        view = fetch_metagraph(self.subtensor, self.settings.netuid)
+        self.loop.metagraph = view
+
+        commitments = [
+            commitment
+            for commitment in view.commitments
+            if commitment.block >= self.settings.min_commit_block
+        ]
 
         results = admit_new_commitments(
             commitments,
             snapshot=self.snapshot,
             store=self.store,
-            registered_hotkeys=set(metagraph.hotkeys),
+            registered_hotkeys=set(view.hotkeys),
             current_block=block,
             recipe_store=self.recipe_store,
         )

@@ -35,6 +35,10 @@ class WindowSample:
     window_id: int
     hidden_seeds: tuple[int, ...]
     ood_seeds: tuple[int, ...]
+    #: Seed for this window's general-capability probe. Derived from the same
+    #: secret root under its own label, so learning the probe reveals nothing
+    #: about the hidden instances and vice versa.
+    probe_seed: int = 0
 
     @property
     def total(self) -> int:
@@ -75,6 +79,7 @@ def draw_window(
         window_id=window_id,
         hidden_seeds=tuple(_distinct(hidden_rng, hidden_count)),
         ood_seeds=tuple(_distinct(ood_rng, ood_count)),
+        probe_seed=_derive(root, window_id, "probe").randrange(1, SEED_SPACE),
     )
 
 

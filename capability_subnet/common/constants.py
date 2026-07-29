@@ -207,6 +207,11 @@ MAX_OUTPUT_TOKENS: Final[int] = 8192
 #: workflow score is rejected.
 BASE_RETENTION_FLOOR: Final[float] = 0.98
 
+#: Items drawn per window for the general-capability probe. Small because each
+#: item is a few tokens and the probe runs once per package per window, and
+#: large enough that a single unlucky item cannot move the ratio past the floor.
+RETENTION_PROBE_ITEMS: Final[int] = 40
+
 #: A candidate must record zero critical unsafe actions.
 MAX_CRITICAL_UNSAFE_ACTIONS: Final[int] = 0
 
@@ -215,11 +220,12 @@ MAX_CRITICAL_UNSAFE_ACTIONS: Final[int] = 0
 # ---------------------------------------------------------------------------
 # Quality dominates efficiency: a cheap but unreliable artifact cannot win.
 
-WEIGHT_END_TO_END: Final[float] = 0.60
+WEIGHT_END_TO_END: Final[float] = 0.55
 WEIGHT_STAGE_BALANCE: Final[float] = 0.15
 WEIGHT_OOD: Final[float] = 0.10
 WEIGHT_RETENTION: Final[float] = 0.05
 WEIGHT_LATENCY: Final[float] = 0.05
+WEIGHT_TOKEN_EFFICIENCY: Final[float] = 0.05
 WEIGHT_ARTIFACT_EFFICIENCY: Final[float] = 0.05
 
 QUALIFIED_SCORE_WEIGHTS: Final[dict[str, float]] = {
@@ -228,8 +234,19 @@ QUALIFIED_SCORE_WEIGHTS: Final[dict[str, float]] = {
     "ood": WEIGHT_OOD,
     "retention": WEIGHT_RETENTION,
     "latency": WEIGHT_LATENCY,
+    "token_efficiency": WEIGHT_TOKEN_EFFICIENCY,
     "artifact_efficiency": WEIGHT_ARTIFACT_EFFICIENCY,
 }
+
+#: Output tokens per completed instance treated as the reference cost.
+#:
+#: Token spend is the operating cost of the finished package — the thing a buyer
+#: actually pays per workflow run — and until now it was measured and reported
+#: but never scored, so a package that reached the same answer twice as
+#: expensively ranked identically. Scored against a fixed budget rather than
+#: against the incumbent, so the target does not drift with whoever holds the
+#: throne.
+REFERENCE_OUTPUT_TOKENS: Final[int] = 3000
 
 #: Floor applied inside the geometric mean so a single zero stage does not make
 #: the whole balance term identically zero and destroy ranking information.
@@ -252,9 +269,31 @@ DEFAULT_MIN_DOMINANT_AXES: Final[int] = 1
 #: fewer valid samples counts as worse.
 DEFAULT_MIN_AXIS_SAMPLES: Final[int] = 20
 
-#: Absolute end-to-end completion margin over the strongest reference, in points
-#: of completion rate.
+#: Absolute end-to-end completion margin over the strongest *non-learned*
+#: reference, in points of completion rate. This is the bar that says
+#: "composition added value at all", and it does not move.
 DEFAULT_END_TO_END_MARGIN: Final[float] = 0.03
+
+#: Margin a challenger must clear over the reigning champion, at the moment the
+#: champion takes the throne.
+#:
+#: Kept separate from the reference margin because the two answer different
+#: questions, and conflating them was a mistake with a specific consequence:
+#: when the incumbent counted as a reference, every new champion had to beat the
+#: previous one by a further three points. Completion is bounded by one, so that
+#: ratchet admits at most a few dozen dethrones in principle and stalls after a
+#: handful in practice — after which one package holds the throne forever, no
+#: further work can ever be bought, and the network pays a permanent rent.
+DEFAULT_CHAMPION_MARGIN: Final[float] = 0.01
+
+#: Blocks over which the champion margin decays to zero.
+#:
+#: A champion that has held the throne unchallenged is either genuinely
+#: excellent or merely unopposed, and the network cannot tell which. Letting the
+#: bar fall over time resolves that in favour of movement: an incumbent keeps
+#: its full defender's advantage while the contest is live, and gradually loses
+#: it if nothing can displace it. At 12s blocks this is roughly 30 days.
+CHAMPION_MARGIN_DECAY_BLOCKS: Final[int] = 216_000
 
 #: One-sided paired bootstrap settings for the end-to-end comparison.
 BOOTSTRAP_RESAMPLES: Final[int] = 10_000
@@ -277,9 +316,6 @@ DEFAULT_OOD_INSTANCES: Final[int] = 30
 #: Public pack size shipped to miners for offline search and debugging.
 PUBLIC_PACK_INSTANCES: Final[int] = 120
 
-#: In-flight evaluation budget per serving host.
-DEFAULT_DISPATCH_BUDGET: Final[int] = 600
-
 # ---------------------------------------------------------------------------
 # Incentive
 # ---------------------------------------------------------------------------
@@ -287,11 +323,70 @@ DEFAULT_DISPATCH_BUDGET: Final[int] = 600
 MODE_WINNER_TAKE_ALL: Final[str] = "winner_take_all"
 MODE_GRADED_TOP3: Final[str] = "graded_top3"
 
+#: Champion takes a fixed share; every other qualified candidate is paid in
+#: proportion to its graded contribution.
+#:
+#: The throne is still the prize, but almost every submission that is ever
+#: evaluated will fail to take it, and paying them all nothing discards the only
+#: information the network has about which failures were close. A recipe is one
+#: shot — a miner cannot iterate the way a code-submitting miner can — so telling
+#: a near miss apart from a distractor soup is what makes the second attempt
+#: better informed than the first.
+MODE_GRADED_CONTRIBUTION: Final[str] = "graded_contribution"
+
+ALLOWED_INCENTIVE_MODES: Final[tuple[str, ...]] = (
+    MODE_WINNER_TAKE_ALL,
+    MODE_GRADED_TOP3,
+    MODE_GRADED_CONTRIBUTION,
+)
+
+#: Share the champion keeps under the graded mode, before the queue tail.
+CHAMPION_BASE_SHARE: Final[float] = 0.55
+
+#: How a non-champion's grade is composed. Quality dominates: a package that
+#: does not finish workflows is not made valuable by being cheap, or by being
+#: nearly as good as something that does.
+CONTRIBUTION_WEIGHT_QUALITY: Final[float] = 0.50
+CONTRIBUTION_WEIGHT_IMPROVEMENT: Final[float] = 0.25
+CONTRIBUTION_WEIGHT_PROXIMITY: Final[float] = 0.15
+CONTRIBUTION_WEIGHT_COST: Final[float] = 0.10
+
+#: Windows a qualified candidate keeps earning its graded share for.
+#:
+#: Bounded because a package's measured contribution is a statement about the
+#: window it was measured in. Paying it indefinitely would let an early miner
+#: collect rent on a result the network has moved past; paying it for one window
+#: would make the reward depend on the accident of when the engine got to it.
+CONTRIBUTION_MEMORY_WINDOWS: Final[int] = 7
+
+#: Most graded contributors paid in one window.
+MAX_GRADED_CONTRIBUTORS: Final[int] = 32
+
 #: Emission split used when the graded mode is enabled. Unfilled shares are
 #: burned rather than redistributed to unqualified miners.
 GRADED_TOP3_SHARES: Final[tuple[float, float, float]] = (0.60, 0.25, 0.15)
 
-#: UID that receives burned emission.
+#: Share of the payable emission reserved for miners who are queued or have
+#: previously held the throne, split as a linear taper.
+#:
+#: Not generosity — deregistration protection. A miner with zero emission is
+#: what Bittensor's pruning selects first, so under a strict winner-take-all
+#: split every challenger waiting its turn is a candidate for eviction before it
+#: is ever evaluated. The engine evaluates roughly one challenger per window, so
+#: that wait is long enough to matter, and a queue that empties itself is a
+#: subnet with one participant.
+DEFAULT_TAIL_SHARE: Final[float] = 0.20
+
+#: Most miners the tail is split across.
+MAX_TAIL_ENTRIES: Final[int] = 16
+
+#: Fallback UID for burned emission when the subnet owner cannot be resolved.
+#:
+#: Note that UID 0 is *not* an incinerator — it belongs to whichever neuron
+#: registered into the first slot. Live components resolve the owner's UID from
+#: the metagraph instead (see ``chain.MetagraphView.owner_uid``) and decline to
+#: submit at all when there is none; this constant exists only so offline
+#: tooling has a value to construct a vector with.
 BURN_UID: Final[int] = 0
 
 #: Fraction of emission routed to the burn UID as an operational safety valve.
@@ -303,6 +398,12 @@ DEFAULT_BURN_PERCENTAGE: Final[float] = 0.0
 
 SANDBOX_TEMPERATURE: Final[float] = 0.0
 SANDBOX_TOP_P: Final[float] = 1.0
+
+#: Whether the served model is asked to emit its separate reasoning channel.
+#: Off: the base model's template enables it by default, and one thinking block
+#: exhausts MAX_OUTPUT_TOKENS before the agent has called a single tool. This is
+#: consensus-relevant — it changes what every candidate is asked.
+SANDBOX_ENABLE_THINKING: Final[bool] = False
 
 #: Wall-clock ceiling for a single hidden instance, including model generation
 #: and every tool call.

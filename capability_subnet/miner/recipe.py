@@ -152,7 +152,8 @@ def advise(recipe: Recipe, snapshot: PoolSnapshot | None = None) -> list[str]:
             "selectable on purpose, but they were certified as harmful to this workflow."
         )
 
-    if "general-reasoning-retention-v1" not in recipe.selected_adapters:
+    anchor = snapshot.registry.retention_anchor()
+    if anchor is not None and anchor not in recipe.selected_adapters:
         notes.append(
             "does not include the general-reasoning retention adapter. The base-retention "
             "gate rejects packages that traded general ability for workflow score."

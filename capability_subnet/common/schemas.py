@@ -69,7 +69,15 @@ class MergeSpec(StrictModel):
             raise ValueError(
                 f"unknown combination_type {value!r}; allowed: {', '.join(C.ALLOWED_MERGE_METHODS)}"
             )
-        return value
+        # Folded to the canonical spelling on the way in, so a recipe's digest
+        # identifies the *package* rather than the wording. Two miners who chose
+        # different accepted names for the same merge would otherwise submit
+        # distinct recipes that reconstruct to identical bytes, and the anti-copy
+        # check would terminate whichever arrived second for copying a package it
+        # never saw.
+        from capability_subnet.merge_engine.methods import canonical_method
+
+        return canonical_method(value)
 
     @model_validator(mode="after")
     def _check_parameter_applicability(self) -> MergeSpec:
@@ -344,6 +352,7 @@ class CandidateScores(StrictModel):
     ood: float = Field(default=0.0, ge=0.0, le=1.0)
     retention: float = Field(default=0.0, ge=0.0, le=1.0)
     latency: float = Field(default=0.0, ge=0.0, le=1.0)
+    token_efficiency: float = Field(default=0.0, ge=0.0, le=1.0)
     artifact_efficiency: float = Field(default=0.0, ge=0.0, le=1.0)
     qualified_score: float = Field(default=0.0, ge=0.0, le=1.0)
 
@@ -398,6 +407,11 @@ class ComparatorOutcome(StrictModel):
     strict_pareto: bool = False
     end_to_end_margin_required: float = C.DEFAULT_END_TO_END_MARGIN
     end_to_end_margin_observed: float = 0.0
+    #: The incumbent's remaining defender's advantage, and what the challenger
+    #: actually managed against it. Published separately from the reference
+    #: margin because they answer different questions and decay differently.
+    champion_margin_required: float = C.DEFAULT_CHAMPION_MARGIN
+    champion_margin_observed: float = 0.0
     paired: PairedComparison | None = None
     dethrones: bool = False
     reason: str = ""
@@ -444,6 +458,11 @@ class EvaluationReport(StrictModel):
 
     verdict: Literal["dethrone", "held", "terminated", "rejected", "reference"] = "held"
     verdict_reason: str = ""
+    #: The graded contribution and its terms, when the candidate cleared every
+    #: hard gate. Published so a miner that earned a partial share can see which
+    #: part of its package earned it — the difference between a signal it can act
+    #: on and a number it has to guess at.
+    contribution: dict[str, float] = Field(default_factory=dict)
 
     #: Set by the signer; excluded from the signed payload itself.
     signature: str | None = None
@@ -479,7 +498,7 @@ class WeightEntry(StrictModel):
     uid: int = Field(ge=0)
     hotkey: str = ""
     weight: float = Field(ge=0.0, le=1.0)
-    role: Literal["champion", "runner_up", "third", "burn"] = "champion"
+    role: Literal["champion", "runner_up", "third", "contributor", "queued", "burn"] = "champion"
 
 
 class WeightVector(StrictModel):
@@ -494,7 +513,9 @@ class WeightVector(StrictModel):
     window_id: int
     computed_at_block: int
     spec_version: int
-    mode: Literal["winner_take_all", "graded_top3"] = C.MODE_WINNER_TAKE_ALL
+    mode: Literal["winner_take_all", "graded_top3", "graded_contribution"] = (
+        C.MODE_GRADED_CONTRIBUTION
+    )
     burn_percentage: float = Field(default=0.0, ge=0.0, le=1.0)
 
     entries: list[WeightEntry] = Field(default_factory=list)

@@ -41,7 +41,7 @@ from capability_subnet.merge_engine.delta import (
     scaled_factors,
 )
 from capability_subnet.merge_engine.determinism import WORK_DTYPE, deterministic_context
-from capability_subnet.merge_engine.factorize import factorize, pad_to_rank
+from capability_subnet.merge_engine.factorize import factorize, factorize_product, pad_to_rank
 from capability_subnet.merge_engine.loader import AdapterSource
 from capability_subnet.registry.snapshot import PoolSnapshot
 
@@ -80,6 +80,10 @@ class ReconstructionStats:
     mean_effective_rank: float = 0.0
     clamped_components: int = 0
     used_factor_space: bool = False
+    #: Which of the three site paths ran: factor-space, exact low-rank, or the
+    #: materialised delta path. Published so a report says how it was built.
+    merge_path: str = "delta_space"
+    merge_device: str = "cpu"
     seconds: float = 0.0
     #: Frobenius norm of each adapter's contribution, summed per layer group.
     contribution_by_group: dict[str, dict[str, float]] = field(default_factory=dict)
@@ -176,6 +180,67 @@ def _merge_site_factor_space(
     return pad_to_rank(accumulated_a, accumulated_b, recipe.compression.output_rank)
 
 
+def _merge_site_low_rank(
+    recipe: Recipe,
+    snapshot: PoolSnapshot,
+    source: AdapterSource,
+    site: TensorSite,
+    adapters: list[str],
+    group: str,
+    stats: ReconstructionStats,
+    device: torch.device,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Exact path for pipelines that never sparsify.
+
+    With no sparsification and no sign election, the merged update is just a
+    weighted sum of the adapters' updates:
+
+        Σ cᵢ · sᵢ · Bᵢ Aᵢ  =  [c₁s₁B₁ … cₙsₙBₙ] · [A₁ … Aₙ]ᵀ
+
+    — a single product of an ``out × nk`` and an ``nk × in`` matrix, whose rank
+    is at most ``nk`` (twelve adapters at rank 64 is 768, against a 12288-wide
+    projection). Concatenating the factors and decomposing *that* is exact and
+    costs a thin QR instead of a dense decomposition of a materialised update.
+
+    The materialised path remains for everything that trims or elects signs,
+    because both operate entrywise and genuinely destroy the low-rank structure.
+    """
+    scaled_a: list[torch.Tensor] = []
+    scaled_b: list[torch.Tensor] = []
+
+    for adapter_id in adapters:
+        entry = snapshot.registry.get(adapter_id)
+        coefficient = recipe.effective_weight(adapter_id, group)
+        lora_a = source.get_tensor(adapter_id, site.key_a).to(WORK_DTYPE).to(device)
+        lora_b = source.get_tensor(adapter_id, site.key_b).to(WORK_DTYPE).to(device)
+
+        stats.record_contribution(
+            group, adapter_id, low_rank_delta_norm(lora_a, lora_b, entry.scaling * coefficient)
+        )
+        # The whole coefficient goes on one side so the product is unchanged and
+        # neither factor's dynamic range is skewed by a large weight.
+        scaled_b.append(lora_b * (entry.scaling * coefficient))
+        scaled_a.append(lora_a)
+
+    concatenated_b = torch.cat(scaled_b, dim=1)
+    concatenated_a = torch.cat(scaled_a, dim=0)
+    del scaled_a, scaled_b
+
+    factorization = factorize_product(
+        concatenated_b,
+        concatenated_a,
+        recipe.compression.output_rank,
+        clamp_quantile=recipe.compression.svd_clamp_quantile,
+    )
+
+    stats.mean_retained_energy += factorization.retained_energy
+    stats.min_retained_energy = min(stats.min_retained_energy, factorization.retained_energy)
+    stats.mean_effective_rank += factorization.effective_rank
+    stats.clamped_components += factorization.clamped_components
+
+    return factorization.lora_a.cpu(), factorization.lora_b.cpu()
+
+
 def _merge_site_delta_space(
     recipe: Recipe,
     snapshot: PoolSnapshot,
@@ -185,26 +250,40 @@ def _merge_site_delta_space(
     group: str,
     pipeline: methods.MergePipeline,
     stats: ReconstructionStats,
+    device: torch.device,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Materialise each update, run the pipeline, factorise the result."""
-    deltas: list[torch.Tensor] = []
     coefficients: list[float] = []
 
     for adapter_id in adapters:
         entry = snapshot.registry.get(adapter_id)
-        lora_a = source.get_tensor(adapter_id, site.key_a).to(WORK_DTYPE)
-        lora_b = source.get_tensor(adapter_id, site.key_b).to(WORK_DTYPE)
+        lora_a = source.get_tensor(adapter_id, site.key_a).to(WORK_DTYPE).to(device)
+        lora_b = source.get_tensor(adapter_id, site.key_b).to(WORK_DTYPE).to(device)
         coefficient = recipe.effective_weight(adapter_id, group)
 
         stats.record_contribution(
             group, adapter_id, low_rank_delta_norm(lora_a, lora_b, entry.scaling * coefficient)
         )
-
-        deltas.append((lora_b @ lora_a) * entry.scaling)
         coefficients.append(coefficient)
+        del lora_a, lora_b
+
+    def delta_for(index: int) -> torch.Tensor:
+        """Materialise one adapter's update on demand.
+
+        Read from the source each time rather than held in a list: the pipeline
+        makes at most two passes, and a re-read from an open safetensors handle
+        costs far less than keeping every selected adapter's full update
+        resident. Twelve of them at the widest projection is 2.3 GB before the
+        aggregation allocates anything.
+        """
+        adapter_id = adapters[index]
+        entry = snapshot.registry.get(adapter_id)
+        lora_a = source.get_tensor(adapter_id, site.key_a).to(WORK_DTYPE).to(device)
+        lora_b = source.get_tensor(adapter_id, site.key_b).to(WORK_DTYPE).to(device)
+        return (lora_b @ lora_a) * entry.scaling
 
     merged = methods.merge_deltas(
-        deltas,
+        delta_for,
         coefficients,
         pipeline,
         density=recipe.merge.density,
@@ -213,7 +292,6 @@ def _merge_site_delta_space(
         site_name=site.name,
         adapter_ids=adapters,
     )
-    del deltas
 
     factorization = factorize(
         merged,
@@ -227,7 +305,7 @@ def _merge_site_delta_space(
     stats.mean_effective_rank += factorization.effective_rank
     stats.clamped_components += factorization.clamped_components
 
-    return factorization.lora_a, factorization.lora_b
+    return factorization.lora_a.cpu(), factorization.lora_b.cpu()
 
 
 def reconstruct(
@@ -238,6 +316,7 @@ def reconstruct(
     output_dir: str | Path | None = None,
     keep_tensors: bool = False,
     threads: int = 1,
+    device: str = "cpu",
 ) -> ReconstructionResult:
     """Build the merged adapter a recipe describes.
 
@@ -251,6 +330,19 @@ def reconstruct(
         keep_tensors: retain the merged tensors on the result. Only useful for
             tests and for in-process serving; at 8B scale they are large.
         threads: torch thread count. Left at one for reproducible accumulation.
+        device: where the merge arithmetic runs. ``cuda`` is roughly thirty times
+            faster on the trimming methods, which materialise a full update per
+            projection and must decompose it densely.
+
+            This is consensus-relevant and deliberately explicit. A decomposition
+            is only unique up to the sign convention this engine pins, but the
+            *values* still depend on the LAPACK or cuSOLVER implementation
+            underneath, so two workers agree byte-for-byte only when they run the
+            same device class. The engine records the device in every published
+            report for exactly that reason: an artifact digest is reproducible by
+            anyone who matches the hardware it was built on, and a dispute that
+            cannot be reproduced on matching hardware is a real finding rather
+            than an ambiguity.
 
     Returns:
         The reconstruction, including the artifact digest.
@@ -283,6 +375,20 @@ def reconstruct(
     started = time.monotonic()
     tensors: dict[str, torch.Tensor] = {}
 
+    torch_device = torch.device(device)
+    # Falling back rather than failing: a miner checking a recipe on a laptop
+    # should get an answer, not an error about hardware they were never asked to
+    # have. The engine's own preflight is where a misconfigured device is caught.
+    if torch_device.type == "cuda" and not torch.cuda.is_available():
+        log.warning("cuda requested but unavailable; merging on the CPU")
+        torch_device = torch.device("cpu")
+
+    # No sparsification and no sign election means the merged update stays a sum
+    # of low-rank products, which can be decomposed exactly from the factors.
+    use_low_rank = (
+        not use_factor_space and pipeline.sparsify == "none" and pipeline.sign_election == "none"
+    )
+
     with deterministic_context(seed=recipe.merge.random_seed, threads=threads):
         for site in enumerate_sites(manifest):
             group = site.layer_group(groups)
@@ -291,9 +397,21 @@ def reconstruct(
                     lora_a, lora_b = _merge_site_factor_space(
                         recipe, snapshot, source, site, adapters, group, stats
                     )
+                elif use_low_rank:
+                    lora_a, lora_b = _merge_site_low_rank(
+                        recipe, snapshot, source, site, adapters, group, stats, torch_device
+                    )
                 else:
                     lora_a, lora_b = _merge_site_delta_space(
-                        recipe, snapshot, source, site, adapters, group, pipeline, stats
+                        recipe,
+                        snapshot,
+                        source,
+                        site,
+                        adapters,
+                        group,
+                        pipeline,
+                        stats,
+                        torch_device,
                     )
             except ReconstructionError:
                 raise
@@ -313,6 +431,10 @@ def reconstruct(
     else:
         stats.mean_effective_rank = float(min(source_rank, recipe.compression.output_rank))
 
+    stats.merge_device = torch_device.type
+    stats.merge_path = (
+        "factor_space" if use_factor_space else ("low_rank" if use_low_rank else "delta_space")
+    )
     stats.seconds = time.monotonic() - started
 
     if output_dir is None:

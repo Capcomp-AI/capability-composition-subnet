@@ -29,6 +29,46 @@ def burn_entry(weight: float, burn_uid: int = C.BURN_UID) -> WeightEntry:
     return WeightEntry(uid=burn_uid, hotkey="", weight=weight, role="burn")
 
 
+def survival_tail(
+    uids_and_hotkeys: list[tuple[int, str]],
+    total_share: float,
+    *,
+    exclude_uid: int | None = None,
+    max_entries: int = C.MAX_TAIL_ENTRIES,
+) -> list[WeightEntry]:
+    """Split ``total_share`` across queued miners as a linear taper.
+
+    This is deregistration protection, not payment for work. Bittensor prunes by
+    emission, lowest first, so a miner holding exactly zero is the one the chain
+    evicts when a slot is needed — and under a pure winner-take-all split that is
+    every challenger still waiting in the queue. The engine evaluates roughly one
+    challenger per window, so a miner can easily wait days for its single
+    evaluation; being pruned during that wait means the network loses the
+    submission it was about to judge, and the queue drains itself.
+
+    A taper rather than an equal split so the ordering still carries information:
+    the front of the queue, which is closest to being evaluated, is worth most.
+    """
+    payable = [(uid, hotkey) for uid, hotkey in uids_and_hotkeys if uid != exclude_uid and hotkey][
+        :max_entries
+    ]
+    if not payable or total_share <= 0.0:
+        return []
+
+    count = len(payable)
+    # Weights count, count-1, ..., 1 — normalised to `total_share`.
+    denominator = count * (count + 1) / 2
+    return [
+        WeightEntry(
+            uid=uid,
+            hotkey=hotkey,
+            weight=total_share * (count - index) / denominator,
+            role="queued",
+        )
+        for index, (uid, hotkey) in enumerate(payable)
+    ]
+
+
 def winner_take_all(
     champion: ChampionRecord | None,
     *,
@@ -39,6 +79,8 @@ def winner_take_all(
     burn_uid: int = C.BURN_UID,
     champion_report_sha256: str | None = None,
     workflow_id: str = C.DEFAULT_WORKFLOW_ID,
+    tail: list[tuple[int, str]] | None = None,
+    tail_share: float = C.DEFAULT_TAIL_SHARE,
 ) -> WeightVector:
     """Assign the whole workflow share to the reigning champion.
 
@@ -63,43 +105,46 @@ def winner_take_all(
         and not is_reference(champion.candidate_id)
     )
 
+    # The tail is paid whether or not anyone holds the throne. With an empty
+    # throne it is the *only* thing standing between a queue of unevaluated
+    # submissions and the pruning mechanism, which is precisely the moment the
+    # network can least afford to lose them.
+    tail_entries = survival_tail(
+        tail or [],
+        tail_share,
+        exclude_uid=champion.uid if champion is not None else None,
+    )
+    tail_total = sum(entry.weight for entry in tail_entries)
+    entries.extend(tail_entries)
+    remaining = max(0.0, 1.0 - tail_total)
+
     if not payable:
         reason = "no champion" if champion is None else f"{champion.candidate_id} is a reference"
-        log.info("burning the full workflow share: %s", reason)
-        entries.append(burn_entry(1.0, burn_uid))
+        log.info("burning the workflow share: %s", reason)
+        entries.append(burn_entry(remaining, burn_uid))
     else:
         assert champion is not None and champion.uid is not None  # narrowed above
         burn = max(0.0, min(1.0, burn_percentage))
         champion_hotkey = champion.hotkey
 
-        if burn > 0.0:
-            if champion.uid == burn_uid:
-                # The champion is registered on the burn UID. Splitting would be
-                # meaningless, so the whole share goes to it as one entry.
-                entries.append(
-                    WeightEntry(
-                        uid=champion.uid,
-                        hotkey=champion.hotkey or "",
-                        weight=1.0,
-                        role="champion",
-                    )
-                )
-            else:
-                entries.append(
-                    WeightEntry(
-                        uid=champion.uid,
-                        hotkey=champion.hotkey or "",
-                        weight=1.0 - burn,
-                        role="champion",
-                    )
-                )
-                entries.append(burn_entry(burn, burn_uid))
-        else:
+        if burn > 0.0 and champion.uid != burn_uid:
             entries.append(
                 WeightEntry(
                     uid=champion.uid,
                     hotkey=champion.hotkey or "",
-                    weight=1.0,
+                    weight=remaining * (1.0 - burn),
+                    role="champion",
+                )
+            )
+            entries.append(burn_entry(remaining * burn, burn_uid))
+        else:
+            # Either nothing is being burned, or the champion happens to sit on
+            # the burn UID and splitting would be meaningless.
+            entries.append(
+                WeightEntry(
+                    uid=champion.uid,
+                    hotkey=champion.hotkey or "",
+                    weight=remaining,
                     role="champion",
                 )
             )
@@ -167,6 +212,127 @@ def graded_top3(
         burn_percentage=burn_percentage,
         entries=_normalise(entries),
         champion_hotkey=ranked[0][1] if ranked else None,
+    )
+
+
+def graded_contribution(
+    champion: ChampionRecord | None,
+    contributors: list[tuple[int, str, float]],
+    *,
+    window_id: int,
+    block: int,
+    spec_version: int,
+    champion_base_share: float = C.CHAMPION_BASE_SHARE,
+    burn_percentage: float = 0.0,
+    burn_uid: int = C.BURN_UID,
+    champion_report_sha256: str | None = None,
+    workflow_id: str = C.DEFAULT_WORKFLOW_ID,
+    tail: list[tuple[int, str]] | None = None,
+    tail_share: float = C.DEFAULT_TAIL_SHARE,
+) -> WeightVector:
+    """Pay the champion a fixed share and split the rest by graded contribution.
+
+    Args:
+        contributors: ``(uid, hotkey, contribution)`` for every miner whose
+            evaluation cleared all hard gates recently. Grades come from
+            :func:`scorer.contribution.contribution_score`; a candidate that
+            failed a gate is not here at all, because grading applies within the
+            qualified set rather than as a consolation prize for producing
+            something undeployable.
+
+    Returns:
+        A vector summing to exactly 1.0.
+
+    Three claims on the emission, in priority order: the queue tail, which keeps
+    unevaluated submissions from being pruned; the champion's base share; and the
+    graded pool for everyone who demonstrated something. Whatever the graded pool
+    cannot allocate — because nobody qualified — is burned rather than handed to
+    the champion, so an empty field does not silently become a bonus for holding
+    an uncontested throne.
+    """
+    entries: list[WeightEntry] = []
+    champion_hotkey: str | None = None
+
+    payable = (
+        champion is not None
+        and champion.uid is not None
+        and champion.hotkey
+        and not champion.is_reference
+        and not is_reference(champion.candidate_id)
+    )
+    champion_uid = champion.uid if champion is not None else None
+
+    tail_entries = survival_tail(tail or [], tail_share, exclude_uid=champion_uid)
+    entries.extend(tail_entries)
+    remaining = max(0.0, 1.0 - sum(entry.weight for entry in tail_entries))
+
+    burn = max(0.0, min(1.0, burn_percentage))
+    burned = remaining * burn
+    payable_pool = remaining - burned
+
+    graded = [
+        (uid, hotkey, grade)
+        for uid, hotkey, grade in contributors
+        if grade > 0.0 and hotkey and uid != champion_uid
+    ]
+    graded.sort(key=lambda item: (-item[2], item[0]))
+    graded = graded[: C.MAX_GRADED_CONTRIBUTORS]
+
+    champion_share = payable_pool * champion_base_share if payable else 0.0
+    graded_pool = payable_pool - champion_share
+
+    if payable:
+        assert champion is not None and champion.uid is not None  # narrowed above
+        champion_hotkey = champion.hotkey
+        entries.append(
+            WeightEntry(
+                uid=champion.uid,
+                hotkey=champion.hotkey or "",
+                weight=champion_share,
+                role="champion",
+            )
+        )
+
+    total_grade = sum(grade for _, _, grade in graded)
+    if graded and total_grade > 0.0:
+        for uid, hotkey, grade in graded:
+            entries.append(
+                WeightEntry(
+                    uid=uid,
+                    hotkey=hotkey,
+                    weight=graded_pool * (grade / total_grade),
+                    role="contributor",
+                )
+            )
+    else:
+        # Nobody qualified. Burn the graded pool rather than promoting the
+        # champion into it: an uncontested window is not an achievement.
+        burned += graded_pool
+
+    if burned > 0.0:
+        entries.append(burn_entry(burned, burn_uid))
+
+    if not entries:
+        entries.append(burn_entry(1.0, burn_uid))
+
+    log.info(
+        "graded window %d: champion=%s, %d contributor(s), %.3f burned",
+        window_id,
+        champion_hotkey[:12] if champion_hotkey else "none",
+        len(graded),
+        burned,
+    )
+
+    return WeightVector(
+        workflow_id=workflow_id,
+        window_id=window_id,
+        computed_at_block=block,
+        spec_version=spec_version,
+        mode=C.MODE_GRADED_CONTRIBUTION,
+        burn_percentage=burn_percentage,
+        entries=_normalise(entries),
+        champion_hotkey=champion_hotkey,
+        champion_report_sha256=champion_report_sha256,
     )
 
 
