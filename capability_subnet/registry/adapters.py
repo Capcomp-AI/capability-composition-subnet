@@ -22,6 +22,24 @@ class RegistryError(Exception):
     """Raised when the adapter registry is malformed or used inconsistently."""
 
 
+#: Whether an adapter must be capability-measured before a recipe may select it.
+#:
+#: False under the leaderboard contract, and the reasoning is that the two
+#: contracts need different things from this gate. When a submission had to beat
+#: an absolute reference bar, an unmeasured adapter was a hole in the argument —
+#: the bar was a claim about value, and a claim built on uncharacterised weights
+#: is not one. When the highest score simply wins, a miner who selects a poor
+#: adapter is answered by its score, immediately and without the operator having
+#: to have measured it first. The market does the work the gate was doing, and
+#: does it over a far larger pool than an operator can characterise by hand.
+#:
+#: What does *not* relax is structural admission. These tensors are loaded into a
+#: process that also holds hidden evaluation material, and no incentive argument
+#: touches that. Capability measurements, where the operator has them, are still
+#: published — as information a miner can use rather than a door they must pass.
+REQUIRE_CAPABILITY_CERTIFICATION: bool = False
+
+
 @dataclass(frozen=True, slots=True)
 class CertificationRecord:
     """Outcome of the capability certification run for one adapter."""
@@ -91,7 +109,9 @@ class AdapterEntry:
         that is structurally sound but unmeasured sits in the registry, safe to
         load and not selectable, until someone measures it.
         """
-        return self.certified and self.certification.is_measured
+        if REQUIRE_CAPABILITY_CERTIFICATION:
+            return self.certified and self.certification.is_measured
+        return self.certified
 
     def snapshot_fields(self) -> dict[str, Any]:
         """The subset of fields that define this adapter's identity.

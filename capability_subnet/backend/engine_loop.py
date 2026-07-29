@@ -533,6 +533,7 @@ class EngineLoop:
             strongest_reference_id=reference_id,
             strongest_reference_score=reference_score,
             end_to_end_margin=self.settings.end_to_end_margin,
+            require_beat_reference=self.settings.require_beat_reference,
         )
 
         log.info("window %d %s", state.window_id, summarise_evaluation(output))
@@ -823,7 +824,7 @@ class EngineLoop:
         if self.settings.incentive_mode == C.MODE_GRADED_CONTRIBUTION:
             vector = graded_contribution(
                 champion,
-                self._recent_contributors(window_id),
+                self._leaderboard(window_id),
                 window_id=window_id,
                 block=block,
                 spec_version=self.workflow_spec_version,
@@ -956,6 +957,38 @@ class EngineLoop:
                 item for item in contributors if self.metagraph.uid_of(item[1]) == item[0]
             ]
         return contributors
+
+    def _leaderboard(self, window_id: int) -> list[tuple[int, str, float]]:
+        """Gate-clearing submissions, best first, with unresolvable gaps tied.
+
+        Ranking on the raw score alone would let a difference smaller than the
+        window can resolve decide who gets paid. Recipes are public, so that is
+        not a theoretical concern: a copy of the leader with one coefficient
+        nudged scores within noise of it and would take the top slot roughly
+        half the time. Ties resolve to the earliest commitment, so a copy — which
+        is later by construction — has to be measurably better rather than
+        luckier.
+        """
+        from capability_subnet.backend.comparator.comparator import minimum_detectable_effect
+        from capability_subnet.backend.scorer.ranking import Submission, rank
+
+        resolvable = minimum_detectable_effect(self.settings.hidden_instances)
+        entries = {entry.hotkey: entry for entry in self.store.list_queue()}
+
+        submissions: list[Submission] = []
+        for uid, hotkey, grade in self._recent_contributors(window_id):
+            entry = entries.get(hotkey)
+            submissions.append(
+                Submission(
+                    uid=uid,
+                    hotkey=hotkey,
+                    score=grade,
+                    first_block=entry.first_block if entry else 0,
+                    resolvable=resolvable,
+                )
+            )
+
+        return [(s.uid, s.hotkey, s.score) for s in rank(submissions)]
 
     def _ranked_qualified(self, window_id: int) -> list[tuple[int, str]]:
         """Qualified miners for the graded split, best first.

@@ -13,6 +13,64 @@ weight vector.
 
 ## [Unreleased]
 
+### Changed — consensus
+
+**Highest score wins.** `require_beat_reference` defaults to False: a
+submission no longer has to clear the strongest permanent reference to be paid.
+The product is the best composition anyone has found, not proof that
+composition was worth attempting — and the old rule had a real failure attached,
+where a network producing perfectly good comparative information burned its
+emission indefinitely because nothing cleared an absolute bar. References are
+still measured and published every window, so the question stays answerable from
+the record; it just stops gating payment. Set True for the stricter contract.
+
+Base retention does **not** move with it. A package that destroyed the base
+model's general ability is not deployable whatever it scored.
+
+**A copy can no longer take a slot on noise.** This is the hole the change above
+opens, and it needed closing in the same release. Under a margin rule a copy of
+the leader could not displace it — identical scores are not a margin. Under
+highest-score-wins a copy *ties*, and since no two evaluations of two distinct
+artifacts land on the same number, a copy with one coefficient nudged takes the
+top slot roughly half the time on sampling noise alone. Recipes are public, so
+this is read-and-resubmit rather than a hypothetical.
+
+Submissions closer together than the window can resolve are now ranked as tied,
+and ties resolve to the earliest commitment. A copier is later by construction,
+so it has to be *measurably* better — the same bar the margin enforced, in the
+units the evidence supports. Indistinguishability is not transitive, so ranking
+groups maximal runs into equivalence classes rather than swapping pairs; a
+single pass leaves a later entry ahead of an earlier one it cannot be shown to
+beat, which is precisely the hole being closed.
+
+**Capability certification is advisory, not a gate.** The two contracts need
+different things from it: under an absolute bar an unmeasured adapter was a hole
+in the argument, while under highest-score-wins a miner who picks a poor adapter
+is answered by its score, immediately, over a pool far larger than an operator
+can characterise by hand. Structural admission does not relax — those tensors
+load into a process that also holds hidden evaluation material.
+
+### Added
+
+**The pool is 30 adapters, 26 admitted.** A strict sweep found 209 eligible
+LoRAs declaring `Qwen/Qwen3-8B` with full canonical target coverage and no
+DoRA, rslora or `modules_to_save`. Eighteen were added, deduplicated by training
+run so one author's checkpoint series cannot fill the pool, capped at two per
+owner, rank 16 or above.
+
+Four were **rejected by the licence gate** for an unstated licence. That gate
+governs weights redistributed inside a merged artifact, which is a different
+exposure from evaluation data, so it stays strict by default; overriding it is
+an operator decision.
+
+Six conversions were lossy — rank 128 or 256 down to the canonical 64 — with
+retained energy between 0.870 and 0.970, now recorded per adapter. Those numbers
+are only meaningful because of the `retained_energy` fix earlier in this
+release; before it, every conversion reported perfect retention.
+
+That leaves **23 selectable capability adapters**, or about 5.5 million adapter
+subsets before a miner chooses a method, a rank or a single coefficient.
+
 ### Fixed — consensus
 
 **The comparator demanded a margin its sample size could not resolve.** A

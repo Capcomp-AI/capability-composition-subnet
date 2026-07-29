@@ -190,6 +190,7 @@ class Evaluator:
         strongest_reference_score: float = 0.0,
         end_to_end_margin: float = C.DEFAULT_END_TO_END_MARGIN,
         apply_comparison_gates: bool = True,
+        require_beat_reference: bool = True,
     ) -> EvaluationOutput:
         """Build, serve, run and score one package.
 
@@ -335,6 +336,7 @@ class Evaluator:
                 strongest_reference_score=strongest_reference_score,
                 end_to_end_margin=end_to_end_margin,
                 apply_comparison_gates=apply_comparison_gates,
+                require_beat_reference=require_beat_reference,
             )
         )
 
@@ -350,6 +352,7 @@ class Evaluator:
         strongest_reference_score: float,
         end_to_end_margin: float,
         apply_comparison_gates: bool,
+        require_beat_reference: bool = True,
     ) -> list[GateVerdict]:
         verdicts = [
             gates.gate_sample_sufficiency(output.hidden_results, self.min_valid_samples),
@@ -361,15 +364,20 @@ class Evaluator:
         ]
 
         if apply_comparison_gates:
+            # Retention is not optional under either contract. A package that
+            # destroyed the base model's general ability is not deployable
+            # whatever it scores on the workflow.
             verdicts.append(gates.gate_base_retention(output.scores.retention))
-            verdicts.append(
-                gates.gate_beats_strongest_reference(
-                    candidate_e2e,
-                    strongest_reference_id or "no reference",
-                    strongest_reference_score,
-                    end_to_end_margin,
+
+            if require_beat_reference:
+                verdicts.append(
+                    gates.gate_beats_strongest_reference(
+                        candidate_e2e,
+                        strongest_reference_id or "no reference",
+                        strongest_reference_score,
+                        end_to_end_margin,
+                    )
                 )
-            )
 
         return verdicts
 

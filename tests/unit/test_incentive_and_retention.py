@@ -9,6 +9,8 @@ crash, so they are pinned explicitly.
 
 from __future__ import annotations
 
+import pytest
+
 from capability_subnet.backend.baselines import references as ref
 from capability_subnet.backend.comparator.comparator import (
     ComparatorConfig,
@@ -310,12 +312,28 @@ class TestTokenSpendIsScored:
         assert token_efficiency(self._rows(10, completed=0, output_tokens=100)) == 0.0
 
 
+@pytest.fixture
+def strict_capability_gate(monkeypatch):
+    """Run under the contract where capability measurement gates selection.
+
+    The two contracts want different things from this gate. When a submission
+    had to clear an absolute reference bar, an unmeasured adapter was a hole in
+    the argument. When the highest score simply wins, a miner who picks a poor
+    adapter is answered by its score. Both are supported, so both are tested.
+    """
+    import capability_subnet.registry.adapters as adapters
+
+    monkeypatch.setattr(adapters, "REQUIRE_CAPABILITY_CERTIFICATION", True)
+    yield
+
+
 class TestAnUnmeasuredAdapterBlocksItselfNotTheNetwork:
     """Certification answers two questions that gate different things.
 
     Collapsing them meant one unmeasured adapter kept the whole arena closed.
     Separated, a structurally sound but uncharacterised adapter sits in the
-    registry — safe to load, not selectable — until somebody measures it.
+    registry — safe to load, and selectable only when the deployment's contract
+    requires it to have been measured.
     """
 
     @staticmethod
@@ -361,7 +379,18 @@ class TestAnUnmeasuredAdapterBlocksItselfNotTheNetwork:
     def test_a_measured_adapter_is_selectable(self):
         assert self._entry("a").selectable
 
-    def test_an_unmeasured_adapter_is_loadable_but_not_selectable(self):
+    def test_under_the_leaderboard_contract_measurement_is_advisory(self):
+        """Highest-score-wins does not need the operator to have characterised
+        an adapter first — a poor choice is answered by the score it produces,
+        over a pool far larger than an operator could measure by hand."""
+        assert self._entry("a", measured=False).selectable
+
+    def test_structural_admission_is_never_advisory(self):
+        """These tensors load into a process that also holds hidden evaluation
+        material, and no incentive argument touches that."""
+        assert not self._entry("a", certified=False, measured=True).selectable
+
+    def test_an_unmeasured_adapter_is_loadable_but_not_selectable(self, strict_capability_gate):
         entry = self._entry("a", measured=False)
         assert entry.certified and not entry.selectable
 
@@ -371,26 +400,26 @@ class TestAnUnmeasuredAdapterBlocksItselfNotTheNetwork:
         entry = self._entry("a", certified=False, measured=True)
         assert not entry.selectable
 
-    def test_the_pool_miners_draw_from_excludes_unmeasured_adapters(self):
+    def test_the_pool_miners_draw_from_excludes_unmeasured_adapters(self, strict_capability_gate):
         registry = self._registry([self._entry("measured"), self._entry("pending", measured=False)])
         assert registry.selectable_ids == ("measured",)
         assert set(registry.ids) == {"measured", "pending"}
         assert registry.unmeasured() == ("pending",)
 
-    def test_references_are_never_built_from_unmeasured_weights(self):
+    def test_references_are_never_built_from_unmeasured_weights(self, strict_capability_gate):
         """A reference built from an uncharacterised adapter would set the bar
         every miner must clear using weights nobody has looked at."""
         registry = self._registry([self._entry("measured"), self._entry("pending", measured=False)])
         assert registry.capability_adapters() == ("measured",)
 
-    def test_selecting_an_unmeasured_adapter_is_reported_distinctly(self):
+    def test_selecting_an_unmeasured_adapter_is_reported_distinctly(self, strict_capability_gate):
         """A different problem from naming an adapter that does not exist, and
         with a different fix — so it gets its own message."""
         registry = self._registry([self._entry("measured"), self._entry("pending", measured=False)])
         assert registry.unselectable_ids(["measured", "pending"]) == ["pending"]
         assert registry.unknown_ids(["measured", "pending"]) == []
 
-    def test_certifying_an_adapter_changes_the_snapshot_digest(self):
+    def test_certifying_an_adapter_changes_the_snapshot_digest(self, strict_capability_gate):
         """Selectability decides which recipes are valid, so it must be part of
         the pool's identity. Two engines disagreeing about it would admit
         different submissions while claiming the same pool."""
@@ -467,3 +496,99 @@ class TestTheEngineRefusesADecisionRuleItCannotResolve:
         assert not outcome.dethrones
         assert "can resolve" in outcome.reason
         assert outcome.minimum_detectable_effect > 0.0
+
+
+class TestACopyCannotWinOnNoise:
+    """The exploit a leaderboard opens that champion-challenge closed.
+
+    Under a margin rule a copy could not displace the leader: identical scores
+    are not a margin. Under "highest score wins" a copy *ties* — and since no two
+    evaluations of two distinct artifacts land on exactly the same number, a copy
+    with one coefficient nudged takes the top slot roughly half the time on
+    sampling noise alone. Recipes are public, so this is a read-and-resubmit
+    attack, not a theoretical one.
+    """
+
+    @staticmethod
+    def _sub(uid, block, score, resolvable=0.05):
+        from capability_subnet.backend.scorer.ranking import Submission
+
+        return Submission(
+            uid=uid,
+            hotkey=f"5Miner{uid}",
+            score=score,
+            first_block=block,
+            resolvable=resolvable,
+        )
+
+    def test_a_later_copy_scoring_a_hair_higher_does_not_outrank_the_original(self):
+        from capability_subnet.backend.scorer.ranking import rank
+
+        original = self._sub(1, block=100, score=0.500)
+        copy = self._sub(2, block=900, score=0.512)  # inside the noise floor
+        assert [s.uid for s in rank([copy, original])] == [1, 2]
+
+    def test_a_measurably_better_later_submission_does_outrank_it(self):
+        """The bar is 'better than the evidence can distinguish', not 'earlier'."""
+        from capability_subnet.backend.scorer.ranking import rank
+
+        original = self._sub(1, block=100, score=0.500)
+        genuine = self._sub(2, block=900, score=0.600)  # clears the noise floor
+        assert [s.uid for s in rank([genuine, original])] == [2, 1]
+
+    def test_an_earlier_submission_never_loses_a_slot_it_cannot_be_shown_to_lose(self):
+        from capability_subnet.backend.scorer.ranking import rank
+
+        ordered = rank(
+            [
+                self._sub(3, block=900, score=0.51),
+                self._sub(1, block=100, score=0.50),
+                self._sub(2, block=500, score=0.505),
+            ]
+        )
+        assert ordered[0].uid == 1
+
+    def test_ordering_is_still_by_score_when_gaps_are_resolvable(self):
+        from capability_subnet.backend.scorer.ranking import rank
+
+        ordered = rank(
+            [
+                self._sub(1, block=100, score=0.20),
+                self._sub(2, block=200, score=0.80),
+                self._sub(3, block=300, score=0.50),
+            ]
+        )
+        assert [s.uid for s in ordered] == [2, 3, 1]
+
+    def test_tied_is_defined_by_what_the_window_could_resolve(self):
+        from capability_subnet.backend.scorer.ranking import tied
+
+        assert tied(self._sub(1, 1, 0.50), self._sub(2, 2, 0.53))
+        assert not tied(self._sub(1, 1, 0.50), self._sub(2, 2, 0.70))
+
+
+class TestTheReferenceBarIsOptional:
+    """The operator's decision: is the product 'the best merge' or 'a merge
+    proven better than doing nothing'?"""
+
+    def test_the_default_contract_pays_the_best_merge(self):
+        from capability_subnet.backend.settings import BackendSettings
+
+        assert BackendSettings().require_beat_reference is False
+
+    def test_the_strict_contract_is_still_available(self):
+        from capability_subnet.backend.settings import BackendSettings
+
+        assert BackendSettings(require_beat_reference=True).require_beat_reference
+
+    def test_retention_is_not_optional_under_either_contract(self):
+        """A package that destroyed general ability is not deployable whatever
+        it scored, so this gate does not move with the reference bar."""
+        import inspect
+
+        from capability_subnet.backend import evaluation
+
+        source = inspect.getsource(evaluation.Evaluator._behavioural_gates)
+        retention_line = source.index("gate_base_retention")
+        guard_line = source.index("if require_beat_reference")
+        assert retention_line < guard_line

@@ -181,6 +181,23 @@ class BackendSettings:
     burn_percentage: float = C.DEFAULT_BURN_PERCENTAGE
     burn_uid: int = C.BURN_UID
 
+    #: Whether a submission must beat the strongest permanent reference to be
+    #: payable at all.
+    #:
+    #: False ships the leaderboard contract: the best merge on the board wins,
+    #: whether or not it beats the untouched base model. That is a legitimate
+    #: product decision — what the network sells is the best composition anyone
+    #: has found — and it removes a real failure mode, where a network producing
+    #: perfectly good comparative information burns its emission forever because
+    #: nothing cleared an absolute bar.
+    #:
+    #: What it gives up is the guarantee that emission only flows once
+    #: composition has been shown to add value. The references are still
+    #: measured and published every window, so the question stays answerable
+    #: from the record; it just stops gating payment. Set True to restore the
+    #: stricter contract.
+    require_beat_reference: bool = False
+
     #: Share of payable emission spread across queued and former champions, so a
     #: miner waiting its turn is not pruned before it is ever evaluated.
     tail_share: float = C.DEFAULT_TAIL_SHARE
