@@ -60,6 +60,11 @@ workflow_id: industrial_maintenance_de_v1
 serving_base_url: http://127.0.0.1:8000
 serving_model_name: candidate
 
+# Extra serving arguments. The defaults are what make a single 24 GB card
+# sufficient: fp8 quantises the KV *cache* (not the weights, so canonical
+# scores stay bfloat16), and the engine evaluates one sequence at a time.
+serving_extra_args: "--kv-cache-dtype fp8 --max-num-seqs 1"
+
 # PostgreSQL for the hidden maintenance snapshot. Leave empty to serve it from
 # an in-memory SQLite database, which is correct for development and not for a
 # live network.

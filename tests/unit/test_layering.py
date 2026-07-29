@@ -213,6 +213,23 @@ class TestTheServingCommandIsCorrect:
             env = self._server(python_executable=link)._environment()
             assert env["PATH"].split(os.pathsep)[0] == venv_bin
 
+    def test_the_settings_that_make_a_24gb_card_work_are_reachable(self):
+        """They were verified on hardware; they must be settable, not hardcoded.
+
+        The engine was measured serving a merged adapter on a single RTX 4090
+        with fp8 KV cache and one sequence at a time. If those flags can only be
+        passed by editing code, that measurement describes something an operator
+        cannot actually deploy.
+        """
+        from capability_subnet.backend.settings import BackendSettings
+
+        extra = BackendSettings().serving_extra_args
+        assert "--kv-cache-dtype" in extra and "fp8" in extra
+        assert "--max-num-seqs" in extra
+
+        command = self._server(extra_args=tuple(extra.split()))._command(None)
+        assert command[command.index("--kv-cache-dtype") + 1] == "fp8"
+
     def test_the_environment_is_inherited_not_replaced(self):
         """A four-entry env dropped HOME, HF_HOME and LD_LIBRARY_PATH, which is
         enough for vLLM to fail at import on most real deployments."""

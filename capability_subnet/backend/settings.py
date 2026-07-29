@@ -109,6 +109,16 @@ class BackendSettings:
     #: versions tightly.
     serving_python: str = ""
 
+    #: Extra arguments appended to the serving command, space-separated.
+    #:
+    #: The two that matter on a 24 GB card are ``--kv-cache-dtype fp8`` and
+    #: ``--max-num-seqs 1``; together they are what makes a single consumer GPU
+    #: sufficient. They are configuration rather than constants because they are
+    #: a deployment's answer to its own hardware, and they do not change what a
+    #: candidate is asked — the cache precision is not the weight precision, and
+    #: the engine evaluates one sequence at a time regardless.
+    serving_extra_args: str = "--kv-cache-dtype fp8 --max-num-seqs 1"
+
     #: vLLM's parser for the base model's tool-call syntax. Qwen3 emits Hermes-style
     #: calls. Without a parser vLLM never populates ``message.tool_calls`` and
     #: every instance fails for a reason unrelated to the candidate.

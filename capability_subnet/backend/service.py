@@ -66,6 +66,7 @@ def _build_server(settings: BackendSettings):
         reasoning_parser=settings.reasoning_parser,
         gpu_memory_utilization=settings.serving_gpu_memory_utilization,
         python_executable=settings.serving_python,
+        extra_args=tuple(settings.serving_extra_args.split()),
     )
 
 
