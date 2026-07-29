@@ -14,10 +14,10 @@ from capability_subnet.backend.evaluation import Evaluator
 from capability_subnet.backend.executor.reconstruction import ArtifactCache, Reconstructor
 from capability_subnet.backend.reports.publisher import ReportPublisher
 from capability_subnet.backend.settings import BackendSettings
-from capability_subnet.common import constants as C
 from capability_subnet.merge_engine.loader import SafetensorsAdapterSource
 from capability_subnet.sandbox.reference_solver import ReferenceSolverClient
 from capability_subnet.workflows import get_workflow
+from tests.conftest import MAINTENANCE_WORKFLOW_ID
 
 
 class ScriptedServer:
@@ -146,7 +146,7 @@ def engine(tmp_path, tiny_snapshot, tiny_pool_dir):
     """A fully wired engine over the miniature pool."""
     import dataclasses
 
-    base = get_workflow(C.DEFAULT_WORKFLOW_ID)
+    base = get_workflow(MAINTENANCE_WORKFLOW_ID)
 
     def _tracking_generate(seed, *, split="hidden"):
         instance = base.generate_instance(seed, split=split)

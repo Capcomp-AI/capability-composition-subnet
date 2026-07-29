@@ -4,32 +4,71 @@ from __future__ import annotations
 
 from typing import Any
 
+from capability_subnet import __spec_version__
 from capability_subnet.common import constants as C
-from capability_subnet.workflows.lora_merger_logic_v1 import dataset
+from capability_subnet.workflows.lora_merger_logic_v1 import sources as S
+from capability_subnet.workflows.shared_contract import (
+    base_model_contract,
+    hard_gates_contract,
+    incentive_contract,
+    qualified_scoring_contract,
+    ranking_contract,
+    recipe_contract,
+    resolve_snapshot,
+    source_pool_contract,
+    windows_contract,
+)
 
 
-def build_contract() -> dict[str, Any]:
+def build_contract(snapshot=None) -> dict[str, Any]:
     """Everything a miner needs to know about how a package is judged here.
 
     Including the parts that are limitations. A contract that published only the
-    favourable properties would be marketing; the two paragraphs below on corpus
+    favourable properties would be marketing; the notes below on corpus
     visibility and difficulty calibration are exactly what a miner needs in order
     to decide whether to compete.
+
+    Args:
+        snapshot: the frozen pool. The engine passes its own so the published
+            contract describes the pool actually being evaluated against; the CLI
+            passes nothing and the shipped one is loaded.
     """
+    snapshot = resolve_snapshot(snapshot)
+
     return {
+        "contract_version": 1,
+        "spec_version": __spec_version__,
         "workflow_id": "lora_merger_logic_v1",
-        "title": "LoRA Merger Logic — single-turn exact-match reasoning",
+        "base_model": base_model_contract(snapshot),
+        "source_pool": source_pool_contract(snapshot),
+        "recipe": recipe_contract(snapshot),
+        "title": "LoRA Merger Logic — single-turn reasoning and execution-verified code",
         "corpus": {
-            "dataset": dataset.DATASET,
-            "revision": dataset.REVISION,
-            "difficulty_column": dataset.DIFFICULTY_COLUMN,
-            "difficulty_band": list(dataset.BAND),
-            "task_families": list(dataset.TASK_FAMILIES),
+            "sources": [
+                {
+                    "name": source.name,
+                    "dataset": source.repo,
+                    "revision": source.revision,
+                    "scoring": "exact match" if source.kind == "logic" else "execution",
+                    "detail": source.detail,
+                }
+                for source in S.SOURCES
+            ],
+            "code_fraction": S.CODE_FRACTION,
+            "difficulty_column": S.DIFFICULTY_COLUMN,
+            "difficulty_band": list(S.DIFFICULTY_BAND),
+            "code_difficulties": sorted(S.CODE_DIFFICULTIES),
+            "task_families": [*S.LOGIC_FAMILIES, S.CODE_FAMILY],
             "note": (
-                "The corpus is public and pinned. What the hidden seed protects is "
+                "Both corpora are public and pinned. What the hidden seed protects is "
                 "which items a window draws, not the items themselves — a weaker "
                 "anti-overfitting property than a generated workflow, and the price "
-                "of a corpus whose difficulty is already measured."
+                "of corpora whose difficulty is already measured. Corpus size is not "
+                "the mitigation and is not claimed as one: roughly 3,200 logic items "
+                "carry the difficulty labels selection needs, and roughly 3,900 code "
+                "problems are admitted. The mitigations that do apply are stratified "
+                "selection, the executed quarter of each window, and a general-"
+                "capability probe scored outside this corpus entirely."
             ),
         },
         "harness": {
@@ -42,29 +81,50 @@ def build_contract() -> dict[str, Any]:
             "note": (
                 "One question, one answer, no tools and no state. Sampling is greedy "
                 "and seeded per instance, and the model's separate reasoning channel "
-                "is disabled — so the difficulty labels in the corpus, which were "
+                "is disabled — so the difficulty labels in the logic corpus, which were "
                 "measured at pass@16 with sampling, overstate what this harness "
                 "observes. Expect materially lower absolute scores than the band."
             ),
         },
         "scoring": {
-            "method": "exact match after whitespace and quote normalisation",
+            "method": (
+                "exact match after whitespace and quote normalisation for logic items; "
+                "the submitted program is executed against stdin/stdout cases for code "
+                "items, and must pass every case"
+            ),
             "extraction": "the wrapper the prompt requested, then the whole reply",
-            "axes": list(dataset.TASK_FAMILIES) + ["format_compliance"],
+            "axes": [*S.LOGIC_FAMILIES, S.CODE_FAMILY, "format_compliance"],
             "note": (
                 "No language model judges any part of a result. Format compliance is "
                 "its own axis rather than part of correctness: a package that is right "
                 "but can no longer follow an output instruction has failed differently "
                 "from one that is wrong, and losing compliance is the most common way "
-                "an over-aggressive merge goes bad."
+                "an over-aggressive merge goes bad. One caveat on that axis: families "
+                "whose answer is itself a bracketed list are compliant by construction, "
+                "so it carries information mainly on the scalar families and on code."
             ),
+        },
+        "stages": {
+            "order": list(S.STAGES),
+            "thresholds": dict(S.STAGE_THRESHOLDS),
+            # Every axis is critical here; a package that abandoned a family has
+            # not solved the arena.
+            "critical_axes": list(S.STAGES),
         },
         "limits": {
             "max_selected_adapters": C.MAX_SELECTED_ADAPTERS,
             "min_selected_adapters": C.MIN_SELECTED_ADAPTERS,
+            "max_cases_per_problem": S.MAX_CASES_PER_PROBLEM,
             "note": (
                 "A submission must combine at least two adapters. A single adapter is "
-                "a reference, not a candidate."
+                "a reference, not a candidate. Code problems are scored on the first "
+                "32 test cases, a bound published because it is part of what a score "
+                "means rather than an implementation detail."
             ),
         },
+        "hard_gates": hard_gates_contract(),
+        "qualified_score": qualified_scoring_contract(),
+        "champion_challenge": ranking_contract(),
+        "windows": windows_contract(),
+        "incentive": incentive_contract(),
     }

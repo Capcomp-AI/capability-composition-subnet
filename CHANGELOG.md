@@ -15,6 +15,13 @@ weight vector.
 
 ### Changed — consensus
 
+**The arena is the default workflow.** `DEFAULT_WORKFLOW_ID` and
+`backend.example.yaml` now select `lora_merger_logic_v1` rather than the German
+maintenance chain. Both remain registered and selectable; this changes which one
+an operator gets without configuring anything. Consensus-relevant because a
+recipe's commitment names its workflow — a submission for one is not a submission
+for the other.
+
 **Highest score wins.** `require_beat_reference` defaults to False: a
 submission no longer has to clear the strongest permanent reference to be paid.
 The product is the best composition anyone has found, not proof that
@@ -52,6 +59,56 @@ load into a process that also holds hidden evaluation material.
 
 ### Added
 
+**A second workflow, `lora_merger_logic_v1`, and it is the one a launch runs.**
+Single-turn, twelve axes, two pinned corpora: ~3,193 reasoning puzzles across ten
+families scored by exact match, and ~3,920 competitive-programming problems
+scored by **executing** the submitted program against stdin/stdout cases. A
+quarter of each window is drawn from the executed corpus.
+
+Built because the maintenance workflow cannot answer the question this subnet
+exists to ask. Its oracle needs ten of twelve turns and the pool contains nothing
+German and nothing SQL, so a null result there measures calibration rather than
+composition. This one puts as little as possible between the answer and the
+measurement: one turn, no tools, no state, no model judging anything, and items
+selected inside the band where the corpus's own measured pass rate says a model
+of this class discriminates. Full reference in [docs/arena.md](docs/arena.md).
+
+Its limitations are published rather than argued away. The corpora are public, so
+the hidden seed protects *which* items a window draws and not the items
+themselves — a weaker anti-overfitting property than a generated workflow, and
+the price of corpora whose difficulty is already measured. The difficulty labels
+were measured at pass@16 with sampling while this engine scores pass@1 greedy, so
+absolute scores land far below the band; the first live run of a merged package
+scored 4/30.
+
+`affine-lgc-xlarge` was measured and **rejected**. It advertises 1,081,566 rows
+against the chosen corpus's 81,566, and a larger pool would have been a real
+mitigation for corpus visibility. But its difficulty column is populated on 8% of
+rows, all inside its first shard, and banding that shard yields exactly the same
+3,193 usable items — its labelled subset *is* the smaller corpus. Preferring it
+cost four shards of download and bought no additional problems. The mitigations
+that do apply are stratified selection, the executed quarter, and a
+general-capability probe scored outside these corpora entirely.
+
+**`PythonRunner.run_program`** runs a whole program against stdin and returns its
+stdout, with the same isolation as the existing function-calling path: `-I -S`,
+no inherited environment, memory and CPU ceilings, a wall-clock timeout.
+Competitive-programming problems are stated as "read stdin, write stdout" and
+cannot be scored by calling a named function.
+
+Execution is bounded two ways, both found by measuring the corpus rather than by
+reasoning about it. Cases are **capped at 32 per problem**: the median problem
+carries 9 but the worst carries 565, and at a 20-second ceiling one instance would
+have held a validator for three hours against a 15-second budget. And a program
+that exhausts its time or memory ceiling gets **no further cases** — it would
+exhaust the ceiling on each of them, passing already requires all of them, so
+continuing cannot change the verdict but can multiply the ceiling by the case
+count. A *crash* still runs every case, because it is cheap and the next case may
+behave differently. Both rules are deterministic in the program and the cases,
+which matters because two validators scoring the same trace must agree; the cap
+is applied at load time so the retained prefix travels with the instance and a
+replay scores the same cases.
+
 **The pool is 30 adapters, 26 admitted.** A strict sweep found 209 eligible
 LoRAs declaring `Qwen/Qwen3-8B` with full canonical target coverage and no
 DoRA, rslora or `modules_to_save`. Eighteen were added, deduplicated by training
@@ -72,6 +129,59 @@ That leaves **23 selectable capability adapters**, or about 5.5 million adapter
 subsets before a miner chooses a method, a rank or a single coefficient.
 
 ### Fixed — consensus
+
+**Nothing is keyed by whichever workflow is default any more.** Pointing
+`DEFAULT_WORKFLOW_ID` at the arena broke fifty-six tests at once, and every
+failure was the same mistake made in a different file: an identity *read from the
+default* instead of stated. The maintenance workflow was registered under
+`C.DEFAULT_WORKFLOW_ID`, so moving the default **unregistered it** — the workflow
+stopped existing rather than stopping being the default. Its own `WORKFLOW_ID`
+came from the same constant, so it then called itself by the new default's name,
+which recipes and reports are keyed by. Its on-chain commitment code was
+registered the same way, so no commitment for it could be encoded or decoded. And
+`WindowDisclosure.workflow_id` defaulted to it, so a disclosure that omitted the
+field claimed to be whatever workflow was configured *at replay time* — meaning a
+disclosure written before an operator switched workflows would regenerate the
+wrong instances and score them with the wrong scorer, silently, because both
+would succeed.
+
+`workflow_id` on a disclosure is now **required**. An audit record has to name its
+own subject. A regression test asserts the whole class: every workflow registers
+under its own id, survives a change of default, has a commitment code that
+round-trips, and publishes a complete contract.
+
+**Both workflows publish the same protocol facts.** The base model, the frozen
+pool, the recipe schema and its bounds, the hard gates, the qualified-score
+weights, the ranking rule, the window sizes and the incentive split are facts
+about the protocol, not about whichever workflow is judging — but they were
+written out inside one workflow's contract, so the second shipped a contract with
+**no base model and no pool in it**. That is not a contract a miner can build
+against. They now come from `workflows/shared_contract.py`, which both call and a
+third would too.
+
+Unifying them surfaced two stale statements in the published contract, both now
+correct: `incentive.default_mode` still said `winner_take_all` when settings
+default to `graded_contribution`, and the ranking rule described the
+champion-challenge margin as unconditional when `require_beat_reference` ships
+off. The contract now states both modes and marks which is the default.
+
+**`docs/architecture.md` described an incentive the engine no longer runs.** It
+documented champion-challenge throughout — including "if a reference holds the
+throne, the workflow share burns", which is the strict contract's behaviour, not
+the shipped one. Corrected to state both modes with the default marked, and the
+anti-copy section now credits the tie rule rather than a margin that is off.
+
+**`workflows.cli show` crashed on any workflow but one.** It accepted
+`--workflow` and then read the maintenance workflow's instance fields directly, so
+selecting the arena raised `AttributeError`. It now falls back to a field-driven
+rendering that a third workflow gets for free.
+
+**Execution details were reported in German.** `run_program` reused the
+resource-limit messages written for the German maintenance workflow, so an
+English-language arena published `Zeitlimit oder Speichergrenze überschritten` in
+its traces. The two maps are now separate rather than shared, because translating
+in place would have put the wrong language in the other workflow.
+
 
 **The comparator demanded a margin its sample size could not resolve.** A
 paired comparison over *n* instances resolves roughly `2.8 · sqrt(0.15 / n)`.

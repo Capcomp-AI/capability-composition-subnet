@@ -101,7 +101,26 @@ Only packages that cleared **every hard gate** are graded. This is not a consola
 
 Miners still waiting in the queue earn a small tapered share on top. Not payment for work: Bittensor prunes by lowest emission, so a strict winner-take-all split makes every unevaluated challenger the first thing the chain evicts.
 
-## The V1 workflow: Industrial Maintenance DE
+## Two arenas
+
+A package is judged by a **workflow**, and the engine does not hardcode one. Workflows register through the `capability_subnet.workflows` entry-point group and `workflow_id` in `backend.yaml` selects which runs.
+
+| Workflow | What it is | Role |
+|---|---|---|
+| `lora_merger_logic_v1` | Single-turn reasoning puzzles and execution-verified programming problems, twelve axes — [reference](docs/arena.md) | **What a launch runs.** Built to measure composition with as little between the answer and the measurement as possible |
+| `industrial_maintenance_de_v1` | A twelve-turn German maintenance chain, seven dependent axes — [reference](docs/workflow.md) | The product demonstration, and a poor instrument for *this* pool: its oracle needs ten of twelve turns and no public adapter covers German or SQL |
+
+The split is deliberate. The maintenance workflow shows what composition is *for*; the arena is where the question "does this merge beat its constituents" can actually be answered, because its items carry pre-measured difficulty and nothing in it is judged by a model.
+
+### `lora_merger_logic_v1` — the arena
+
+Two pinned corpora. ~3,193 logic puzzles across ten families, scored by exact match against the answer the prompt asked for. ~3,920 competitive-programming problems, scored by **running the submitted program** against stdin/stdout cases in an isolated interpreter — a quarter of every window, because execution asks whether the code works rather than whether the answer looks right.
+
+Items are selected in the band where a model of this class actually discriminates (the corpus carries its own measured pass rate), stratified by family, and deterministic in a hidden seed.
+
+Its limitations are published rather than argued away: the corpora are public, so what the seed protects is *which* items a window draws and not the items themselves; and the difficulty labels were measured at pass@16 with sampling while this engine scores pass@1 greedy, so absolute scores land far below the band. [docs/arena.md](docs/arena.md) states both in full.
+
+### `industrial_maintenance_de_v1` — the demonstration
 
 A German industrial-maintenance agent works one fault from a controller log to a signed-off replacement decision:
 
@@ -133,7 +152,8 @@ python -m capability_subnet.miner.cli pool          # the frozen certified adapt
 python -m capability_subnet.miner.cli contract      # the full published contract
 
 # What does one problem look like?
-python -m capability_subnet.workflows.cli show --seed 42 --with-truth
+python -m capability_subnet.workflows.cli show --workflow lora_merger_logic_v1 --seed 42 --with-truth
+python -m capability_subnet.workflows.cli show --seed 42 --with-truth   # the maintenance workflow
 
 # Is the environment actually solvable?
 python -m capability_subnet.workflows.cli selftest --count 10
@@ -185,7 +205,8 @@ A published score that does not follow from its published trace is caught.
 | [Miner guide](docs/miner.md) | Building, evaluating and committing a recipe |
 | [Validator guide](docs/validator.md) | Running a validator, verification, failure modes |
 | [Engine operations](docs/backend.md) | Operating the evaluation engine |
-| [Workflow reference](docs/workflow.md) | The V1 workflow, its stages and how each is scored |
+| [Arena reference](docs/arena.md) | The logic + code arena a launch runs, and its limitations |
+| [Workflow reference](docs/workflow.md) | The V1 maintenance workflow, its stages and how each is scored |
 | [Recipe reference](docs/recipe.md) | Every field, bound and merge method |
 | [Security model](docs/security.md) | Threats, defences and what is deliberately not defended |
 | [Repositories](docs/repositories.md) | What is public, what an operator keeps private, and why |
@@ -211,7 +232,7 @@ capability_subnet/
 
 ## Status and honest limits
 
-This is a V1 protocol, and it is deliberately narrow: one base model, one adapter pool, one workflow, one declarative recipe format, no routing, no distillation, no miner-hosted inference.
+This is a V1 protocol, and it is deliberately narrow: one base model, one adapter pool, one workflow running at a time, one declarative recipe format, no routing, no distillation, no miner-hosted inference.
 
 **Does composition beat the equal-weight merge? On this pool, measured: no.**
 

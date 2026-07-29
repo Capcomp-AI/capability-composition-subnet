@@ -25,8 +25,15 @@ COMMITMENT_PREFIX: Final[str] = "capsub"
 #: old and new payload shapes during a rollout.
 COMMITMENT_VERSION: Final[str] = "v1"
 
-#: The single workflow shipped in V1.
-DEFAULT_WORKFLOW_ID: Final[str] = "industrial_maintenance_de_v1"
+#: The workflow a launch runs unless configured otherwise.
+#:
+#: The arena rather than the maintenance chain, because it is the one that can
+#: answer whether a merge beat its constituents: one turn, pre-measured item
+#: difficulty, nothing judged by a model. The maintenance workflow remains
+#: registered and selectable — it demonstrates what composition is *for*, but its
+#: oracle needs ten of twelve turns and no adapter in the pool covers German or
+#: SQL, so a null result on it measures calibration rather than composition.
+DEFAULT_WORKFLOW_ID: Final[str] = "lora_merger_logic_v1"
 
 # ---------------------------------------------------------------------------
 # Base model

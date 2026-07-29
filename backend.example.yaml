@@ -52,7 +52,14 @@ hidden_seed_root: 0
 # ---------------------------------------------------------------------------
 # Evaluation
 # ---------------------------------------------------------------------------
-workflow_id: industrial_maintenance_de_v1
+# Which workflow judges a package. Registered workflows come from the
+# `capability_subnet.workflows` entry-point group, so this is not limited to the
+# two shipped here.
+#
+#   lora_merger_logic_v1          the arena: single-turn logic + executed code,
+#                                 twelve axes, pre-measured item difficulty
+#   industrial_maintenance_de_v1  the twelve-turn German maintenance chain
+workflow_id: lora_merger_logic_v1
 
 # The OpenAI-compatible endpoint serving the candidate. With the external server
 # the operator restarts the runtime per candidate; the managed server does it

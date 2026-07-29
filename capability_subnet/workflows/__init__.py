@@ -107,8 +107,12 @@ def _load_lora_merger_logic_v1() -> WorkflowModule:
     )
 
 
+#: A workflow is registered under **its own** id, never under whichever id is
+#: currently the default. Keying the maintenance workflow by `DEFAULT_WORKFLOW_ID`
+#: meant moving the default silently unregistered it — the workflow stopped
+#: existing rather than stopping being the default.
 _BUILTIN_LOADERS: dict[str, Callable[[], WorkflowModule]] = {
-    C.DEFAULT_WORKFLOW_ID: _load_industrial_maintenance_de_v1,
+    "industrial_maintenance_de_v1": _load_industrial_maintenance_de_v1,
     "lora_merger_logic_v1": _load_lora_merger_logic_v1,
 }
 

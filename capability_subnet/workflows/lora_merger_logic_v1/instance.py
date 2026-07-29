@@ -18,6 +18,21 @@ class LogicInstance:
     question: str
     answer: str
     difficulty: float
+    #: stdin/stdout cases for an execution-scored item; empty for a logic item.
+    #: Present on the instance rather than fetched at scoring time so a replay
+    #: scores against exactly the cases the candidate was judged on.
+    cases: tuple = ()
+    source: str = ""
+
+    @property
+    def is_code(self) -> bool:
+        """Whether this instance is scored by running a program.
+
+        The presence of test cases *is* the distinction, so it is derived rather
+        than stored: a second field naming the scoring mode could disagree with
+        the cases, and the scorer branches on the cases.
+        """
+        return bool(self.cases)
 
 
 def generate_instance(seed: int, *, split: str = "hidden") -> LogicInstance:
@@ -37,8 +52,10 @@ def generate_instance(seed: int, *, split: str = "hidden") -> LogicInstance:
         instance_id=f"{split}-{seed:012d}",
         seed=seed,
         split=split,
-        task=item.task,
+        task=item.family,
         question=item.question,
         answer=item.answer,
         difficulty=item.difficulty,
+        cases=item.cases,
+        source=item.source,
     )

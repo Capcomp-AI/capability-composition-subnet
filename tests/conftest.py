@@ -243,11 +243,21 @@ def store(tmp_path: Path):
         instance.close()
 
 
+#: The maintenance workflow, named explicitly rather than taken from the default.
+#:
+#: The suites built on this fixture read that workflow's own instance fields —
+#: sensor logs, SQL snapshots, the reference solver — so they are tests *of* it,
+#: not tests of whichever workflow an operator happens to have configured. Before
+#: this was pinned, changing the shipped default broke fifty-six tests that had
+#: nothing to say about the change.
+MAINTENANCE_WORKFLOW_ID = "industrial_maintenance_de_v1"
+
+
 @pytest.fixture(scope="session")
 def workflow():
     from capability_subnet.workflows import get_workflow
 
-    return get_workflow(C.DEFAULT_WORKFLOW_ID)
+    return get_workflow(MAINTENANCE_WORKFLOW_ID)
 
 
 @pytest.fixture

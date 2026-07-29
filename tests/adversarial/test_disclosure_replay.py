@@ -21,6 +21,7 @@ from capability_subnet.audit.replay import (
 from capability_subnet.common.schemas import DisclosedInstance, WindowDisclosure
 from capability_subnet.sandbox.orchestrator import run_instance
 from capability_subnet.sandbox.reference_solver import ReferenceSolverClient
+from tests.conftest import MAINTENANCE_WORKFLOW_ID
 
 
 @pytest.fixture(scope="module")
@@ -47,6 +48,9 @@ def disclosure_for(instance, trace, result, **overrides) -> WindowDisclosure:
         setattr(entry, key, value)
 
     payload = {
+        # Stated explicitly: a disclosure names its own workflow, and this helper
+        # builds a maintenance run.
+        "workflow_id": MAINTENANCE_WORKFLOW_ID,
         "window_id": 7,
         "closed_at_block": 50_400,
         "spec_version": 1000,
@@ -180,7 +184,12 @@ class TestAttribution:
 
 class TestDisclosureBoundaries:
     def test_an_empty_disclosure_is_flagged_rather_than_passing_quietly(self):
-        disclosure = WindowDisclosure(window_id=3, closed_at_block=1, spec_version=1000)
+        disclosure = WindowDisclosure(
+            workflow_id=MAINTENANCE_WORKFLOW_ID,
+            window_id=3,
+            closed_at_block=1,
+            spec_version=1000,
+        )
         outcome, audit = replay_disclosure(disclosure)
 
         assert outcome.checked == 0

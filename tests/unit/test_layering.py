@@ -351,3 +351,76 @@ class TestTheModelRequestIsWellFormed:
         body = self._body([])
         assert body["temperature"] == 0.0
         assert body["seed"] == 1
+
+
+class TestNothingIsKeyedByWhicheverWorkflowIsDefault:
+    """The bug class that broke fifty-six tests at once.
+
+    Moving `DEFAULT_WORKFLOW_ID` unregistered the maintenance workflow, made it
+    call itself by the new default's name, invalidated its on-chain commitment
+    code, and made every disclosure claim to be a workflow it was not. Each was
+    the same mistake: an identity read from the default instead of stated.
+    """
+
+    def test_every_workflow_registers_under_its_own_id(self):
+        from capability_subnet.workflows import available_workflows, get_workflow
+
+        for workflow_id in available_workflows():
+            assert get_workflow(workflow_id).workflow_id == workflow_id
+
+    def test_both_shipped_workflows_survive_a_change_of_default(self, monkeypatch):
+        from capability_subnet.common import constants as C
+        from capability_subnet.workflows import available_workflows
+
+        registered = set(available_workflows())
+        assert {"industrial_maintenance_de_v1", "lora_merger_logic_v1"} <= registered
+
+        monkeypatch.setattr(C, "DEFAULT_WORKFLOW_ID", "something-else-entirely")
+        assert set(available_workflows()) == registered
+
+    def test_every_workflow_has_a_commitment_code(self):
+        from capability_subnet.common.commitments import WORKFLOW_CODES, decode_commitment
+        from capability_subnet.common.hashing import sha256_bytes
+        from capability_subnet.workflows import available_workflows
+
+        uri = "hf:alice/recipes/final.json"
+        for workflow_id in available_workflows():
+            assert workflow_id in WORKFLOW_CODES, f"{workflow_id} could never be committed"
+            from capability_subnet.common.commitments import encode_commitment
+
+            payload = encode_commitment(workflow_id, sha256_bytes(b"x"), uri)
+            assert decode_commitment(payload).workflow_id == workflow_id
+
+    def test_a_disclosure_must_name_its_own_workflow(self):
+        """Defaulting it would score a year-old disclosure against whatever
+        workflow happens to be configured when it is replayed."""
+        import pytest
+
+        from capability_subnet.common.schemas import WindowDisclosure
+
+        with pytest.raises(Exception):  # noqa: B017 - pydantic's own validation error
+            WindowDisclosure(window_id=1, closed_at_block=1, spec_version=1000)
+
+    def test_every_workflow_publishes_the_protocol_facts_a_miner_needs(self):
+        """A contract without the base model or the pool is not one a miner can
+        build against, and the second workflow shipped without them."""
+        from capability_subnet.workflows import available_workflows, get_workflow
+
+        required = {
+            "workflow_id",
+            "spec_version",
+            "base_model",
+            "source_pool",
+            "recipe",
+            "stages",
+            "hard_gates",
+            "champion_challenge",
+            "windows",
+            "incentive",
+        }
+        for workflow_id in available_workflows():
+            contract = get_workflow(workflow_id).build_contract()
+            assert required <= set(contract), f"{workflow_id} omits {required - set(contract)}"
+            assert contract["base_model"]["repo"]
+            assert contract["source_pool"]["adapters"]
+            assert contract["stages"]["order"] == list(get_workflow(workflow_id).stages)

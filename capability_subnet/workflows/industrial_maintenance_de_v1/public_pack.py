@@ -24,6 +24,7 @@ from typing import Any
 
 from capability_subnet.common import constants as C
 from capability_subnet.common.hashing import canonical_json_str, sha256_tree
+from capability_subnet.workflows.industrial_maintenance_de_v1.contract import WORKFLOW_ID
 from capability_subnet.workflows.industrial_maintenance_de_v1.generator import (
     generate_instance,
     sample_seeds,
@@ -144,7 +145,7 @@ def generate_pack(
             )
 
     manifest = {
-        "workflow_id": C.DEFAULT_WORKFLOW_ID,
+        "workflow_id": WORKFLOW_ID,
         "pack_seed": seed,
         "ood_pack_seed": ood_seed,
         "instance_count": len([item for item in written if item["split"] == "public"]),

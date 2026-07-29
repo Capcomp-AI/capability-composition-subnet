@@ -16,8 +16,6 @@ from typing import Any
 
 from capability_subnet import __spec_version__
 from capability_subnet.common import constants as C
-from capability_subnet.common.schemas import recipe_json_schema
-from capability_subnet.merge_engine.methods import PIPELINES
 from capability_subnet.workflows.industrial_maintenance_de_v1.final_schema import (
     FINAL_PAYLOAD_SCHEMA,
 )
@@ -27,8 +25,22 @@ from capability_subnet.workflows.industrial_maintenance_de_v1.instance import (
     STAGES,
 )
 from capability_subnet.workflows.industrial_maintenance_de_v1.tools_schema import TOOL_SCHEMAS
+from capability_subnet.workflows.shared_contract import (
+    base_model_contract,
+    hard_gates_contract,
+    incentive_contract,
+    qualified_scoring_contract,
+    ranking_contract,
+    recipe_contract,
+    resolve_snapshot,
+    source_pool_contract,
+    windows_contract,
+)
 
-WORKFLOW_ID = C.DEFAULT_WORKFLOW_ID
+#: This workflow's own identifier, stated rather than read from the shipped
+#: default. Recipes and reports are keyed by it, so it must not move when an
+#: operator changes which workflow runs.
+WORKFLOW_ID = "industrial_maintenance_de_v1"
 WORKFLOW_TITLE = "Industrial Maintenance DE"
 
 DESCRIPTION = (
@@ -59,10 +71,7 @@ def build_contract(snapshot=None) -> dict[str, Any]:
             is what the CLI does; the engine passes its own so the contract it
             publishes always describes the pool it is actually evaluating against.
     """
-    if snapshot is None:
-        from capability_subnet.registry.snapshot import load_snapshot
-
-        snapshot = load_snapshot()
+    snapshot = resolve_snapshot(snapshot)
 
     return {
         "contract_version": 1,
@@ -71,46 +80,9 @@ def build_contract(snapshot=None) -> dict[str, Any]:
         "title": WORKFLOW_TITLE,
         "description": DESCRIPTION,
         "capabilities": list(CAPABILITIES),
-        "base_model": {
-            "repo": snapshot.manifest.model_repo,
-            "revision": snapshot.manifest.revision,
-            "revision_pinned": snapshot.manifest.is_pinned,
-            "dtype": snapshot.manifest.dtype,
-            "num_hidden_layers": snapshot.manifest.num_hidden_layers,
-        },
-        "source_pool": {
-            "source_snapshot_sha256": snapshot.sha256,
-            "canonical_rank": snapshot.registry.canonical_rank,
-            "canonical_lora_alpha": snapshot.registry.canonical_lora_alpha,
-            "target_modules": list(snapshot.registry.canonical_target_modules),
-            "adapters": list(snapshot.adapter_ids),
-            "distractors": list(snapshot.registry.distractors()),
-        },
-        "recipe": {
-            "schema_version": C.RECIPE_SCHEMA_VERSION,
-            "json_schema": recipe_json_schema(),
-            "layer_groups": {
-                name: {"first_layer": low, "last_layer": high}
-                for name, (low, high) in snapshot.manifest.layer_groups.items()
-            },
-            "merge_methods": {
-                name: {
-                    "sparsify": pipeline.sparsify,
-                    "sign_election": pipeline.sign_election,
-                    "aggregate": pipeline.aggregate,
-                    "description": pipeline.description,
-                }
-                for name, pipeline in sorted(PIPELINES.items())
-            },
-            "bounds": {
-                "adapter_weight": [C.ADAPTER_WEIGHT_MIN, C.ADAPTER_WEIGHT_MAX],
-                "density": [C.DENSITY_MIN, C.DENSITY_MAX],
-                "output_rank": list(C.ALLOWED_OUTPUT_RANKS),
-                "svd_clamp_quantile": [C.SVD_CLAMP_QUANTILE_MIN, C.SVD_CLAMP_QUANTILE_MAX],
-                "random_seed": [C.RANDOM_SEED_MIN, C.RANDOM_SEED_MAX],
-                "selected_adapters": [C.MIN_SELECTED_ADAPTERS, C.MAX_SELECTED_ADAPTERS],
-            },
-        },
+        "base_model": base_model_contract(snapshot),
+        "source_pool": source_pool_contract(snapshot),
+        "recipe": recipe_contract(snapshot),
         "agent_harness": {
             "tools": TOOL_SCHEMAS,
             "max_turns": C.MAX_AGENT_TURNS,
@@ -131,58 +103,9 @@ def build_contract(snapshot=None) -> dict[str, Any]:
             "critical_axes": list(CRITICAL_AXES),
         },
         "final_payload_schema": FINAL_PAYLOAD_SCHEMA,
-        "hard_gates": {
-            "artifact_size_bytes": C.MAX_ARTIFACT_BYTES,
-            "peak_vram_gb": C.MAX_PEAK_VRAM_GB,
-            "p95_workflow_seconds": C.MAX_P95_WORKFLOW_SECONDS,
-            "max_turns": C.MAX_AGENT_TURNS,
-            "max_output_tokens": C.MAX_OUTPUT_TOKENS,
-            "critical_unsafe_actions": C.MAX_CRITICAL_UNSAFE_ACTIONS,
-            "base_retention_floor": C.BASE_RETENTION_FLOOR,
-        },
-        "scoring": {
-            "weights": dict(C.QUALIFIED_SCORE_WEIGHTS),
-            "formula": (
-                "Q = 0.60·end_to_end + 0.15·stage_balance + 0.10·ood + "
-                "0.05·retention + 0.05·latency + 0.05·artifact_efficiency"
-            ),
-            "stage_balance": (
-                "Geometric mean of the per-stage means. Rewards packages that are "
-                "competent everywhere over packages that are excellent at one stage "
-                "and broken at another."
-            ),
-        },
-        "champion_challenge": {
-            "axis_margin": C.DEFAULT_AXIS_MARGIN,
-            "axis_tolerance": C.DEFAULT_AXIS_TOLERANCE,
-            "min_dominant_axes": C.DEFAULT_MIN_DOMINANT_AXES,
-            "min_axis_samples": C.DEFAULT_MIN_AXIS_SAMPLES,
-            "end_to_end_margin": C.DEFAULT_END_TO_END_MARGIN,
-            "bootstrap_resamples": C.BOOTSTRAP_RESAMPLES,
-            "bootstrap_confidence": C.BOOTSTRAP_CONFIDENCE,
-            "rule": (
-                "A challenger takes the throne only if it dominates at least the "
-                "required number of capability axes, is not worse on any other axis, "
-                "raises end-to-end completion over the strongest reference by the "
-                "absolute margin, and its paired bootstrap lower confidence bound "
-                "against that reference is above zero. One shot per hotkey: a "
-                "decisive loss terminates the challenger permanently."
-            ),
-        },
-        "windows": {
-            "window_blocks": C.DEFAULT_WINDOW_BLOCKS,
-            "hidden_instances": C.DEFAULT_HIDDEN_INSTANCES,
-            "ood_instances": C.DEFAULT_OOD_INSTANCES,
-            "public_pack_instances": C.PUBLIC_PACK_INSTANCES,
-        },
-        "incentive": {
-            "default_mode": C.MODE_WINNER_TAKE_ALL,
-            "graded_shares": list(C.GRADED_TOP3_SHARES),
-            "burn_uid": C.BURN_UID,
-            "note": (
-                "The reigning champion holds the full workflow weight. If no "
-                "candidate and no incumbent qualify, the workflow share is burned "
-                "rather than redistributed."
-            ),
-        },
+        "hard_gates": hard_gates_contract(),
+        "scoring": qualified_scoring_contract(),
+        "champion_challenge": ranking_contract(),
+        "windows": windows_contract(),
+        "incentive": incentive_contract(),
     }

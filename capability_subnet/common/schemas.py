@@ -587,7 +587,12 @@ class WindowDisclosure(StrictModel):
     hand its challenger the test it is sitting.
     """
 
-    workflow_id: str = C.DEFAULT_WORKFLOW_ID
+    #: Required, with no default. A disclosure is an audit record and has to name
+    #: its own subject: defaulting to whichever workflow is *currently* configured
+    #: means replaying a disclosure written before the operator switched workflows
+    #: would regenerate the wrong instances and score them against the wrong
+    #: scorer — silently, since both would succeed.
+    workflow_id: str
     window_id: int
     closed_at_block: int
     spec_version: int

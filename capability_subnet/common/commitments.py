@@ -24,7 +24,6 @@ import base64
 import re
 from dataclasses import dataclass
 
-from capability_subnet.common import constants as C
 from capability_subnet.common.hashing import SHA256_PREFIX, normalise_digest
 
 #: Magic prefix identifying a payload as belonging to this subnet and protocol
@@ -41,8 +40,12 @@ MAX_PAYLOAD_BYTES = 128
 
 #: Short codes keep the payload compact. Every workflow the network runs needs
 #: an entry here.
+#: Keyed by each workflow's own id, never by whichever is currently the default —
+#: a commitment code is part of the on-chain wire format and must stay valid for
+#: every workflow that ever ran, including ones no longer configured.
 WORKFLOW_CODES: dict[str, str] = {
-    C.DEFAULT_WORKFLOW_ID: "imde",
+    "industrial_maintenance_de_v1": "imde",
+    "lora_merger_logic_v1": "lmlg",
 }
 CODE_TO_WORKFLOW: dict[str, str] = {code: wf for wf, code in WORKFLOW_CODES.items()}
 

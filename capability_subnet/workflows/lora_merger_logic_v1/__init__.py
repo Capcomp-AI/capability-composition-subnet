@@ -24,31 +24,23 @@ secret seed protects only which of them a window draws.
 from __future__ import annotations
 
 from capability_subnet.workflows.lora_merger_logic_v1.contract import build_contract
-from capability_subnet.workflows.lora_merger_logic_v1.dataset import TASK_FAMILIES
 from capability_subnet.workflows.lora_merger_logic_v1.instance import (
     LogicInstance,
     generate_instance,
 )
 from capability_subnet.workflows.lora_merger_logic_v1.runner import run_instance
 from capability_subnet.workflows.lora_merger_logic_v1.scoring import score_instance
+from capability_subnet.workflows.lora_merger_logic_v1.sources import (
+    STAGE_THRESHOLDS,
+    STAGES,
+)
 
 WORKFLOW_ID = "lora_merger_logic_v1"
-WORKFLOW_TITLE = "LoRA Merger Logic — single-turn exact-match reasoning"
+WORKFLOW_TITLE = "LoRA Merger Logic — single-turn reasoning and execution-verified code"
 
-#: Each task family is an axis, plus format compliance.
-#:
-#: Compliance is separated on purpose. A merged package losing the ability to
-#: follow an output instruction is the most common way merging goes wrong — the
-#: first run of this corpus had a linear merge answering terse instructions with
-#: prose and burning five times the tokens to do it — and folding that into
-#: correctness would report it as "wrong" rather than "no longer obedient".
-STAGES: tuple[str, ...] = (*TASK_FAMILIES, "format_compliance")
+#: Every axis is critical: a package that abandoned one family has not solved the
+#: arena, and the stage-balance term is a geometric mean for the same reason.
 CRITICAL_AXES: tuple[str, ...] = STAGES
-
-#: An instance exercises one family, so an axis is scored only on the instances
-#: that belong to it. The threshold is exactness: a partially right answer to a
-#: puzzle is a wrong answer.
-STAGE_THRESHOLDS: dict[str, float] = {stage: 1.0 for stage in STAGES}
 
 #: No tools. The whole point of this arena is that the package answers alone.
 TOOL_SCHEMAS: list[dict] = []

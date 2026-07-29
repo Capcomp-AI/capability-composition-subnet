@@ -161,9 +161,19 @@ Five independent bars, all of which must clear:
 
 1. **Per-axis dominance** on at least the required number of capability axes.
 2. **Not worse on every remaining axis.** This is the bar that stops a package trading a capability away for a better average.
-3. **An absolute end-to-end margin** over the *strongest permanent reference*. This is the bar that says composition added value at all, and it never moves.
+3. **An absolute end-to-end margin** over the *strongest permanent reference*. This is the bar that says composition added value at all, and it never moves. **Off by default** — see below.
 4. **A defender's margin** over the incumbent, which starts small and decays to zero over roughly thirty days.
 5. **Paired statistical significance** — a one-sided bootstrap lower confidence bound above zero on shared instances.
+
+### Bar 3 is optional, and ships off
+
+`require_beat_reference` defaults to **False**: the highest score on the board is paid, whether or not it cleared the strongest reference. The product is the best composition anyone has found, not proof that composition was worth attempting — and the strict rule had a real failure attached, where a network producing perfectly good comparative information would burn its emission indefinitely because nothing cleared an absolute bar. References are still measured and published every window, so the question stays answerable from the record; it just stops gating payment. Set it True for the stricter contract.
+
+**Base retention does not move with it.** A package that destroyed the base model's general ability is not deployable whatever it scored, so that gate stays hard in both modes.
+
+Turning bar 3 off opens a hole that bar 4 was quietly closing, and it is closed separately. Under a margin rule a copy of the leader could not displace it, because identical scores are not a margin. Under highest-score-wins a copy *ties* — and since no two evaluations of two distinct artifacts land on exactly the same number, a copy with one coefficient nudged takes the top slot roughly half the time on sampling noise alone. Recipes are public, so this is read-and-resubmit rather than a hypothetical.
+
+So submissions closer together than the window can **resolve** are ranked as tied, and ties resolve to the earliest commitment. A copier commits later by construction, so it has to be measurably better — the same bar the margin enforced, expressed in the units the evidence actually supports. Indistinguishability is not transitive, so ranking groups maximal runs into equivalence classes rather than swapping pairs.
 
 Bars 3 and 4 are separate on purpose, and conflating them was a real mistake with a specific consequence. When the incumbent counted among the references, every successive champion had to beat the previous one by a further three points of completion. Completion is bounded by one, so that staircase admits a few dozen dethrones in principle and stalls after a handful in practice — after which one package holds the throne permanently, no further work can be bought, and the network pays rent.
 
@@ -200,7 +210,7 @@ The base model, the three standard merges and the owner recipe are re-measured e
 
 The **incumbent is not one of them**. It is re-measured every window and reported alongside them, but it does not set the absolute bar; see the dethrone rule above for why.
 
-None of them can be terminated and **none of them earn emission**. If a reference holds the throne, the workflow share burns, because the network has not yet produced anything worth paying for.
+None of them can be terminated and **none of them earn emission**. Under the strict contract (`require_beat_reference=True`) a reference can hold the throne, and then the workflow share burns because the network has not yet produced anything worth paying for. Under the default it cannot: the best *submission* is paid regardless of where the references landed, and the references serve as published context for whether that submission was worth anything rather than as a gate on it.
 
 ---
 
@@ -222,7 +232,7 @@ Recipes are public — they have to be, or nobody could verify an evaluation. So
 
 - **Earliest commit wins**, checked on the recipe digest at admission and again on the reconstructed artifact digest. Two differently-worded recipes that build the same bytes are the same package.
 - **One shot per hotkey.** Copying costs a registration and buys nothing.
-- **Defender advantage.** Dethroning requires a genuine margin, so a copy that exactly reproduces the champion's scores loses by construction.
+- **Defender advantage.** A copy has to be *measurably* better, not merely higher. Under the strict contract that is the dethrone margin; under the default it is the tie rule — scores closer than the window can resolve are ranked equal and ties resolve to the earliest commitment, so a later copy cannot displace what it copied on sampling noise.
 
 The third point is what makes the first two sufficient. Even a copy nobody detected cannot win.
 
@@ -265,9 +275,9 @@ Quality carries 85%, efficiency 15% — a cheap package that does not finish the
 
 ## Who gets paid
 
-The dethrone rule decides who holds the throne. It is far too blunt to also decide who gets paid, because almost every submission that is ever evaluated will fail to dethrone — and a recipe is *one shot*, so a miner cannot iterate on it the way a code-submitting miner can. Paying a miner who moved completion from 0.41 to 0.58 exactly what it pays one that submitted a soup of distractors leaves the second attempt no better informed than the first, in a network whose entire purpose is to learn which adapters compose.
+Ranking decides who leads — the dethrone rule under the strict contract, the tie-aware leaderboard by default. Either way it is far too blunt to also decide who gets *paid*, because almost every submission that is ever evaluated will fail to lead — and a recipe is *one shot*, so a miner cannot iterate on it the way a code-submitting miner can. Paying a miner who moved completion from 0.41 to 0.58 exactly what it pays one that submitted a soup of distractors leaves the second attempt no better informed than the first, in a network whose entire purpose is to learn which adapters compose.
 
-So the throne is winner-takes-most and everything below it is graded:
+So the top slot is winner-takes-most and everything below it is graded:
 
 | Term | Weight | What it rewards |
 |---|---|---|
@@ -280,9 +290,9 @@ Only candidates that cleared **every hard gate** are graded — this is not a co
 
 Proximity is deliberately not a gate. Rewarding closeness alone would pay for copying the champion, which is why it is one term of four and why the anti-copy check runs *before* the evaluation rather than after it.
 
-**Stage balance** is a geometric mean of the per-stage means, and the choice of mean is doing real work: a package scoring 1.0 on six stages and 0.1 on the seventh lands far below one scoring 0.8 everywhere, even though their arithmetic means are close. The workflow needs every stage, so a package that abandoned one has not solved it.
+**Stage balance** is a geometric mean of the per-stage means, and the choice of mean is doing real work: a package scoring 1.0 on all but one axis and 0.1 on the last lands far below one scoring 0.8 everywhere, even though their arithmetic means are close. A workflow needs every axis it declares — seven for the maintenance chain, twelve for the arena — so a package that abandoned one has not solved it.
 
-**Retention** is measured on a held-out general-capability probe, *not* on the workflow. That distinction is the whole reason the term exists. Comparing a candidate's workflow completion with the base model's cannot detect anything: a candidate only reaches the gate after beating the base by an absolute margin, so the ratio is always above one and the clamp returns exactly `1.0` for every candidate that could possibly be crowned. The probe asks short, exactly-scored questions about the behaviours aggressive merging actually destroys — following a format, not padding an answer, arithmetic, ordering, answering in the language it was addressed in — drawn per window from their own secret seed and asked of the base model on the same draw.
+**Retention** is measured on a held-out general-capability probe, *not* on the workflow. That distinction is the whole reason the term exists, and it is the one term that does not weaken when bar 3 is off: a comparison against the base model's *workflow* completion cannot detect collapse under the strict contract either, since a candidate only reaches the gate after beating the base by a margin, so the ratio is always above one and the clamp returns exactly `1.0` for every candidate that could possibly be crowned. The probe asks short, exactly-scored questions about the behaviours aggressive merging actually destroys — following a format, not padding an answer, arithmetic, ordering, answering in the language it was addressed in — drawn per window from their own secret seed and asked of the base model on the same draw.
 
 ---
 

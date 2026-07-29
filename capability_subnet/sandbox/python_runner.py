@@ -75,6 +75,24 @@ if __name__ == "__main__":
 """
 
 
+#: Prefix on :meth:`PythonRunner.run_program` details meaning the program hit a
+#: resource ceiling rather than failing. A caller that runs one program against
+#: many cases uses it to stop: the next case will hit the same ceiling.
+EXHAUSTED = "resource-exhausted"
+
+
+#: The same codes for :meth:`PythonRunner.run_program`, whose details are
+#: published in an English-language arena. Kept separate rather than translated in
+#: place: the map below is what the German maintenance workflow shows its miners,
+#: and a shared map would put one language or the other in the wrong place.
+_RESOURCE_LIMIT_SIGNALS_EN: dict[int, str] = {
+    -9: "killed on a time or memory limit",
+    -24: "exceeded the CPU time limit",
+    -25: "exceeded the file size limit",
+    -11: "segfault or memory limit",
+}
+
+
 #: Negative return codes that mean a resource limit fired rather than the code
 #: crashing. ``subprocess`` reports a signal death as the negated signal number.
 _RESOURCE_LIMIT_SIGNALS: dict[int, str] = {
@@ -103,6 +121,61 @@ class PythonRunner:
 
     def __init__(self, limits: ExecutionLimits | None = None) -> None:
         self._limits = limits or ExecutionLimits()
+
+    def run_program(self, source: str, stdin: str) -> tuple[str | None, str]:
+        """Run ``source`` as a whole program and return ``(stdout, detail)``.
+
+        Competitive-programming problems are stated as "read stdin, write
+        stdout", so they cannot be scored by calling a named function. This is
+        the same isolation as :meth:`run` — isolated interpreter, no inherited
+        environment, wall-clock and memory ceilings — applied to a program
+        rather than a function.
+
+        Returns ``None`` for stdout when the program did not complete, with the
+        reason in ``detail``. A candidate is allowed to submit code that crashes
+        or hangs; that is a score, not an incident.
+
+        ``detail`` begins with :data:`EXHAUSTED` when the program ran out of time
+        or memory rather than failing outright. A caller running one program
+        against many cases needs that distinction: a crash is cheap to repeat and
+        the next case may behave differently, while a program that exhausts its
+        ceiling will exhaust it again on every remaining case.
+        """
+        if not isinstance(source, str) or not source.strip():
+            return None, "no source submitted"
+        if len(source.encode("utf-8")) > self._limits.max_code_bytes:
+            return None, f"source exceeds {self._limits.max_code_bytes} bytes"
+
+        try:
+            completed = subprocess.run(
+                # -I: isolated mode, so submitted code cannot import whatever
+                # happens to be sitting next to the harness. -S: no site
+                # packages. Same posture as run(); see its comment.
+                [sys.executable, "-I", "-S", "-c", source],
+                input=stdin,
+                capture_output=True,
+                text=True,
+                timeout=self._limits.python_timeout_seconds,
+                preexec_fn=lambda: apply_subprocess_limits(
+                    self._limits.python_memory_mb, self._limits.python_cpu_seconds
+                ),
+                env={"PATH": "/usr/bin:/bin", "LC_ALL": "C.UTF-8", "LANG": "C.UTF-8"},
+            )
+        except subprocess.TimeoutExpired:
+            return None, f"{EXHAUSTED}: exceeded the time limit"
+        except OSError as exc:
+            log.exception("could not start the isolated interpreter")
+            return None, f"execution environment unavailable: {exc}"
+
+        if completed.returncode != 0:
+            # A negative return code means the kernel killed the process, which is
+            # how the memory and CPU ceilings actually fire — they trip before the
+            # wall-clock timeout. Same reasoning as run(): "too expensive" is not
+            # the same report as "broken".
+            if completed.returncode in _RESOURCE_LIMIT_SIGNALS_EN:
+                return None, f"{EXHAUSTED}: {_RESOURCE_LIMIT_SIGNALS_EN[completed.returncode]}"
+            return None, f"exited {completed.returncode}: {completed.stderr.strip()[:200]}"
+        return completed.stdout, "completed"
 
     def run(
         self,

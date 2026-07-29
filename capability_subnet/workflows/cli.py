@@ -45,6 +45,12 @@ def _cmd_show(args: argparse.Namespace) -> int:
     workflow = get_workflow(args.workflow)
     instance = workflow.generate_instance(args.seed, split=args.split)
 
+    # The rendering below reads the maintenance workflow's instance fields, which
+    # only that workflow has. `--workflow` selects freely, so anything else gets
+    # the generic rendering rather than an AttributeError.
+    if not hasattr(instance, "machine_model_de"):
+        return _show_generic(instance, args)
+
     if args.json:
         from capability_subnet.workflows.industrial_maintenance_de_v1.public_pack import (
             instance_to_dict,
@@ -86,6 +92,48 @@ def _cmd_show(args: argparse.Namespace) -> int:
         print(f"  part              : {truth.required_part_number} × {truth.required_quantity}")
         print(f"  safety steps      : {', '.join(truth.required_safety_steps)}")
         print(f"  recommendation    : {truth.recommendation}")
+
+    return 0
+
+
+def _show_generic(instance: object, args: argparse.Namespace) -> int:
+    """Render any workflow's instance from the fields every instance has.
+
+    Deliberately field-driven rather than workflow-specific: a third workflow
+    should be inspectable the day it is registered, without editing this file.
+    """
+    from dataclasses import asdict, is_dataclass
+
+    fields = asdict(instance) if is_dataclass(instance) else dict(vars(instance))
+
+    if args.json:
+        sys.stdout.write(canonical_json_str(fields))
+        return 0
+
+    question = fields.pop("question", "")
+    cases = fields.pop("cases", ()) or ()
+    answer = fields.pop("answer", "")
+
+    for key, value in fields.items():
+        print(f"{key:11s}: {value}")
+
+    print("\n--- task ---")
+    print(question)
+
+    if cases:
+        print(f"\n--- test cases ({len(cases)}) ---")
+        for number, case in enumerate(cases[:3], start=1):
+            stdin = case["stdin"] if isinstance(case, dict) else case.stdin
+            expected = case["expected_stdout"] if isinstance(case, dict) else case.expected_stdout
+            print(f"  {number}. stdin={stdin[:60]!r} -> {expected[:60]!r}")
+        if len(cases) > 3:
+            print(f"  ... {len(cases) - 3} more")
+
+    if args.with_truth and answer:
+        print("\n--- ground truth (never shown to a candidate) ---")
+        print(f"  {answer}")
+    elif answer:
+        print("\n(pass --with-truth to show the expected answer)")
 
     return 0
 
