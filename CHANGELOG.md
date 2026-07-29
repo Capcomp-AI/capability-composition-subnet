@@ -13,6 +13,73 @@ weight vector.
 
 ## [Unreleased]
 
+### Fixed — consensus
+
+**The comparator demanded a margin its sample size could not resolve.** A
+paired comparison over *n* instances resolves roughly `2.8 · sqrt(0.15 / n)`.
+The shipped configuration asked for a 0.03 margin over 100 hidden instances,
+which resolves 0.108 — so a challenger with a genuine three-point edge could
+not have demonstrated it, no matter how good it was.
+
+That is not a strict network. It is one where the throne cannot be taken, and
+nothing anywhere says so: the bootstrap declines correctly, every individual
+verdict reads as an ordinary loss, and the shortfall is invisible in exactly the
+records built to make things visible.
+
+Three changes, all mechanism rather than tuning:
+
+* `minimum_detectable_effect()` computes what a sample size can resolve, and
+  **preflight refuses a deployment where the margin sits below it**, naming both
+  ways out with numbers.
+* Every published report carries the window's `minimum_detectable_effect`, so a
+  reader can tell a package that genuinely lost from one the engine never had
+  the evidence to judge — previously identical in every field of a report.
+* A challenger ahead by less than the sample can resolve is now reported as
+  *not enough evidence either way*, distinct from a loss.
+
+Defaults are now chosen as a pair rather than independently: **400 hidden
+instances** (resolving 0.054) against a **0.06 margin**. That is four times the
+per-package GPU cost, which is the real price of a decision rule that means
+anything.
+
+**Preflight also refuses a window that cannot finish its own schedule.** The
+symptom otherwise is silence — the engine re-measures references forever, the
+queue never moves, and nothing records that the budget was impossible from the
+start. `single_adapter_rotation` drops to 2 so the shipped defaults pass their
+own check: 4,000 runs in 16.7h of a 24h window.
+
+### Measured — the hypothesis, tested directly
+
+Composition should make one package better than *each of its constituents on
+the tasks that constituent is not the specialist for*. The earlier run answered
+a different question — it compared merges against the best single adapter *per
+task*, which is an oracle router, the strongest possible single-adapter
+strategy and not what a deployer chooses between.
+
+Retested with a merge of only the five adapters that individually certify:
+
+| package | score | 95% CI |
+|---|---|---|
+| best single (`creative-writing-v1`) | 0.132 | [0.096, 0.180] |
+| **`selective_ties`** | **0.112** | [0.079, 0.157] |
+| base model | 0.100 | [0.069, 0.143] |
+| `selective_linear` | 0.088 | [0.059, 0.130] |
+| `owner_tuned` (all ten adapters) | 0.060 | [0.037, 0.097] |
+
+**Selection nearly doubled the best merge** — 0.060 to 0.112 — purely by
+excluding adapters that individually fail the retention floor. That is a
+statement about miner strategy, and the recipe format already supports it.
+
+Against the hypothesis itself: broader than **2 of 5** constituents on away
+tasks, short of a majority. But on `word_sorting` the merge scored **0.44
+against a best member of 0.36 and a base of 0.20** — composition beating every
+one of its parts, which is precisely the predicted shape, on one task in ten and
+on a margin of two items.
+
+Nothing here is established at 250 items. The honest summary is that the effect,
+if it exists, is smaller than this experiment could resolve — which is the same
+finding as the comparator fix above, arrived at from the other direction.
+
 ### Measured — does composition beat the equal-weight merge?
 
 **On this pool, no.** 250 paired items from `AffineFoundation/affine-lgc`

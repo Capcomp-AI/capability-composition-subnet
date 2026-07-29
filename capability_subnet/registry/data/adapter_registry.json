@@ -33,15 +33,17 @@
       "rank": 64,
       "lora_alpha": 64,
       "converted_from_rank": 64,
-      "certified": true,
+      "certified": false,
       "is_distractor": false,
       "certification": {
-        "capability_score": null,
+        "capability_score": 0.1176,
         "base_retention": 0.3714,
         "certified_at": "2026-07-29",
         "recertified_after_conversion": true,
         "base_retention_measured_at": "2026-07-29",
-        "base_retention_probe_seed": 20260729
+        "base_retention_probe_seed": 20260729,
+        "capability_task": "boolean_expressions",
+        "capability_measured_on": "AffineFoundation/affine-lgc@19765edac477"
       }
     },
     {
@@ -66,12 +68,14 @@
       "certified": true,
       "is_distractor": false,
       "certification": {
-        "capability_score": null,
+        "capability_score": 0.15,
         "base_retention": 1.0,
         "certified_at": "2026-07-29",
         "recertified_after_conversion": true,
         "base_retention_measured_at": "2026-07-29",
-        "base_retention_probe_seed": 20260729
+        "base_retention_probe_seed": 20260729,
+        "capability_task": "word_sorting",
+        "capability_measured_on": "AffineFoundation/affine-lgc@19765edac477"
       }
     },
     {
@@ -96,12 +100,14 @@
       "certified": true,
       "is_distractor": false,
       "certification": {
-        "capability_score": null,
+        "capability_score": 0.1,
         "base_retention": 1.0,
         "certified_at": "2026-07-29",
         "recertified_after_conversion": true,
         "base_retention_measured_at": "2026-07-29",
-        "base_retention_probe_seed": 20260729
+        "base_retention_probe_seed": 20260729,
+        "capability_task": "word_sorting",
+        "capability_measured_on": "AffineFoundation/affine-lgc@19765edac477"
       }
     },
     {
@@ -123,15 +129,17 @@
       "rank": 64,
       "lora_alpha": 64,
       "converted_from_rank": 16,
-      "certified": true,
+      "certified": false,
       "is_distractor": false,
       "certification": {
-        "capability_score": null,
+        "capability_score": 0.12,
         "base_retention": 0.8,
         "certified_at": "2026-07-29",
         "recertified_after_conversion": true,
         "base_retention_measured_at": "2026-07-29",
-        "base_retention_probe_seed": 20260729
+        "base_retention_probe_seed": 20260729,
+        "capability_task": "time_sequence",
+        "capability_measured_on": "AffineFoundation/affine-lgc@19765edac477"
       }
     },
     {
@@ -153,15 +161,17 @@
       "rank": 64,
       "lora_alpha": 64,
       "converted_from_rank": 48,
-      "certified": true,
+      "certified": false,
       "is_distractor": false,
       "certification": {
-        "capability_score": null,
+        "capability_score": 0.0,
         "base_retention": 1.0,
         "certified_at": "2026-07-29",
         "recertified_after_conversion": true,
         "base_retention_measured_at": "2026-07-29",
-        "base_retention_probe_seed": 20260729
+        "base_retention_probe_seed": 20260729,
+        "capability_task": "arrow_maze",
+        "capability_measured_on": "AffineFoundation/affine-lgc@19765edac477"
       }
     },
     {
@@ -185,15 +195,17 @@
       "rank": 64,
       "lora_alpha": 64,
       "converted_from_rank": 32,
-      "certified": true,
+      "certified": false,
       "is_distractor": false,
       "certification": {
-        "capability_score": null,
+        "capability_score": 0.0,
         "base_retention": 0.7714,
         "certified_at": "2026-07-29",
         "recertified_after_conversion": true,
         "base_retention_measured_at": "2026-07-29",
-        "base_retention_probe_seed": 20260729
+        "base_retention_probe_seed": 20260729,
+        "capability_task": "arrow_maze",
+        "capability_measured_on": "AffineFoundation/affine-lgc@19765edac477"
       }
     },
     {
@@ -217,15 +229,17 @@
       "rank": 64,
       "lora_alpha": 64,
       "converted_from_rank": 32,
-      "certified": true,
+      "certified": false,
       "is_distractor": false,
       "certification": {
-        "capability_score": null,
+        "capability_score": 0.04,
         "base_retention": 0.5143,
         "certified_at": "2026-07-29",
         "recertified_after_conversion": true,
         "base_retention_measured_at": "2026-07-29",
-        "base_retention_probe_seed": 20260729
+        "base_retention_probe_seed": 20260729,
+        "capability_task": "time_sequence",
+        "capability_measured_on": "AffineFoundation/affine-lgc@19765edac477"
       }
     },
     {
@@ -250,12 +264,14 @@
       "certified": true,
       "is_distractor": false,
       "certification": {
-        "capability_score": null,
+        "capability_score": 0.2,
         "base_retention": 1.0,
         "certified_at": "2026-07-29",
         "recertified_after_conversion": true,
         "base_retention_measured_at": "2026-07-29",
-        "base_retention_probe_seed": 20260729
+        "base_retention_probe_seed": 20260729,
+        "capability_task": "word_sorting",
+        "capability_measured_on": "AffineFoundation/affine-lgc@19765edac477"
       }
     },
     {
@@ -277,15 +293,17 @@
       "rank": 64,
       "lora_alpha": 64,
       "converted_from_rank": 16,
-      "certified": true,
+      "certified": false,
       "is_distractor": false,
       "certification": {
-        "capability_score": null,
+        "capability_score": 0.12,
         "base_retention": 0.8571,
         "certified_at": "2026-07-29",
         "recertified_after_conversion": true,
         "base_retention_measured_at": "2026-07-29",
-        "base_retention_probe_seed": 20260729
+        "base_retention_probe_seed": 20260729,
+        "capability_task": "time_sequence",
+        "capability_measured_on": "AffineFoundation/affine-lgc@19765edac477"
       }
     },
     {
@@ -309,15 +327,17 @@
       "rank": 64,
       "lora_alpha": 64,
       "converted_from_rank": 64,
-      "certified": true,
+      "certified": false,
       "is_distractor": true,
       "certification": {
-        "capability_score": null,
+        "capability_score": 0.0,
         "base_retention": 0.0,
         "certified_at": "2026-07-29",
         "recertified_after_conversion": true,
         "base_retention_measured_at": "2026-07-29",
-        "base_retention_probe_seed": 20260729
+        "base_retention_probe_seed": 20260729,
+        "capability_task": "arrow_maze",
+        "capability_measured_on": "AffineFoundation/affine-lgc@19765edac477"
       }
     },
     {
@@ -342,12 +362,14 @@
       "certified": true,
       "is_distractor": true,
       "certification": {
-        "capability_score": null,
+        "capability_score": 0.4118,
         "base_retention": 1.0,
         "certified_at": "2026-07-29",
         "recertified_after_conversion": true,
         "base_retention_measured_at": "2026-07-29",
-        "base_retention_probe_seed": 20260729
+        "base_retention_probe_seed": 20260729,
+        "capability_task": "word_sorting_mistake",
+        "capability_measured_on": "AffineFoundation/affine-lgc@19765edac477"
       }
     },
     {
@@ -372,12 +394,14 @@
       "certified": true,
       "is_distractor": true,
       "certification": {
-        "capability_score": null,
+        "capability_score": 0.1,
         "base_retention": 1.0,
         "certified_at": "2026-07-29",
         "recertified_after_conversion": true,
         "base_retention_measured_at": "2026-07-29",
-        "base_retention_probe_seed": 20260729
+        "base_retention_probe_seed": 20260729,
+        "capability_task": "word_sorting",
+        "capability_measured_on": "AffineFoundation/affine-lgc@19765edac477"
       }
     }
   ]

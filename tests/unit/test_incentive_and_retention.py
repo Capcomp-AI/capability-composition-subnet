@@ -397,3 +397,73 @@ class TestAnUnmeasuredAdapterBlocksItselfNotTheNetwork:
         before = self._registry([self._entry("a"), self._entry("b", measured=False)])
         after = self._registry([self._entry("a"), self._entry("b")])
         assert before.snapshot_sha256() != after.snapshot_sha256()
+
+
+class TestTheEngineRefusesADecisionRuleItCannotResolve:
+    """A margin the sample size cannot demonstrate is not strictness.
+
+    It is a network that can never crown anyone, and the reason never surfaces:
+    every individual verdict looks like an ordinary loss, so the shortfall is
+    invisible in exactly the records built to make things visible.
+    """
+
+    def test_more_instances_resolve_smaller_differences(self):
+        from capability_subnet.backend.comparator.comparator import minimum_detectable_effect
+
+        assert minimum_detectable_effect(1600) < minimum_detectable_effect(400)
+        assert minimum_detectable_effect(400) < minimum_detectable_effect(100)
+
+    def test_no_instances_resolve_nothing(self):
+        from capability_subnet.backend.comparator.comparator import minimum_detectable_effect
+
+        assert minimum_detectable_effect(0) == 1.0
+
+    def test_the_shipped_defaults_are_consistent_with_each_other(self):
+        """They are a pair, and were not previously chosen as one: the old
+        0.03 margin needed roughly 1,300 paired instances and got 100."""
+        from capability_subnet.backend.comparator.comparator import minimum_detectable_effect
+        from capability_subnet.backend.settings import BackendSettings
+
+        settings = BackendSettings()
+        assert settings.end_to_end_margin >= minimum_detectable_effect(settings.hidden_instances)
+
+    def test_an_unresolvable_configuration_is_refused_at_preflight(self):
+        from capability_subnet.backend.settings import BackendSettings
+
+        problems = BackendSettings(hidden_instances=100, end_to_end_margin=0.03).validate()
+        assert any("can only resolve" in p for p in problems)
+
+    def test_the_refusal_says_how_to_fix_it(self):
+        """Both ways out, with numbers — an operator should not have to derive
+        the sample size themselves."""
+        from capability_subnet.backend.settings import BackendSettings
+
+        problem = next(
+            p
+            for p in BackendSettings(hidden_instances=100, end_to_end_margin=0.03).validate()
+            if "can only resolve" in p
+        )
+        assert "Raise hidden_instances" in problem and "raise end_to_end_margin" in problem
+
+    def test_an_unresolvable_loss_is_reported_as_such(self):
+        """A challenger ahead by less than the sample can resolve has not been
+        shown to be worse — it has not been measured well enough to be shown
+        better, which is the engine's shortfall rather than the miner's."""
+        from capability_subnet.backend.comparator.comparator import ComparatorConfig, compare
+        from tests.conftest import make_results
+
+        # Two packages a hair apart, on far too few instances to tell.
+        challenger = make_results({"a": 1.0}, count=30, success_rate=0.53)
+        champion = make_results({"a": 1.0}, count=30, success_rate=0.50)
+
+        outcome = compare(
+            challenger,
+            champion,
+            champion,
+            axes=("a",),
+            reference_id="ref",
+            config=ComparatorConfig(end_to_end_margin=0.01),
+        )
+        assert not outcome.dethrones
+        assert "can resolve" in outcome.reason
+        assert outcome.minimum_detectable_effect > 0.0

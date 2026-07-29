@@ -412,6 +412,11 @@ class ComparatorOutcome(StrictModel):
     #: margin because they answer different questions and decay differently.
     champion_margin_required: float = C.DEFAULT_CHAMPION_MARGIN
     champion_margin_observed: float = 0.0
+    #: The smallest difference this window's sample size could have resolved.
+    #: Published so a reader can tell a package that genuinely lost from one the
+    #: engine never had the evidence to judge — the two look identical in every
+    #: other field of a report.
+    minimum_detectable_effect: float = 0.0
     paired: PairedComparison | None = None
     dethrones: bool = False
     reason: str = ""

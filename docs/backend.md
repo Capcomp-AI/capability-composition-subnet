@@ -177,10 +177,17 @@ Every field can be overridden with `CAPSUB_<FIELD_NAME>`. Full annotated referen
 | Field | Default | Notes |
 |---|---|---|
 | `window_blocks` | `7200` | ≈24 h. Shorter re-measures references more often; longer gives a champion more time on one draw. |
-| `hidden_instances` | `100` | Canonical instances per window. |
-| `ood_instances` | `30` | Out-of-distribution instances per window. |
+| `hidden_instances` | `400` | Canonical instances per window. |
+| `ood_instances` | `100` | Out-of-distribution instances per window. |
 | `hidden_seed_root` | — | **Secret.** Set it. |
-| `single_adapter_rotation` | `3` | Single-adapter references measured per window, rotated by window id. `0` measures all of them. |
+| `single_adapter_rotation` | `2` | Single-adapter references measured per window, rotated by window id. `0` measures all of them. |
+
+A window is also checked for *feasibility*: preflight refuses a configuration
+whose reference schedule cannot finish inside the window, because the symptom
+otherwise is silence — the engine keeps re-measuring references, the queue never
+moves, and nothing in any log says the budget was impossible from the start. Set
+`expected_instance_seconds` from your own hardware; the default of 15 s is half
+the p95 latency ceiling, not a measurement of your host.
 
 `single_adapter_rotation` is a throughput knob with a real trade behind it.
 Measuring every single-adapter reference each window is the most defensible
@@ -314,12 +321,41 @@ one** — which the cross-worker digest check enforces automatically, by failing
 | `axis_tolerance` | `0.01` | Relative band that still counts as not-worse |
 | `min_dominant_axes` | `1` | Axes a challenger must dominate |
 | `min_axis_samples` | `20` | Fewer paired samples than this counts as worse |
-| `end_to_end_margin` | `0.03` | Absolute completion margin over the strongest **permanent reference** |
+| `end_to_end_margin` | `0.06` | Absolute completion margin over the strongest **permanent reference** |
 | `champion_margin` | `0.01` | Defender's advantage over the incumbent, at the moment it is crowned |
 | `champion_margin_decay_blocks` | `216000` | Blocks over which that advantage falls to zero (~30 days) |
 | `strict_pareto` | `false` | `true` requires dominance on *every* axis |
 
-Raising `end_to_end_margin` makes the throne harder to take and improvements more meaningful; lowering it risks crowning noise. Do not tune it in response to a specific candidate.
+**`end_to_end_margin` and `hidden_instances` are one decision, not two.** A
+paired comparison over *n* instances can only resolve a difference of roughly
+`2.8 · sqrt(0.15 / n)`; below that the bootstrap declines, correctly, because
+the evidence is not there. A margin under that floor does not make the network
+strict — it makes the throne unwinnable, and nothing says so, because every
+individual verdict looks like an ordinary loss.
+
+| instances | smallest resolvable difference |
+|---|---|
+| 100 | 0.108 |
+| 250 | 0.069 |
+| **400** | **0.054** |
+| 1,000 | 0.034 |
+| 1,600 | 0.027 |
+
+The shipped defaults are a consistent pair: 400 instances resolve 0.054, and
+the margin is 0.06. **Preflight refuses a deployment where they contradict each
+other**, and says which way to fix it. Every published report carries the
+window's `minimum_detectable_effect`, so a reader can tell a package that
+genuinely lost from one the engine never had the evidence to judge.
+
+The previous defaults — a 0.03 margin over 100 instances — needed roughly 1,300
+paired instances and had 100. Raising the sample to 400 is four times the GPU
+cost per package per window, which is the real price of a decision rule that
+means anything; `single_adapter_rotation` above is where to buy it back.
+
+Raising `end_to_end_margin` further makes the throne harder to take and
+improvements more meaningful; lowering it risks crowning noise, and below the
+resolvable floor it stops the contest entirely. Do not tune it in response to a
+specific candidate.
 
 `champion_margin` is deliberately separate from `end_to_end_margin`, and setting them equal recreates a bug rather than simplifying the configuration: the incumbent would then effectively count as a reference, every successive champion would have to beat the previous one by a further fixed margin, and the bar would walk upward until nothing could move it. Setting `champion_margin_decay_blocks` to `0` disables the decay and reintroduces a permanent defender's advantage — an incumbent that nothing displaces then holds the throne indefinitely.
 

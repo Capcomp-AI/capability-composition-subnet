@@ -21,6 +21,7 @@ evaluated on an easier draw.
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
 
 from capability_subnet.backend.comparator.bootstrap import (
@@ -56,6 +57,40 @@ class ComparatorConfig:
     bootstrap_resamples: int = C.BOOTSTRAP_RESAMPLES
     bootstrap_confidence: float = C.BOOTSTRAP_CONFIDENCE
     strict_pareto: bool = False
+
+
+#: Fraction of paired instances on which two packages are expected to disagree.
+#:
+#: Only discordant pairs carry information in a paired test — instances both
+#: packages got right, or both got wrong, contribute nothing to the difference.
+#: Fifteen percent is a deliberately optimistic default for two packages close
+#: enough to be arguing over the throne; a lower assumption would understate how
+#: many instances the decision needs.
+ASSUMED_DISCORDANCE: float = 0.15
+
+
+def minimum_detectable_effect(
+    instances: int,
+    *,
+    discordance: float = ASSUMED_DISCORDANCE,
+    power: float = 0.80,
+    alpha: float = 0.05,
+) -> float:
+    """The smallest end-to-end difference this many instances can resolve.
+
+    A margin below this number cannot be demonstrated no matter how good a
+    challenger is: the paired bootstrap will decline it, correctly, because the
+    evidence is not there. Configuring such a margin does not make the network
+    strict — it makes it unable to crown anyone, and the reason never appears in
+    a report because every individual verdict looks like an ordinary loss.
+
+    Standard normal approximation to McNemar's test. Returns 1.0 (nothing is
+    detectable) for a non-positive instance count.
+    """
+    if instances <= 0:
+        return 1.0
+    z_alpha, z_power = 1.96, 0.84  # two-sided 5%, 80% power
+    return math.sqrt((z_alpha + z_power) ** 2 * discordance / instances)
 
 
 def decayed_champion_margin(config: ComparatorConfig, *, blocks_held: int) -> float:
@@ -222,9 +257,20 @@ def compare(
             f"{champion_margin:+.3f} it still holds ({champion_blocks_held} blocks in)"
         )
     if not bootstrap.significant:
-        reasons.append(
-            f"paired lower bound {bootstrap.lower_confidence_bound:+.4f} is not above zero"
-        )
+        resolvable = minimum_detectable_effect(len(shared))
+        if observed_margin > 0 and observed_margin < resolvable:
+            # Distinguished from an ordinary loss on purpose. A challenger that
+            # was ahead by less than the sample could resolve has not been shown
+            # to be worse; it has not been measured precisely enough to be shown
+            # to be better, which is the engine's shortfall to report.
+            reasons.append(
+                f"margin {observed_margin:+.4f} is below what {len(shared)} paired "
+                f"instances can resolve ({resolvable:.4f}); not enough evidence either way"
+            )
+        else:
+            reasons.append(
+                f"paired lower bound {bootstrap.lower_confidence_bound:+.4f} is not above zero"
+            )
 
     dethrones = not reasons
 
@@ -236,6 +282,7 @@ def compare(
         strict_pareto=config.strict_pareto,
         end_to_end_margin_required=config.end_to_end_margin,
         end_to_end_margin_observed=observed_margin,
+        minimum_detectable_effect=minimum_detectable_effect(len(shared)),
         champion_margin_required=champion_margin,
         champion_margin_observed=champion_margin_observed,
         paired=paired,

@@ -272,7 +272,10 @@ DEFAULT_MIN_AXIS_SAMPLES: Final[int] = 20
 #: Absolute end-to-end completion margin over the strongest *non-learned*
 #: reference, in points of completion rate. This is the bar that says
 #: "composition added value at all", and it does not move.
-DEFAULT_END_TO_END_MARGIN: Final[float] = 0.03
+#: Raised from 0.03, which 100 instances could not resolve. See
+#: DEFAULT_HIDDEN_INSTANCES: the two are a pair, and the engine refuses a
+#: deployment that sets a margin its sample size cannot demonstrate.
+DEFAULT_END_TO_END_MARGIN: Final[float] = 0.06
 
 #: Margin a challenger must clear over the reigning champion, at the moment the
 #: champion takes the throne.
@@ -308,10 +311,16 @@ BOOTSTRAP_CONFIDENCE: Final[float] = 0.95
 DEFAULT_WINDOW_BLOCKS: Final[int] = 7200
 
 #: Hidden instances drawn per window for the canonical comparison.
-DEFAULT_HIDDEN_INSTANCES: Final[int] = 100
+#:
+#: Chosen together with DEFAULT_END_TO_END_MARGIN, not independently. A paired
+#: comparison over 400 instances resolves about 0.054, so a 0.06 margin is
+#: demonstrable; 100 instances resolve only 0.108, which made the previous
+#: 0.03 margin unprovable and the throne effectively unwinnable. The engine now
+#: refuses a configuration where the two contradict each other.
+DEFAULT_HIDDEN_INSTANCES: Final[int] = 400
 
 #: Additional out-of-distribution instances drawn per window.
-DEFAULT_OOD_INSTANCES: Final[int] = 30
+DEFAULT_OOD_INSTANCES: Final[int] = 100
 
 #: Public pack size shipped to miners for offline search and debugging.
 PUBLIC_PACK_INSTANCES: Final[int] = 120

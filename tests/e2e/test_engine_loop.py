@@ -34,7 +34,16 @@ class TestReferenceMeasurement:
         # Every equal-weight merge, the owner recipe, and one entry per single
         # adapter.
         singles = [name for name in state.reference_scores if name.startswith(ref.BEST_SINGLE)]
-        assert len(singles) == len(loop.snapshot.registry.capability_adapters())
+        # Rotated, not exhaustive. Measuring every single-adapter reference each
+        # window is correct and costs most of the window's GPU budget before any
+        # challenger is looked at; a window that cannot finish never evaluates
+        # anybody. Which ones are measured comes from the window id, so it is not
+        # the operator's choice.
+        expected = min(
+            loop.settings.single_adapter_rotation,
+            len(loop.snapshot.registry.capability_adapters()),
+        )
+        assert len(singles) == expected
         for reference in (ref.EQUAL_LINEAR, ref.EQUAL_TIES, ref.EQUAL_DARE_TIES, ref.OWNER_RECIPE):
             assert reference in state.reference_scores
 

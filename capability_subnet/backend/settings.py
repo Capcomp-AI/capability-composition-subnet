@@ -11,6 +11,7 @@ the engine is wired up.
 
 from __future__ import annotations
 
+import math
 import os
 from dataclasses import dataclass, field, fields
 from pathlib import Path
@@ -70,6 +71,11 @@ class BackendSettings:
     hidden_instances: int = C.DEFAULT_HIDDEN_INSTANCES
     ood_instances: int = C.DEFAULT_OOD_INSTANCES
 
+    #: Seconds one instance is expected to take end to end, used only to check
+    #: that a window can finish the work it schedules. Measure it on your own
+    #: hardware — the p95 latency gate is the ceiling, not the typical case.
+    expected_instance_seconds: float = 15.0
+
     #: Single-adapter references measured per window, rotated by window id.
     #:
     #: Zero or a value at least as large as the pool measures all of them, which
@@ -77,7 +83,7 @@ class BackendSettings:
     #: a window's GPU budget spent before any challenger is looked at. Rotating
     #: keeps the "beat the best specialist" bar honest over time while leaving
     #: room in the window to actually evaluate somebody.
-    single_adapter_rotation: int = 3
+    single_adapter_rotation: int = 2
 
     #: Seed the per-window hidden instance draw is derived from. It must stay
     #: secret: publishing it would publish every future hidden instance.
@@ -248,6 +254,39 @@ class BackendSettings:
                 "instances. That removes the only check on the engine's scoring "
                 "that does not require trusting the operator."
             )
+        # A margin the instance count cannot resolve is not strictness, it is a
+        # network that can never crown anyone — and the reason never surfaces,
+        # because every individual verdict looks like an ordinary loss.
+        from capability_subnet.backend.comparator.comparator import minimum_detectable_effect
+
+        mde = minimum_detectable_effect(self.hidden_instances)
+        if self.end_to_end_margin < mde:
+            problems.append(
+                f"end_to_end_margin is {self.end_to_end_margin:.3f} but {self.hidden_instances} "
+                f"hidden instances can only resolve {mde:.3f}. A challenger with a genuine "
+                f"edge of {self.end_to_end_margin:.3f} could not demonstrate it, so nothing "
+                f"would ever be crowned. Raise hidden_instances to about "
+                f"{math.ceil((1.96 + 0.84) ** 2 * 0.15 / self.end_to_end_margin ** 2)}, or "
+                f"raise end_to_end_margin to at least {mde:.3f}."
+            )
+
+        # A window that cannot finish its own schedule never reaches a
+        # challenger, and the symptom is silence: the engine keeps re-measuring
+        # references and the queue never moves, with nothing in any log saying
+        # the budget was impossible from the start.
+        packages = 1 + max(1, self.single_adapter_rotation) + 4 + 1  # base, singles, merges, incumbent
+        per_window = (self.hidden_instances + self.ood_instances) * packages
+        needed_hours = per_window * self.expected_instance_seconds / 3600
+        window_hours = self.window_blocks * 12 / 3600
+        if needed_hours > window_hours * 0.75:
+            problems.append(
+                f"a window is {window_hours:.1f}h but re-measuring {packages} reference "
+                f"packages over {self.hidden_instances + self.ood_instances} instances needs "
+                f"about {needed_hours:.1f}h, leaving no room to evaluate a challenger. Lower "
+                f"single_adapter_rotation, lower hidden_instances (and raise "
+                f"end_to_end_margin to match), lengthen window_blocks, or add serving hosts."
+            )
+
         if self.merge_device not in ("cpu", "cuda"):
             problems.append(f"unknown merge_device {self.merge_device!r}; expected 'cpu' or 'cuda'")
         if self.serving_mode not in ("managed", "external"):
