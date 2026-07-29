@@ -239,10 +239,34 @@ the number of selected adapters** — the merge streams one update at a time
 rather than stacking them, so a twelve-adapter recipe costs the same as a
 two-adapter one. It can share the serving card or use any other.
 
-**24 GB is a real floor rather than a comfortable one.** It leaves about 4.5 GB
-of KV cache — 32k tokens, which covers the single sequence the engine runs at a
-time with nothing to spare. 40 GB or more is what to buy if the workflow's
-context grows or evaluation is ever made concurrent.
+**24 GB is verified sufficient.** A merged rank-64 adapter was served on a
+single RTX 4090 through `ManagedVllmServer`, and both request shapes the
+protocol uses worked — a bare completion and a tool call:
+
+| | |
+|---|---|
+| startup | 67 s |
+| peak GPU memory, NVML under load | 22.89 GB |
+| GPU KV cache | 73,968 tokens |
+| concurrency at full 16384 context | 4.51x |
+
+Two settings make that comfortable, and both are safe:
+
+- `--kv-cache-dtype fp8` halves KV cost. This quantises the *cache*, not the
+  weights, so canonical scores remain bfloat16.
+- `--max-num-seqs 1` matches what the engine actually does — one sequence at a
+  time, because latency is scored.
+
+**Do not quantise the weights.** AWQ, GPTQ or FP8 weights would free about 8 GB
+and would break the contract's own rule: bfloat16 for every canonical score,
+because a package measured at a different precision is a different package.
+
+48 GB remains the recommendation for context growth or concurrent evaluation,
+but it is a preference rather than a requirement.
+
+The 16384 context is not padding, either. Measured with the real tokenizer, the
+opening prompt is 4.3–4.6k tokens and a complete oracle run reaches 8.0–8.3k; a
+model that wastes turns approaches the configured limit.
 
 One consequence worth knowing: because the base model dominates, `peak_vram`
 barely distinguishes candidates. A rank-128 artifact is 0.33 GB heavier than a

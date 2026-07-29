@@ -183,6 +183,36 @@ class TestTheServingCommandIsCorrect:
         """Never "python" from PATH: vLLM lives in a specific environment."""
         assert self._server()._command(None)[0] == "/venv/bin/python"
 
+    def test_the_interpreters_bin_is_on_the_subprocess_path(self):
+        """A runtime shells out to tools that live beside its interpreter.
+
+        vLLM JIT-compiles kernels with `ninja`, which ships in its virtualenv's
+        bin/. Point `serving_python` at another venv without putting that bin/
+        on PATH and start-up dies with a bare FileNotFoundError from deep inside
+        engine initialisation — which reads like anything except a PATH problem.
+        """
+        env = self._server(python_executable="/opt/vllm-venv/bin/python")._environment()
+        assert env["PATH"].split(":")[0] == "/opt/vllm-venv/bin"
+
+    def test_a_symlinked_venv_interpreter_still_yields_its_own_bin(self):
+        """The case the first attempt at this got wrong.
+
+        A virtualenv's `bin/python` is a symlink to the system interpreter, so
+        resolving it yields `/usr/bin` — which was already on PATH, leaving the
+        venv's console scripts exactly as unreachable as before.
+        """
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            venv_bin = os.path.join(tmp, "venv", "bin")
+            os.makedirs(venv_bin)
+            link = os.path.join(venv_bin, "python")
+            os.symlink("/usr/bin/python3", link)
+
+            env = self._server(python_executable=link)._environment()
+            assert env["PATH"].split(os.pathsep)[0] == venv_bin
+
     def test_the_environment_is_inherited_not_replaced(self):
         """A four-entry env dropped HOME, HF_HOME and LD_LIBRARY_PATH, which is
         enough for vLLM to fail at import on most real deployments."""
@@ -194,7 +224,9 @@ class TestTheServingCommandIsCorrect:
         assert env["VLLM_ALLOW_RUNTIME_LORA_UPDATING"] == "0"
         assert env["HF_HUB_OFFLINE"] == "1"
         if "PATH" in os.environ:
-            assert env["PATH"] == os.environ["PATH"]
+            # Prepended with the interpreter's own bin/, but everything the
+            # engine inherited is still behind it.
+            assert env["PATH"].endswith(os.environ["PATH"])
 
 
 class TestAStartUpFailureExplainsItself:
@@ -250,3 +282,55 @@ class TestAStartUpFailureExplainsItself:
 
         summary = summarise_startup_failure("\n".join(f"INFO step {i}" for i in range(100)))
         assert "no recognised error line" in summary
+
+
+class TestTheModelRequestIsWellFormed:
+    """The request body decides whether a package can be measured at all."""
+
+    @staticmethod
+    def _body(tools):
+        from unittest.mock import patch
+
+        from capability_subnet.sandbox.model_client import ModelMessage, OpenAICompatibleClient
+
+        captured: dict = {}
+
+        class _Response:
+            status_code = 200
+
+            def raise_for_status(self): ...
+
+            def json(self):
+                return {"choices": [{"message": {"content": "x"}}], "usage": {}}
+
+        def _post(url, json=None, **kwargs):
+            captured.update(json or {})
+            return _Response()
+
+        with patch("httpx.post", _post):
+            OpenAICompatibleClient("http://x", "m").complete(
+                [ModelMessage(role="user", content="hi")], tools, seed=1, max_tokens=8
+            )
+        return captured
+
+    def test_no_tool_choice_is_sent_when_no_tools_are_offered(self):
+        """The retention probe offers none, and `tool_choice: "auto"` with an
+        empty tool list is a 400 — which the scorer would read as the candidate
+        answering nothing rather than as a malformed request."""
+        body = self._body([])
+        assert "tool_choice" not in body
+        assert "tools" not in body
+
+    def test_tools_and_tool_choice_travel_together(self):
+        body = self._body([{"type": "function", "function": {"name": "f"}}])
+        assert body["tool_choice"] == "auto"
+        assert len(body["tools"]) == 1
+
+    def test_thinking_is_disabled_on_every_request(self):
+        for tools in ([], [{"type": "function", "function": {"name": "f"}}]):
+            assert self._body(tools)["chat_template_kwargs"] == {"enable_thinking": False}
+
+    def test_sampling_is_greedy_and_seeded(self):
+        body = self._body([])
+        assert body["temperature"] == 0.0
+        assert body["seed"] == 1

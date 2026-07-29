@@ -103,11 +103,9 @@ class OpenAICompatibleClient:
     ) -> ModelReply:
         import httpx
 
-        body = {
+        body: dict[str, Any] = {
             "model": self.model,
             "messages": [message.to_api() for message in messages],
-            "tools": tools,
-            "tool_choice": "auto",
             "temperature": C.SANDBOX_TEMPERATURE,
             "top_p": C.SANDBOX_TOP_P,
             "seed": seed,
@@ -120,6 +118,15 @@ class OpenAICompatibleClient:
             # published contract because it changes what candidates are asked.
             "chat_template_kwargs": {"enable_thinking": self.enable_thinking},
         }
+
+        # Only sent when there is something to choose from. An OpenAI-compatible
+        # server rejects `tool_choice: "auto"` alongside an empty tool list with
+        # a 400, and the general-capability probe deliberately offers no tools —
+        # so sending it unconditionally made every probe request fail, and the
+        # retention gate would have read that as a candidate scoring zero.
+        if tools:
+            body["tools"] = tools
+            body["tool_choice"] = "auto"
 
         try:
             response = httpx.post(

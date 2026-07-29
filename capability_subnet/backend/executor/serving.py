@@ -248,6 +248,20 @@ class ManagedVllmServer:
         overridden.
         """
         env = dict(os.environ)
+
+        # Put the serving interpreter's own bin/ first on PATH. A runtime shells
+        # out to build tools that live beside it — vLLM JIT-compiles kernels with
+        # `ninja` — and when the interpreter belongs to a different virtualenv
+        # than the engine, those tools are not on the inherited PATH. The failure
+        # is a bare `FileNotFoundError: 'ninja'` from deep inside engine
+        # start-up, which reads like anything except a PATH problem.
+        # Deliberately not resolved: a virtualenv's `bin/python` is a symlink to
+        # the system interpreter, so resolving it yields /usr/bin and adds the
+        # one directory that was already on PATH. The venv's own bin/ — where
+        # its console scripts live — is the literal parent.
+        interpreter_bin = str(Path(self.python_executable).absolute().parent)
+        env["PATH"] = os.pathsep.join([interpreter_bin, env.get("PATH", "")]).rstrip(os.pathsep)
+
         env["CUDA_VISIBLE_DEVICES"] = str(self.gpu_index)
         # The one feature that would let something inside the sandbox swap the
         # package under measurement for a different one.

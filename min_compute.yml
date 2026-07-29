@@ -89,10 +89,26 @@ backend:
   # update at a time rather than stacking them. It can share the serving card
   # or run on any other.
   #
-  # 24 GB is the floor and it is a real floor: it leaves ~4.5 GB of KV cache,
-  # which is 32k tokens — enough for the one sequence the engine runs at a
-  # time and no margin beyond it. 40 GB or more is what an operator wants if
-  # the workflow's context grows or evaluation is ever made concurrent.
+  # 24 GB is verified sufficient, not merely arithmetically adequate. A merged
+  # rank-64 adapter was served on a single RTX 4090 through the engine's own
+  # ManagedVllmServer, and both request shapes the protocol uses succeeded:
+  #
+  #   startup                                    67 s
+  #   peak GPU memory (NVML, under load)      22.89 GB
+  #   GPU KV cache                          73,968 tokens
+  #   concurrency at full 16384 context           4.51x
+  #
+  # Two settings make the difference and both are safe:
+  #   --kv-cache-dtype fp8   halves KV cost; this quantises the *cache*, not
+  #                          the weights, so canonical scores stay bfloat16
+  #   --max-num-seqs 1       the engine evaluates one sequence at a time anyway
+  #
+  # Quantising the *weights* would free ~8 GB and is forbidden: the contract
+  # requires bfloat16 for every canonical score, because a package measured at
+  # a different precision is a different package.
+  #
+  # 48 GB is still the recommendation, for context growth or concurrent
+  # evaluation, but it is a preference rather than a requirement.
   cpu:
     min_cores: 32
     min_speed: 3.0

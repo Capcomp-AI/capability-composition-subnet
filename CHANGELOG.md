@@ -78,6 +78,28 @@ comes down to something a real merge can clear, or the pool gets an adapter that
 was actually trained to preserve capability under merging. Lowering the floor
 without fixing the pool would be choosing not to look.
 
+### Verified on hardware
+
+A merged rank-64 adapter served on a **single RTX 4090** through the engine's
+own `ManagedVllmServer`, with both request shapes the protocol uses succeeding —
+a bare completion and a tool call:
+
+| | |
+|---|---|
+| startup | 67 s |
+| peak GPU memory, NVML under load | 22.89 GB |
+| GPU KV cache | 73,968 tokens |
+| concurrency at full 16384 context | 4.51x |
+
+So 24 GB is sufficient rather than merely adequate on paper, using
+`--kv-cache-dtype fp8` (which quantises the cache, not the weights, leaving
+canonical scores in bfloat16) and `--max-num-seqs 1` (which matches what the
+engine does anyway). Quantising the *weights* would free ~8 GB and is
+forbidden by the contract.
+
+The 16384 context is justified, not padding: measured with the real tokenizer
+the opening prompt is 4.3–4.6k tokens and a complete oracle run reaches 8.0–8.3k.
+
 ### Fixed — consensus
 
 Both of these were found by building the real pool on a real GPU. Neither was
@@ -105,6 +127,20 @@ production window rather than in review.
   given the seed. Peak memory no longer depends on how many adapters a miner
   selected. **This changes artifact bytes** — accumulation order differs from a
   single stacked reduction — hence the consensus marking.
+- **The probe could never have reached a real endpoint.** Every request sent
+  `tool_choice: "auto"`, including the general-capability probe, which
+  deliberately offers no tools — and an OpenAI-compatible server answers that
+  combination with a 400. The retention gate would have read the failures as a
+  candidate answering nothing. `tool_choice` and `tools` are now sent only
+  together.
+- **The serving subprocess could not find tools shipped beside its
+  interpreter.** vLLM JIT-compiles kernels with `ninja`, which lives in its
+  virtualenv's `bin/`; pointing `serving_python` at another environment without
+  putting that directory on PATH produced a bare `FileNotFoundError: 'ninja'`
+  from deep inside engine start-up. Note the first attempt at this fix resolved
+  the interpreter path, which follows a virtualenv's `python` symlink to
+  `/usr/bin` — the one directory already on PATH — so the test pins the
+  symlinked case specifically.
 - **A serving start-up failure now explains itself.** The message attached the
   last 2000 characters of the runtime's log, which reliably hid the cause: vLLM
   prints thousands of lines of banner and shutdown noise around the exception
