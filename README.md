@@ -213,7 +213,28 @@ capability_subnet/
 
 This is a V1 protocol, and it is deliberately narrow: one base model, one adapter pool, one workflow, one declarative recipe format, no routing, no distillation, no miner-hosted inference.
 
-**First measurement on the real pool.** Forty exactly-scored general-capability probe items against the pinned base model, on a GPU:
+**Does composition beat the equal-weight merge? On this pool, measured: no.**
+
+250 paired items from `AffineFoundation/affine-lgc`, ten task families, exact-match scored:
+
+| package | score | 95% CI | output tokens | kind |
+|---|---|---|---|---|
+| `creative-writing-v1` | 0.132 | [0.096, 0.180] | 182,070 | single (**a declared distractor**) |
+| `code-generation-v1` | 0.116 | [0.082, 0.162] | 202,666 | single |
+| **base model** | **0.100** | **[0.069, 0.143]** | **205,241** | reference |
+| `action-planner-v1` | 0.100 | [0.069, 0.143] | 205,211 | single |
+| owner's tuned recipe | 0.060 | [0.037, 0.097] | 62,973 | **merge** |
+| equal-weight TIES | 0.056 | [0.034, 0.092] | 64,999 | **merge** |
+| equal-weight SVD | 0.004 | [0.001, 0.022] | 115,349 | **merge** |
+| equal-weight linear | 0.000 | [0.000, 0.015] | 254,950 | **merge** |
+
+Merge better on **0** of 10 tasks, single better on 7, tied on 3. Every merge landed at or below the base model, in the same order the retention probe found — TIES survives, linear collapses.
+
+Two findings behind the headline. The best single adapter is a **declared distractor**, because the distractor labels were assigned from descriptions rather than measurement. And composition *did* lift one capability off the floor — `time_sequence`, where the base scores 0.00 and the TIES merge 0.08 — which is the shape a real positive result would take, on one family out of ten.
+
+This measures *this* pool: twelve scavenged public adapters with no coherent capability coverage, six of which individually fall below the retention floor. It does not show composition cannot work; it shows composing these adapters does not — which is the question [the go/no-go](docs/architecture.md#gono-go) says to answer before launching.
+
+**Earlier measurement, general-capability retention.** Forty exactly-scored general-capability probe items against the pinned base model, on a GPU:
 
 | package | probe | retention | output tokens | 0.98 gate |
 |---|---|---|---|---|

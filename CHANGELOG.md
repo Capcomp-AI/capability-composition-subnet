@@ -13,6 +13,60 @@ weight vector.
 
 ## [Unreleased]
 
+### Measured — does composition beat the equal-weight merge?
+
+**On this pool, no.** 250 paired items from `AffineFoundation/affine-lgc`
+(revision `19765edac477`), ten task families, 25 items each, difficulty-banded
+on the corpus's own measured pass rate, scored by exact match against ground
+truth. Seventeen packages, identical items, greedy, thinking disabled.
+
+| package | score | 95% CI | output tokens | kind |
+|---|---|---|---|---|
+| `creative-writing-v1` | 0.132 | [0.096, 0.180] | 182,070 | single (**a declared distractor**) |
+| `code-generation-v1` | 0.116 | [0.082, 0.162] | 202,666 | single |
+| **base model** | **0.100** | **[0.069, 0.143]** | **205,241** | reference |
+| `action-planner-v1` | 0.100 | [0.069, 0.143] | 205,211 | single |
+| owner's tuned recipe | 0.060 | [0.037, 0.097] | 62,973 | **merge** |
+| equal-weight TIES | 0.056 | [0.034, 0.092] | 64,999 | **merge** |
+| equal-weight SVD | 0.004 | [0.001, 0.022] | 115,349 | **merge** |
+| equal-weight linear | 0.000 | [0.000, 0.015] | 254,950 | **merge** |
+
+Merge better on **0** of 10 tasks. Single better on 7. Tied on 3.
+
+What the confidence intervals actually support, at 250 items:
+
+* `equal_linear` and `equal_svd` are worse than the base model — decisively,
+  intervals do not overlap.
+* `equal_ties` and the tuned recipe are worse than the base model
+  *directionally*; their intervals overlap it, so this sample does not settle it.
+* Best single beating best merge is directional, not established — the
+  intervals touch. The consistent finding is the direction, reproduced across
+  four merges and ten tasks.
+
+Three things worth acting on:
+
+**Every merge scored at or below the base model.** The ordering matches the
+retention probe exactly — TIES survives, linear collapses — which is two
+independent measurements agreeing on the same mechanism.
+
+**The best single adapter is a declared distractor.** `creative-writing-v1`
+outscored every capability adapter and the base model. The distractor labels in
+this pool were assigned from descriptions, not measurement, and this is what
+that costs. Nothing in the registry currently earns the label `is_distractor`
+by evidence.
+
+**Composition did lift one capability off the floor.** On `time_sequence` the
+base model scores 0.00 and the TIES merge scores 0.08 — a capability the base
+does not have. It is one family out of ten and a single adapter still beat it,
+but it is the only positive signal in the run and it is the shape a real result
+would take.
+
+Read the scope: this measures *this* pool — twelve scavenged public adapters
+with no coherent capability coverage, six of which individually fall below the
+retention floor. It does not show that composition cannot work. It shows that
+composing these adapters does not, which is exactly the question
+`docs/architecture.md` says to answer before launching.
+
 ### Measured
 
 First run of the real pool against the real pinned base model on a GPU. Forty
