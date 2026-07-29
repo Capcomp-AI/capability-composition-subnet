@@ -283,7 +283,7 @@ class BackendSettings:
                 f"hidden instances can only resolve {mde:.3f}. A challenger with a genuine "
                 f"edge of {self.end_to_end_margin:.3f} could not demonstrate it, so nothing "
                 f"would ever be crowned. Raise hidden_instances to about "
-                f"{math.ceil((1.96 + 0.84) ** 2 * 0.15 / self.end_to_end_margin ** 2)}, or "
+                f"{math.ceil((1.96 + 0.84) ** 2 * 0.15 / self.end_to_end_margin**2)}, or "
                 f"raise end_to_end_margin to at least {mde:.3f}."
             )
 
@@ -291,7 +291,9 @@ class BackendSettings:
         # challenger, and the symptom is silence: the engine keeps re-measuring
         # references and the queue never moves, with nothing in any log saying
         # the budget was impossible from the start.
-        packages = 1 + max(1, self.single_adapter_rotation) + 4 + 1  # base, singles, merges, incumbent
+        packages = (
+            1 + max(1, self.single_adapter_rotation) + 4 + 1
+        )  # base, singles, merges, incumbent
         per_window = (self.hidden_instances + self.ood_instances) * packages
         needed_hours = per_window * self.expected_instance_seconds / 3600
         window_hours = self.window_blocks * 12 / 3600

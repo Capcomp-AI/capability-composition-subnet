@@ -6,17 +6,17 @@ assertion, and this subnet's whole argument is that assertions are not enough.
 
 | file | what it does |
 |---|---|
-| `affine_bench.py` | Single adapters versus merges on `AffineFoundation/affine-lgc`, pinned revision, difficulty-banded, paired, exact-match scored |
-| `analyse_affine.py` | Per-task best-single versus best-merge, with Wilson intervals |
-| `affine_results.json` | 17 packages × 250 paired items |
+| `logic_bench.py` | Single adapters versus merges on `AffineFoundation/affine-lgc`, pinned revision, difficulty-banded, paired, exact-match scored |
+| `analyse_logic.py` | Per-task best-single versus best-merge, with Wilson intervals |
+| `logic_results.json` | 17 packages × 250 paired items |
 | `probe_results.json` | General-capability retention across the same packages |
 
 ## Reproducing
 
 ```bash
-python experiments/affine_bench.py \
+python experiments/logic_bench.py \
     <base-model-dir> <pool-dir> <packages-dir> results.json <vllm-python> 25 <gpu>
-python experiments/analyse_affine.py results.json
+python experiments/analyse_logic.py results.json
 ```
 
 Both are seeded and pin the dataset revision, so a rerun draws the same items.

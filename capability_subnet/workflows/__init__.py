@@ -49,6 +49,17 @@ class WorkflowModule:
     critical_axes: tuple[str, ...]
     stage_thresholds: dict[str, float]
     tool_schemas: list[dict[str, Any]]
+    #: Runs one instance against a served package and returns its sample row.
+    #:
+    #: Owned by the workflow rather than the engine because workflows differ in
+    #: how a package is *asked*, not only in what it is asked. The V1 workflow
+    #: drives a twelve-turn agent loop over seven tool services; a single-turn
+    #: benchmark asks one question and reads one answer. Hardcoding the first
+    #: shape into the evaluator meant the second could not be plugged in at all,
+    #: which made the entry-point mechanism a promise the code could not keep.
+    #:
+    #: Signature: ``(instance, client, *, config) -> SandboxOutcome``.
+    run_instance: Callable[..., Any]
     #: Whether anyone can obtain this workflow and re-score a closed window from
     #: its published seeds and traces. False for a workflow whose generator
     #: cannot be published — which is a legitimate choice and a materially
@@ -69,6 +80,7 @@ def _load_industrial_maintenance_de_v1() -> WorkflowModule:
         critical_axes=tuple(module.CRITICAL_AXES),
         stage_thresholds=dict(module.STAGE_THRESHOLDS),
         tool_schemas=list(module.TOOL_SCHEMAS),
+        run_instance=module.run_instance,
         publicly_verifiable=True,
     )
 
@@ -76,8 +88,28 @@ def _load_industrial_maintenance_de_v1() -> WorkflowModule:
 #: Entry point group third-party workflow distributions register under.
 ENTRY_POINT_GROUP = "capability_subnet.workflows"
 
+
+def _load_lora_merger_logic_v1() -> WorkflowModule:
+    from capability_subnet.workflows import lora_merger_logic_v1 as module
+
+    return WorkflowModule(
+        workflow_id=module.WORKFLOW_ID,
+        title=module.WORKFLOW_TITLE,
+        generate_instance=module.generate_instance,
+        score_instance=module.score_instance,
+        build_contract=module.build_contract,
+        stages=tuple(module.STAGES),
+        critical_axes=tuple(module.CRITICAL_AXES),
+        stage_thresholds=dict(module.STAGE_THRESHOLDS),
+        tool_schemas=list(module.TOOL_SCHEMAS),
+        run_instance=module.run_instance,
+        publicly_verifiable=True,
+    )
+
+
 _BUILTIN_LOADERS: dict[str, Callable[[], WorkflowModule]] = {
     C.DEFAULT_WORKFLOW_ID: _load_industrial_maintenance_de_v1,
+    "lora_merger_logic_v1": _load_lora_merger_logic_v1,
 }
 
 _CACHE: dict[str, WorkflowModule] = {}

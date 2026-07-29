@@ -47,3 +47,14 @@ __all__ = [
     "sample_seeds",
     "score_instance",
 ]
+
+
+def run_instance(instance, client, *, config=None):
+    """Drive one instance through the twelve-turn agent loop.
+
+    Re-exported so the workflow owns how a package is asked, not just what it
+    is asked. The implementation is unchanged; only the ownership moved.
+    """
+    from capability_subnet.sandbox.orchestrator import run_instance as _run
+
+    return _run(instance, client, config=config)

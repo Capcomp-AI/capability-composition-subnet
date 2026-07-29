@@ -215,7 +215,7 @@ This is a V1 protocol, and it is deliberately narrow: one base model, one adapte
 
 **Does composition beat the equal-weight merge? On this pool, measured: no.**
 
-250 paired items from `AffineFoundation/affine-lgc`, ten task families, exact-match scored:
+250 paired items from the pinned logic corpus, ten task families, exact-match scored:
 
 | package | score | 95% CI | output tokens | kind |
 |---|---|---|---|---|

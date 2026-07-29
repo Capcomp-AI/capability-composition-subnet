@@ -56,10 +56,12 @@ for merge_name in ("selective_ties", "selective_linear"):
     print("=" * 78)
     print(f"{merge_name}  —  merge of {len(MEMBERS)} individually-certified adapters".center(78))
     print("=" * 78)
-    print(f"  merge      {merge['score']:.3f}  [{lo:.3f}, {hi:.3f}]   {merge['output_tokens']:>7,} tokens")
+    print(
+        f"  merge      {merge['score']:.3f}  [{lo:.3f}, {hi:.3f}]   {merge['output_tokens']:>7,} tokens"
+    )
     print(f"  base       {base['score']:.3f}  [{bl:.3f}, {bh:.3f}]")
 
-    print(f"\n  versus each constituent, on that adapter's OWN task vs its AWAY tasks:")
+    print("\n  versus each constituent, on that adapter's OWN task vs its AWAY tasks:")
     print(f"  {'constituent':26s} {'home task':22s} {'home':>14s} {'away':>14s}")
     away_wins = home_wins = 0
     for member in MEMBERS:
@@ -92,15 +94,18 @@ for merge_name in ("selective_ties", "selective_linear"):
     )
     print(f"\n  -> {verdict}")
 
-    print(f"\n  per task:")
+    print("\n  per task:")
     print(f"  {'task':24s} {'base':>6s} {'merge':>7s} {'best member':>13s}  {'':>10s}")
     for t in tasks:
-        best = max(((m, sc(rows[f'single:{m}'], t)) for m in MEMBERS if f"single:{m}" in rows),
-                   key=lambda kv: kv[1], default=("", 0.0))
+        best = max(
+            ((m, sc(rows[f"single:{m}"], t)) for m in MEMBERS if f"single:{m}" in rows),
+            key=lambda kv: kv[1],
+            default=("", 0.0),
+        )
         flag = ""
         if sc(merge, t) > best[1]:
             flag = "MERGE BEATS EVERY MEMBER"
         elif sc(base, t) == 0 and sc(merge, t) > 0:
             flag = "lifted off a zero floor"
-        print(f"  {t:24s} {sc(base,t):6.2f} {sc(merge,t):7.2f} {best[1]:13.2f}  {flag}")
+        print(f"  {t:24s} {sc(base, t):6.2f} {sc(merge, t):7.2f} {best[1]:13.2f}  {flag}")
     print()

@@ -1,4 +1,4 @@
-"""Single adapters versus merged adapters, per task, on Affine's logic corpus.
+"""Single adapters versus merged adapters, per task, on the pinned logic corpus.
 
 The question this answers is the one the subnet exists to ask: does composing
 adapters beat picking the best single one, and beat the standard merges. The
@@ -40,7 +40,7 @@ import pandas as pd
 from huggingface_hub import hf_hub_download
 
 DATASET = "AffineFoundation/affine-lgc"
-REVISION = "19765edac477"          # pinned, like every other input to this subnet
+REVISION = "19765edac477"  # pinned, like every other input to this subnet
 SAMPLE_SEED = 20260729
 BAND = (0.20, 0.80)
 DIFFICULTY = "avg@16_qwen3_4b_instruct_2507"
@@ -71,8 +71,13 @@ def load_items(per_task: int, max_tasks: int) -> list[Item]:
         if not answer:
             continue
         by_task[info.get("task", "unknown")].append(
-            Item(f"{info.get('task')}-{index}", info.get("task", "unknown"),
-                 row["question"], answer, float(row[DIFFICULTY]))
+            Item(
+                f"{info.get('task')}-{index}",
+                info.get("task", "unknown"),
+                row["question"],
+                answer,
+                float(row[DIFFICULTY]),
+            )
         )
 
     # Largest families first so the sample is dominated by well-populated tasks,
@@ -156,8 +161,14 @@ class PackageResult:
         return self.correct / self.attempted if self.attempted else 0.0
 
 
-async def _ask(client: httpx.AsyncClient, url: str, model: str, item: Item,
-               semaphore: asyncio.Semaphore, max_tokens: int) -> tuple[Item, str | None, int]:
+async def _ask(
+    client: httpx.AsyncClient,
+    url: str,
+    model: str,
+    item: Item,
+    semaphore: asyncio.Semaphore,
+    max_tokens: int,
+) -> tuple[Item, str | None, int]:
     body = {
         "model": model,
         "messages": [{"role": "user", "content": item.question}],
@@ -183,8 +194,15 @@ async def _ask(client: httpx.AsyncClient, url: str, model: str, item: Item,
     return item, None, 0
 
 
-async def run_package(url: str, model: str, label: str, kind: str, items: list[Item],
-                      concurrency: int, max_tokens: int) -> PackageResult:
+async def run_package(
+    url: str,
+    model: str,
+    label: str,
+    kind: str,
+    items: list[Item],
+    concurrency: int,
+    max_tokens: int,
+) -> PackageResult:
     result = PackageResult(label=label, kind=kind)
     started = time.time()
     semaphore = asyncio.Semaphore(concurrency)
@@ -223,8 +241,11 @@ def main() -> int:
 
     manifest = json.loads((pathlib.Path(packages_dir) / "manifest.json").read_text())
     targets: list[tuple[str, str | None, str]] = [("base_model", None, "reference")]
-    targets += [(f"single:{p.name}", str(p), "single_adapter")
-                for p in sorted(pathlib.Path(pool_dir).iterdir()) if p.is_dir()]
+    targets += [
+        (f"single:{p.name}", str(p), "single_adapter")
+        for p in sorted(pathlib.Path(pool_dir).iterdir())
+        if p.is_dir()
+    ]
     targets += [(name, manifest[name]["path"], "merge") for name in sorted(manifest)]
 
     out = pathlib.Path(out_path)
@@ -235,16 +256,28 @@ def main() -> int:
             print(f"  {label:34s} (done)", flush=True)
             continue
         server = ManagedVllmServer(
-            base_model_path=base_model, model_name="candidate", port=8100 + gpu,
-            gpu_index=gpu, python_executable=vllm_python, gpu_memory_utilization=0.92,
+            base_model_path=base_model,
+            model_name="candidate",
+            port=8100 + gpu,
+            gpu_index=gpu,
+            python_executable=vllm_python,
+            gpu_memory_utilization=0.92,
             startup_timeout=1500.0,
             extra_args=("--kv-cache-dtype", "fp8", "--max-num-seqs", "32"),
         )
         try:
             with server.serve(adapter) as handle:
-                res = asyncio.run(run_package(
-                    handle.base_url, handle.model_name, label, kind, items,
-                    concurrency=32, max_tokens=1024))
+                res = asyncio.run(
+                    run_package(
+                        handle.base_url,
+                        handle.model_name,
+                        label,
+                        kind,
+                        items,
+                        concurrency=32,
+                        max_tokens=1024,
+                    )
+                )
         except Exception as exc:  # noqa: BLE001 - one bad package must not end the run
             results[label] = {"error": str(exc)[:300], "kind": kind}
             print(f"  {label:34s} FAILED: {str(exc)[:110]}", flush=True)
@@ -252,13 +285,20 @@ def main() -> int:
             continue
 
         results[label] = {
-            "kind": kind, "score": round(res.score, 4), "correct": res.correct,
-            "attempted": res.attempted, "failed_requests": res.failed_requests,
-            "output_tokens": res.output_tokens, "minutes": round(res.seconds / 60, 1),
+            "kind": kind,
+            "score": round(res.score, 4),
+            "correct": res.correct,
+            "attempted": res.attempted,
+            "failed_requests": res.failed_requests,
+            "output_tokens": res.output_tokens,
+            "minutes": round(res.seconds / 60, 1),
             "per_task": {t: c for t, c in sorted(res.per_task.items())},
         }
-        print(f"  {label:34s} {res.score:.3f}  ({res.correct}/{res.attempted})  "
-              f"{res.output_tokens:>7,} tok  {res.seconds/60:.1f} min", flush=True)
+        print(
+            f"  {label:34s} {res.score:.3f}  ({res.correct}/{res.attempted})  "
+            f"{res.output_tokens:>7,} tok  {res.seconds / 60:.1f} min",
+            flush=True,
+        )
         out.write_text(json.dumps(results, indent=1))
 
     print(f"\nwrote {out}")
