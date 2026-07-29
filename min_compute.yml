@@ -74,14 +74,33 @@ validator:
 backend:
   # Owner-operated evaluation engine. Sizing is per evaluation worker; the
   # scheduler, monitor and API can share one smaller control-plane host.
+  #
+  # GPU memory, measured against the pinned base model rather than estimated:
+  #
+  #   base weights (bf16)                    15.26 GB
+  #   KV cache, one 16384-token sequence      2.25 GB   (144 KB/token)
+  #   merged adapter at rank 64               0.33 GB
+  #   CUDA graphs, activations, workspace    ~1.50 GB
+  #   ------------------------------------------------
+  #   minimum to serve one candidate         19.33 GB
+  #
+  # Reconstruction is a separate, much smaller cost: peak is ~1.5 GB and is
+  # flat in the number of selected adapters, because the merge streams one
+  # update at a time rather than stacking them. It can share the serving card
+  # or run on any other.
+  #
+  # 24 GB is the floor and it is a real floor: it leaves ~4.5 GB of KV cache,
+  # which is 32k tokens — enough for the one sequence the engine runs at a
+  # time and no margin beyond it. 40 GB or more is what an operator wants if
+  # the workflow's context grows or evaluation is ever made concurrent.
   cpu:
     min_cores: 32
     min_speed: 3.0
     recommended_cores: 64
   gpu:
     required: true
-    min_vram: 80            # one assigned GPU per sandbox; 80 GB gives headroom
-    recommended_vram: 80
+    min_vram: 24            # measured: 19.33 GB to serve, 1.5 GB to reconstruct
+    recommended_vram: 48    # room for context growth and concurrent evaluation
     count: 1                # per concurrent sandbox
     min_compute_capability: 8.0
   memory:

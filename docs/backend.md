@@ -222,6 +222,35 @@ the network would burn its emission with no report explaining why. The engine
 refuses to start in `external` mode for exactly that reason; it exists for
 development against the base model alone.
 
+### How much GPU memory
+
+Measured against the pinned base model, not estimated:
+
+| | |
+|---|---|
+| base weights (bf16) | 15.26 GB |
+| KV cache, one 16384-token sequence | 2.25 GB (144 KB/token) |
+| merged adapter at rank 64 | 0.33 GB |
+| CUDA graphs, activations, workspace | ~1.50 GB |
+| **minimum to serve one candidate** | **19.33 GB** |
+
+Reconstruction is a separate and much smaller cost: **~1.5 GB peak, and flat in
+the number of selected adapters** — the merge streams one update at a time
+rather than stacking them, so a twelve-adapter recipe costs the same as a
+two-adapter one. It can share the serving card or use any other.
+
+**24 GB is a real floor rather than a comfortable one.** It leaves about 4.5 GB
+of KV cache — 32k tokens, which covers the single sequence the engine runs at a
+time with nothing to spare. 40 GB or more is what to buy if the workflow's
+context grows or evaluation is ever made concurrent.
+
+One consequence worth knowing: because the base model dominates, `peak_vram`
+barely distinguishes candidates. A rank-128 artifact is 0.33 GB heavier than a
+rank-64 one, against a 24 GB limit — so the memory gate answers "does this fit
+on the card" and not "is this candidate leaner than that one", and the
+`artifact_efficiency` score component is correspondingly compressed. Artifact
+*size* is the term that actually separates packages there.
+
 **A faulty GPU anywhere in the machine can make higher-indexed ones unreachable.**
 Device enumeration walks the physical indices in order, so a card NVML cannot
 describe stops the walk — every GPU above it then reports as absent, and vLLM
