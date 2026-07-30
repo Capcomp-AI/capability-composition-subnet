@@ -6,7 +6,7 @@
   scored by running the candidate's program. Exact match asks whether an answer
   looks right; execution asks whether the code works.
 
-Both are public, so a window draws from ~3,193 logic items and ~3,920 code
+Both are public, so a window draws from ~3,193 logic items and ~2,319 code
 problems that a miner can read. The defence is not corpus size: recipes are
 scored on held-out draws per window, retention is probed separately, and closed
 windows are re-scorable from published traces.

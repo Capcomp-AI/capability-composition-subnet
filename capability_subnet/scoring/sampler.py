@@ -9,9 +9,30 @@ set. Both are derived from a secret root the operator holds, so:
 * a candidate cannot be tuned to a fixed test set, because the set moves every
   window and the incumbent is re-measured on the new one.
 
-Refreshing per window is what replaces the heavier commit-and-reveal machinery a
-round-based design would need. There is nothing to reveal: the instances simply
-did not exist in a form anyone could see before the window opened.
+Refreshing per window defends against a *miner* tuning to a fixed set. On its own
+it does not defend against the operator, and the difference matters.
+
+Seeds derive deterministically from ``(root, window_id)``. If the root were the
+operator's private choice and nothing bound them to it, they could try many roots
+for one window, keep whichever draw suited a candidate they had already seen, and
+publish the resulting seeds. A replay would verify that the published instances
+match the published seeds and still miss it entirely, because what was chosen was
+the *seeds*.
+
+Two things close that, and both are needed:
+
+* **The root is committed.** ``root_commitment`` is a hash of the root, published
+  in the contract and in every disclosure. One root produces every window, so an
+  operator cannot re-grind per window without the commitment changing — and a
+  changing commitment is visible to everyone. Revealing the root at any point
+  lets an auditor recompute every historical window at once.
+* **The draw is bound to a value the operator does not choose.** Each window mixes
+  in a public ``beacon`` — the hash of the block the window opened at. It is not
+  known until the window opens, so the draw cannot be precomputed, and it is
+  publicly checkable, so a fabricated one is caught.
+
+With both, choosing the draw requires either breaking the commitment or choosing
+a block hash.
 """
 
 from __future__ import annotations
@@ -39,20 +60,39 @@ class WindowSample:
     #: secret root under its own label, so learning the probe reveals nothing
     #: about the hidden instances and vice versa.
     probe_seed: int = 0
+    #: The public value this draw was bound to — the hash of the block the window
+    #: opened at. Published so anyone can check the draw against the chain.
+    beacon: str = ""
+    #: Hash of the seed root. Constant across every window of a deployment.
+    root_commitment: str = ""
 
     @property
     def total(self) -> int:
         return len(self.hidden_seeds) + len(self.ood_seeds)
 
 
-def _derive(root: int, window_id: int, label: str) -> random.Random:
-    """A generator keyed on the secret root, the window and a label.
+def root_commitment(root: int) -> str:
+    """The public commitment to a seed root.
+
+    Published in the contract and in every disclosure. It reveals nothing about
+    the root — it is a hash — but it binds the operator to one: every window must
+    derive from the root behind this value, so a commitment that changes between
+    windows is an operator changing the draw, in public.
+    """
+    return "sha256:" + hashlib.sha256(f"capsub-seed-root|{root}".encode()).hexdigest()
+
+
+def _derive(root: int, window_id: int, label: str, beacon: str = "") -> random.Random:
+    """A generator keyed on the secret root, the window, a label and the beacon.
 
     Hashing rather than arithmetic on the root: an attacker who learned one
     window's seeds must not be able to walk backwards to the root or forwards to
     the next window's draw.
+
+    The beacon is the public part. Without it the operator alone decides the draw;
+    with it they would also have to choose the block hash it comes from.
     """
-    material = f"{root}|{window_id}|{label}".encode()
+    material = f"{root}|{window_id}|{label}|{beacon}".encode()
     digest = hashlib.sha256(material).digest()
     return random.Random(int.from_bytes(digest, "big"))
 
@@ -63,8 +103,21 @@ def draw_window(
     root: int,
     hidden_count: int,
     ood_count: int,
+    beacon: str = "",
 ) -> WindowSample:
-    """Draw the hidden and out-of-distribution seeds for one window."""
+    """Draw the hidden and out-of-distribution seeds for one window.
+
+    Args:
+        beacon: a public value the operator does not choose — the hash of the
+            block this window opened at. Empty means the draw rests on the
+            operator's root alone, which is a weaker guarantee and is logged.
+    """
+    if not beacon:
+        log.warning(
+            "window %s drawn with no beacon; the draw rests entirely on the "
+            "operator's secret root and cannot be shown to be unchosen",
+            window_id,
+        )
     if root == 0:
         log.warning(
             "drawing window %s from the default seed root; hidden instances are "
@@ -72,14 +125,16 @@ def draw_window(
             window_id,
         )
 
-    hidden_rng = _derive(root, window_id, "hidden")
-    ood_rng = _derive(root, window_id, "ood")
+    hidden_rng = _derive(root, window_id, "hidden", beacon)
+    ood_rng = _derive(root, window_id, "ood", beacon)
 
     return WindowSample(
         window_id=window_id,
         hidden_seeds=tuple(_distinct(hidden_rng, hidden_count)),
         ood_seeds=tuple(_distinct(ood_rng, ood_count)),
-        probe_seed=_derive(root, window_id, "probe").randrange(1, SEED_SPACE),
+        probe_seed=_derive(root, window_id, "probe", beacon).randrange(1, SEED_SPACE),
+        beacon=beacon,
+        root_commitment=root_commitment(root),
     )
 
 

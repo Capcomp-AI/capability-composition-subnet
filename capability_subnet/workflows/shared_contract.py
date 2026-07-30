@@ -12,8 +12,8 @@ from __future__ import annotations
 from typing import Any
 
 from capability_subnet.common import constants as C
-from capability_subnet.common.schemas import recipe_json_schema
 from capability_subnet.common.merge_methods import PIPELINES
+from capability_subnet.common.schemas import recipe_json_schema
 
 
 def resolve_snapshot(snapshot=None):
@@ -114,12 +114,29 @@ def ranking_contract() -> dict[str, Any]:
     }
 
 
-def windows_contract() -> dict[str, Any]:
+def windows_contract(root_commitment: str = "") -> dict[str, Any]:
+    """How a window is sized, and what its instance draw is bound to.
+
+    Args:
+        root_commitment: hash of the operator's seed root. Published so a miner
+            can see that one root produces every window: it reveals nothing about
+            the root, and a value that changes between windows is the operator
+            changing the draw where everyone can see it.
+    """
     return {
         "window_blocks": C.DEFAULT_WINDOW_BLOCKS,
         "hidden_instances": C.DEFAULT_HIDDEN_INSTANCES,
         "ood_instances": C.DEFAULT_OOD_INSTANCES,
         "public_pack_instances": C.PUBLIC_PACK_INSTANCES,
+        "seed_root_commitment": root_commitment,
+        "note": (
+            "Hidden instances are drawn per window from a secret root the operator "
+            "holds, mixed with the hash of the block the window opened at. The "
+            "block hash is public and not the operator's to choose, so the draw "
+            "cannot be selected after seeing a candidate; the commitment above "
+            "binds the operator to one root across every window. Both are "
+            "published in each closed window's disclosure."
+        ),
     }
 
 

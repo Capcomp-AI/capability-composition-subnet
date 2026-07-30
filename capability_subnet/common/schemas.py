@@ -603,6 +603,17 @@ class WindowDisclosure(StrictModel):
     hidden_seeds: list[int] = Field(default_factory=list)
     ood_seeds: list[int] = Field(default_factory=list)
 
+    #: The public value this window's draw was bound to — the hash of the block
+    #: it opened at. Published so the draw can be checked against the chain
+    #: instead of taken on trust: the seeds derive from it, and the operator does
+    #: not choose it.
+    beacon: str = ""
+    #: Hash of the operator's seed root, identical in every window of a
+    #: deployment. It reveals nothing about the root and binds the operator to
+    #: one: a value that moves between windows is the draw being changed, in
+    #: public.
+    root_commitment: str = ""
+
     #: Traces for a bounded, deterministically chosen sample.
     instances: list[DisclosedInstance] = Field(default_factory=list)
 

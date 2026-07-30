@@ -58,7 +58,7 @@ def build_contract(snapshot=None) -> dict[str, Any]:
             "note": (
                 "Both corpora are public and pinned. The hidden seed protects which "
                 "items a window draws, not the items themselves. Roughly 3,200 logic "
-                "items carry the difficulty labels selection needs and roughly 3,900 "
+                "items carry the difficulty labels selection needs and roughly 2,300 "
                 "code problems are admitted, so corpus size is not the mitigation: "
                 "stratified selection, the executed quarter of each window, and a "
                 "general-capability probe scored outside this corpus are."

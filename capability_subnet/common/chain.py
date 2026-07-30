@@ -296,6 +296,37 @@ def current_block(subtensor: bt.Subtensor) -> int:
         return 0
 
 
+def block_beacon(subtensor: bt.Subtensor, block: int) -> str:
+    """The hash of ``block``, to bind a window's instance draw to.
+
+    Instance seeds derive from a root only the operator holds. Mixing in a block
+    hash takes the choice of draw away from them: the value is public, it is not
+    theirs to pick, and it does not exist until the window opens — so a draw
+    cannot be selected after seeing a candidate.
+
+    Returns an empty string when the endpoint cannot supply it. That is a real
+    weakening and the sampler logs it rather than pretending otherwise: a draw
+    with no beacon rests entirely on the operator's root. It is not fatal,
+    because an engine that stopped evaluating whenever the chain hiccuped would
+    fail closed against the miners waiting in its queue.
+    """
+    try:
+        info = subtensor.block_info(block)
+    except Exception:
+        log.warning("could not read block %s for the draw beacon", block, exc_info=True)
+        return ""
+
+    for attribute in ("block_hash", "hash", "parent_hash"):
+        value = getattr(info, attribute, None) or (
+            info.get(attribute) if isinstance(info, dict) else None
+        )
+        if value:
+            return str(value)
+
+    log.warning("block %s carried no hash; the draw will not be bound to it", block)
+    return ""
+
+
 def window_id_for_block(block: int, window_blocks: int) -> int:
     """Map a block height to its evaluation window index."""
     if window_blocks <= 0:

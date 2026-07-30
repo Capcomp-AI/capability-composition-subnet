@@ -178,7 +178,7 @@ def load_code() -> tuple[CorpusItem, ...]:
                 for c in (as_mapping(x) for x in raw_cases)
                 if c.get("type") == "stdin_stdout"
             )[: S.MAX_CASES_PER_PROBLEM]
-            if not cases:
+            if not cases or not _has_a_hidden_case(row["prompt"], cases):
                 continue
             items.append(
                 CorpusItem(
@@ -192,6 +192,28 @@ def load_code() -> tuple[CorpusItem, ...]:
 
     log.info("code corpus %s: %d problems", S.CODE.repo, len(items))
     return tuple(sorted(items, key=lambda i: i.item_id))
+
+
+def _has_a_hidden_case(prompt: str, cases: tuple[TestCase, ...]) -> bool:
+    """Whether solving this problem requires more than reading the prompt.
+
+    Competitive-programming statements print a worked example, and the corpus
+    usually keeps that example as the first test case — harmless when other cases
+    follow, because passing requires all of them.
+
+    It is not harmless when it is the *only* case. Then the expected output is
+    printed in the question, and a program that ignores its input and prints that
+    constant passes. Measured on the admitted pool, roughly a quarter of the code
+    problems were in that state: free marks for any package including the base
+    model, on the axis whose whole claim is that execution is the stronger signal.
+
+    A problem is admitted only if at least one retained case cannot be answered
+    from the statement.
+    """
+    return any(
+        case.expected_stdout.strip() and case.expected_stdout.strip() not in prompt
+        for case in cases
+    )
 
 
 def select(seed: int) -> CorpusItem:

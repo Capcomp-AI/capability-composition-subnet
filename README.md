@@ -110,7 +110,7 @@ A package is judged by a **workflow**, and the engine does not hardcode one. Wor
 
 ### `lora_merger_logic_v1` — the arena
 
-Two pinned corpora. ~3,193 logic puzzles across ten families, scored by exact match against the answer the prompt asked for. ~3,920 competitive-programming problems, scored by **running the submitted program** against stdin/stdout cases in an isolated interpreter — a quarter of every window, because execution asks whether the code works rather than whether the answer looks right.
+Two pinned corpora. ~3,193 logic puzzles across ten families, scored by exact match against the answer the prompt asked for. ~2,319 competitive-programming problems, scored by **running the submitted program** against stdin/stdout cases in an isolated interpreter — a quarter of every window, because execution asks whether the code works rather than whether the answer looks right.
 
 Items are selected in the band where a model of this class discriminates — the corpus carries its own measured pass rate — stratified by family, and deterministic in a hidden seed.
 

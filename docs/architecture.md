@@ -227,6 +227,38 @@ What that leaves genuinely unaddressed: an operator who *withholds* disclosures 
 
 ---
 
+## Who chooses the problems
+
+Hidden instances are drawn per window from a secret root the operator holds.
+Refreshing per window stops a *miner* tuning to a fixed set. On its own it does
+nothing about the operator, and the difference matters.
+
+Seeds derive deterministically from the root and the window id. An operator free
+to try roots until the draw suited a candidate they had already evaluated would
+pass every check in this document: the seeds would be real, the instances would
+match them, and the scores would follow from the traces. What was chosen was the
+draw.
+
+Two things close it, and both are needed.
+
+**The root is committed.** `seed_root_commitment` is a hash of the root, published
+in the contract and in every closed window's disclosure. It reveals nothing and
+binds the operator to one root: the same value has to appear in every window, so a
+commitment that moves is the draw being re-rolled where anyone can see it.
+`commitments_agree()` checks a run of disclosures for exactly that.
+
+**The draw is bound to a value the operator does not choose.** Each window mixes
+in the hash of the block it opened at. That is public, it is not the operator's to
+pick, and it does not exist until the window opens — so a draw cannot be selected
+after seeing a candidate.
+
+Choosing the draw then requires either breaking the commitment or choosing a block
+hash. Where the beacon is absent — a local run, or an endpoint that was down — the
+disclosure says so and the auditor raises `unbound_draw` rather than implying a
+guarantee that is not there.
+
+---
+
 ## Anti-copy
 
 Recipes are public — they have to be, or nobody could verify an evaluation. So the protocol makes copying *worthless* rather than impossible:
@@ -469,6 +501,16 @@ A validator refuses a vector that is unsigned, signed by a hotkey outside its al
 Beyond the signature, the validator checks the vector against the chain: weights summing to one, distinct UIDs, UIDs inside the subnet, the champion still holding its UID, and the vector not being many windows stale. **A correctly-signed vector can still be unsubmittable**, and a deregistered champion is the common case.
 
 ---
+
+### Operator-side threats
+
+| Threat | What stops it |
+|---|---|
+| Publishing scores the traces do not support | Validators re-score every closed window and burn on disagreement |
+| Choosing which problems a candidate faces | Seed-root commitment plus a block-hash beacon — see [Who chooses the problems](#who-chooses-the-problems) |
+| Re-rolling the draw between windows | The commitment is constant across a deployment; `commitments_agree()` checks a run |
+| Quietly not re-measuring references | Every window's reference scores are published in its report |
+| Withholding disclosures | Validators refuse a vector more than `max_stale_windows` behind the chain head |
 
 ## What is deliberately not defended
 

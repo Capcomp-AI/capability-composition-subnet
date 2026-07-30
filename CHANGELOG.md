@@ -75,6 +75,25 @@ weight vector.
 - `miner/search.py`. The shipped starting point is a naive random recipe;
   composition search is left to miners.
 
+### Fixed — consensus
+
+- **The operator could choose which problems a candidate faced.** Instance seeds
+  derive from a root only the operator held, and nothing bound them to it: trying
+  roots until the draw suited an already-evaluated candidate would have passed
+  every replay, because the seeds were real and the instances matched them. The
+  draw now mixes in the hash of the block the window opened at — public, and not
+  the operator's to pick — and every window publishes `root_commitment`, a hash of
+  the seed root that must be identical across a deployment. `commitments_agree()`
+  checks a run of disclosures for a root that moved; `check_draw_is_bound()`
+  raises when a window is unbound.
+- **A quarter of the code corpus could be passed without reading the input.**
+  Competitive-programming statements print a worked example and the corpus keeps
+  it as a test case — harmless alongside other cases, but 971 problems had only
+  that one, putting the expected output in the question. A program that ignored
+  its input and printed that constant passed. Problems are now admitted only if
+  at least one retained case cannot be answered from the statement, taking the
+  pool from 3,920 to 2,319.
+
 ### Fixed
 
 - `retained_energy` was computed after truncation and always reported 1.0.

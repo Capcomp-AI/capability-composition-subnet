@@ -37,12 +37,25 @@ is not reproducible.
 | Source | Items used | Scoring |
 |---|---|---|
 | `AffineFoundation/affine-lgc` @ `19765edac477` | ~3,193 across 10 families | exact match |
-| `AffineFoundation/rl-python` @ `0cc711b1f059` | ~3,920 problems | execution |
+| `AffineFoundation/rl-python` @ `0cc711b1f059` | ~2,319 problems | execution |
 
 A quarter of every window is drawn from the code corpus (`CODE_FRACTION`).
 Execution is the stronger signal — it asks whether the code works rather than
 whether the answer looks right — but every case is a subprocess, so it is
 deliberately neither a tenth of the board nor all of it.
+
+### Why the code corpus is smaller than the source
+
+A competitive-programming statement prints a worked example, and this corpus keeps
+that example as a test case. Harmless when other cases follow, because passing
+requires all of them — but roughly a quarter of the source problems had *only*
+that case, which puts the expected output in the question. A program that ignores
+its input and prints that constant passes.
+
+Those are dropped: a problem is admitted only if at least one retained case
+cannot be answered from the statement. That takes the pool from ~3,920 to ~2,319
+and removes free marks that every package, including the base model, was
+collecting on the axis whose whole claim is that execution is the stronger signal.
 
 ### Item selection
 

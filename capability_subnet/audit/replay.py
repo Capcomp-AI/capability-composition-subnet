@@ -140,6 +140,61 @@ def _compare(claimed: InstanceResult, rescored: InstanceResult) -> list[str]:
     return problems
 
 
+def check_draw_is_bound(disclosure: WindowDisclosure, result: AuditResult) -> None:
+    """Whether this window's instance draw can be shown not to have been chosen.
+
+    Replaying a window proves the published instances match the published seeds.
+    It says nothing about where the *seeds* came from — and seeds derive from a
+    root only the operator holds. An operator free to try roots until the draw
+    suited a candidate they had already seen would pass every other check here.
+
+    So two fields have to be present and stable: the beacon this window's draw was
+    bound to, which is a block hash the operator does not choose, and the
+    commitment to the seed root, which must be identical in every window of a
+    deployment. Their absence is not proof of anything, which is why it is a
+    warning — but a run of disclosures whose commitment moves is an operator
+    changing the draw.
+    """
+    if not disclosure.root_commitment:
+        result.add(
+            "unbound_seed_root",
+            "warning",
+            "this window publishes no commitment to the operator's seed root, so "
+            "the instance draw cannot be shown to be the same root as other windows",
+            f"window {disclosure.window_id}",
+        )
+    if not disclosure.beacon:
+        result.add(
+            "unbound_draw",
+            "warning",
+            "this window's draw is not bound to a public beacon, so it rests "
+            "entirely on the operator's secret root and cannot be shown to be "
+            "unchosen",
+            f"window {disclosure.window_id}",
+        )
+
+
+def commitments_agree(disclosures: list[WindowDisclosure]) -> tuple[bool, str]:
+    """Whether a run of windows all derive from one seed root.
+
+    The check a single disclosure cannot make. One commitment proves nothing; the
+    same commitment across every window a deployment has published is what says
+    the operator has not been re-rolling the draw.
+    """
+    seen = {d.root_commitment for d in disclosures if d.root_commitment}
+    if not seen:
+        return False, "no window published a seed-root commitment"
+    if len(seen) > 1:
+        return False, (
+            f"{len(seen)} different seed-root commitments across "
+            f"{len(disclosures)} windows; the draw was re-rooted"
+        )
+    missing = [d.window_id for d in disclosures if not d.root_commitment]
+    if missing:
+        return False, f"windows {missing} published no commitment"
+    return True, f"one seed root across {len(disclosures)} windows"
+
+
 def replay_disclosure(
     disclosure: WindowDisclosure,
     *,
@@ -149,6 +204,8 @@ def replay_disclosure(
     result = result or AuditResult()
     outcome = ReplayOutcome()
     workflow = get_workflow(disclosure.workflow_id)
+
+    check_draw_is_bound(disclosure, result)
 
     disclosed_seeds = set(disclosure.hidden_seeds) | set(disclosure.ood_seeds)
 
