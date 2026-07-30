@@ -106,7 +106,7 @@ A package is judged by a **workflow**, and the engine does not hardcode one. Wor
 | Workflow | What it is | Role |
 |---|---|---|
 | `lora_merger_logic_v1` | Single-turn reasoning puzzles and execution-verified programming problems, twelve axes — [reference](docs/arena.md) | The default |
-| `industrial_maintenance_de_v1` | A twelve-turn German maintenance chain, seven dependent axes — [reference](docs/workflow.md) | A multi-turn agent workflow |
+| `industrial_maintenance_de_v1` | A twelve-turn German maintenance chain, seven dependent axes — [reference](docs/arena.md#the-maintenance-workflow) | A multi-turn agent workflow |
 
 ### `lora_merger_logic_v1` — the arena
 
@@ -131,6 +131,23 @@ Seven scored capability axes in one dependent chain — manual interpretation, f
 
 Determinism is what makes the paired statistics valid and lets a disputed evaluation be replayed later with the same answer.
 
+## Two repositories
+
+| Repository | What it holds | Who needs it |
+|---|---|---|
+| **this one** | The protocol: recipe contract, merge engine, workflows, and every rule that decides a score — aggregation, gates, retention, the comparator, ranking, contribution, the weight vector | Miners, validators, auditors |
+| [`lora-merger-engine`](https://github.com/favoroot/lora-merger-engine) | The evaluation engine that *runs* those rules: window loop, candidate serving, store, read-only API, operator configuration | The subnet operator only |
+
+The line is drawn where it is for one reason: a validator pays only for a score
+it can recompute. So everything that turns evidence into a number is here and
+public, and the engine depends on this package rather than reimplementing any of
+it. Nothing here imports the engine, and
+[a test](tests/unit/test_layering.py) enforces that direction.
+
+What the operator keeps private is operational — the hidden seed root, wallet
+material, filled-in configuration, host inventory — none of which changes what a
+candidate scores.
+
 ## Quick start
 
 ```bash
@@ -139,7 +156,6 @@ git clone <repository-url> lora-merger && cd lora-merger
 # Install what your role needs. A validator never touches the tensor stack.
 pip install -e .              # validator, auditor  (~50 MB)
 pip install -e ".[miner]"     # + reconstruction and local evaluation
-pip install -e ".[backend]"   # + serving, sandbox services, NVML
 pip install -e ".[dev]"       # everything, plus test and lint tooling
 
 # What is the arena?
@@ -165,7 +181,7 @@ Then read the guide for your role:
 | **Miner** | [docs/miner.md](docs/miner.md) | Any hardware. A GPU only if you want to evaluate locally. |
 | **Pool operator** | [`scripts/import_public_adapters.py`](scripts/import_public_adapters.py) | Materialises the certified pool from its pinned upstream sources. |
 | **Validator** | [docs/validator.md](docs/validator.md) | A small VPS. **No GPU.** |
-| **Subnet operator** | [docs/backend.md](docs/backend.md) | GPU hosts, Docker, PostgreSQL. |
+| **Subnet operator** | the engine repository (operator-only) | GPU hosts, Docker, PostgreSQL. |
 
 ## Why validators need no GPU
 
@@ -196,16 +212,10 @@ A published score that does not follow from its published trace is caught.
 
 | Document | What it covers |
 |---|---|
-| [Architecture](docs/architecture.md) | How the pieces fit together |
-| [Miner guide](docs/miner.md) | Building, evaluating and committing a recipe |
-| [Validator guide](docs/validator.md) | Running a validator, verification, failure modes |
-| [Engine operations](docs/backend.md) | Operating the evaluation engine |
-| [Arena reference](docs/arena.md) | The default arena: corpora, scoring, limits |
-| [Workflow reference](docs/workflow.md) | The maintenance workflow, its stages and scoring |
-| [Recipe reference](docs/recipe.md) | Every field, bound and merge method |
-| [Security model](docs/security.md) | Threats, defences and what is not defended |
-| [Deployment](docs/deployment.md) | Local, testnet and mainnet |
-| [FAQ](docs/faq.md) | Common questions |
+| [Architecture](docs/architecture.md) | How the pieces fit together, the security model, and how scores become emission |
+| [Miner guide](docs/miner.md) | Building, evaluating and committing a recipe, and the full recipe reference |
+| [Validator guide](docs/validator.md) | Running a validator, verification, failure modes, and deployment |
+| [Arena reference](docs/arena.md) | Both workflows: corpora, scoring and limits |
 | [Changelog](CHANGELOG.md) | Release history |
 
 ## Project layout
@@ -217,11 +227,11 @@ capability_subnet/
 ├── merge_engine/    deterministic reconstruction — the consensus-critical core
 ├── workflows/       workflow definitions, generators and deterministic scorers
 ├── sandbox/         isolated execution: agent loop, tool services, limits
-├── backend/         the evaluation engine (operator-only)
+├── scoring/         aggregation, gates, comparator, ranking, weight vector
 ├── miner/           recipe construction, local evaluation, commitment
 ├── validator/       the thin weight-setter
 ├── audit/           independent verification of published records
-└── platform/        storage, compatibility history, dashboard
+└── testing/         miniature-pool fixtures, published as a pytest plugin
 ```
 
 ## Scope
@@ -244,6 +254,36 @@ pinned base, so those axes are carried by the base model alone.
 
 Efficient multi-adapter serving is a real alternative to static merging. A
 routed-adapter reference baseline is a planned addition.
+
+## Common questions
+
+### What does this subnet actually produce?
+
+A verified, deployable package for one specific business workflow: a merged LoRA adapter that completes the workflow better than the base model, better than any single specialist adapter, better than standard merges, and better than whatever held the throne before it — under hard limits on size, memory, latency and general-capability retention.
+
+Not a benchmark score. A thing you can deploy.
+
+### Why composition instead of training?
+
+Training a new adapter is a solved, well-served problem. What is not solved is deciding which of the adapters you *already have* should be combined, at what weights, at what depth, and how aggressively compressed — for one real workflow.
+
+That decision is currently made by intuition and a handful of experiments. This subnet turns it into a measured competition.
+
+### Is merging actually better than routing between adapters?
+
+**Unknown, and the subnet is built to find out rather than assume it.**
+
+Efficient multi-adapter serving is a genuine competitor. Static merging removes a runtime selector, a load/swap policy and several runtime states, giving one stable model identity and simpler batching — but it does not inherently reduce tokens, agent steps or base compute. Those savings only appear where merging eliminates a token-consuming mechanism.
+
+A routed-adapter reference baseline is a planned addition. Until it exists, the honest position is that static merging is worth selling *where measured total cost is better*, not everywhere.
+
+### What happens if composition turns out not to help?
+
+Nobody gets paid. The permanent reference baselines — including plain equal-weight merges — sit on the board specifically so the network can discover the answer is "no" rather than paying miners to not discover it.
+
+If a reference holds the throne, the workflow share burns.
+
+---
 
 ## References
 

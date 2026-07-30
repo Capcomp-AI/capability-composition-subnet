@@ -11,22 +11,22 @@ from __future__ import annotations
 
 import pytest
 
-from capability_subnet.backend.baselines import references as ref
-from capability_subnet.backend.comparator.comparator import (
+from capability_subnet.common import constants as C
+from capability_subnet.common.schemas import ChampionRecord
+from capability_subnet.scoring import references as ref
+from capability_subnet.scoring.comparator import (
     ComparatorConfig,
     compare,
     compare_axis,
     decisive_loss,
     strongest_reference,
 )
-from capability_subnet.backend.weights.weight_writer import (
+from capability_subnet.scoring.weight_vector import (
     apply_validator_burn,
     graded_top3,
     winner_take_all,
 )
-from capability_subnet.common import constants as C
-from capability_subnet.common.schemas import ChampionRecord
-from tests.conftest import make_results
+from capability_subnet.testing import make_results
 
 AXES = ("stage_a", "stage_b", "stage_c")
 CONFIG = ComparatorConfig(min_axis_samples=5, min_dominant_axes=1)

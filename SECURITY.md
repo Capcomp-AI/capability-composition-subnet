@@ -32,7 +32,7 @@ the technique to everyone before it can be fixed.
 ## What is deliberately not defended
 
 Stated so you can tell a finding from a known limitation. The reasoning is in
-[docs/security.md](docs/security.md).
+[docs/architecture.md](docs/architecture.md#security-model).
 
 - **A miner's private search.** Any hardware, any method. The network judges the
   artifact, not the process.

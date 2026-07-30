@@ -19,7 +19,7 @@ import torch
 
 from capability_subnet.common import constants as C
 from capability_subnet.merge_engine.canonical_writer import artifact_digest_of_tensors
-from capability_subnet.merge_engine.engine import artifact_hashes_agree, reconstruct
+from capability_subnet.merge_engine.engine import reconstruct
 
 ALL_METHODS = [
     (C.MERGE_LINEAR, None, None),
@@ -138,63 +138,6 @@ class TestWrittenArtifactDeterminism:
         view = base.t().t()
 
         assert artifact_digest_of_tensors({"w": base}) == artifact_digest_of_tensors({"w": view})
-
-
-class TestWorkerAgreement:
-    def test_agreement_is_reported_when_digests_match(
-        self, tiny_snapshot, tiny_source, recipe_factory
-    ):
-        recipe = recipe_factory()
-        results = [reconstruct(recipe, tiny_snapshot, tiny_source) for _ in range(3)]
-
-        agreed, detail = artifact_hashes_agree(results)
-        assert agreed
-        assert "agree" in detail
-
-    def test_disagreement_is_reported_rather_than_silently_resolved(
-        self, tiny_snapshot, tiny_source, recipe_factory
-    ):
-        # Scoring one of two disagreeing artifacts would mean paying for a result
-        # nobody can reproduce.
-        first = reconstruct(
-            recipe_factory(seed=1, combination_type=C.MERGE_DARE_TIES_SVD, density=0.3),
-            tiny_snapshot,
-            tiny_source,
-        )
-        second = reconstruct(
-            recipe_factory(seed=2, combination_type=C.MERGE_DARE_TIES_SVD, density=0.3),
-            tiny_snapshot,
-            tiny_source,
-        )
-
-        agreed, detail = artifact_hashes_agree([first, second])
-        assert not agreed
-        assert "distinct artifacts" in detail
-
-    def test_no_reconstructions_is_not_agreement(self):
-        agreed, _ = artifact_hashes_agree([])
-        assert not agreed
-
-    def test_the_reconstructor_cross_checks_before_caching(
-        self, tiny_snapshot, tiny_pool_dir, recipe_factory, tmp_path
-    ):
-        from capability_subnet.backend.executor.reconstruction import ArtifactCache, Reconstructor
-        from capability_subnet.merge_engine.loader import SafetensorsAdapterSource
-
-        cache = ArtifactCache(tmp_path / "cache")
-        reconstructor = Reconstructor(
-            tiny_snapshot, SafetensorsAdapterSource(tiny_pool_dir), cache, workers=3
-        )
-
-        outcome = reconstructor.build(recipe_factory())
-        assert outcome.workers_agreed
-        assert not outcome.from_cache
-        assert cache.contains(outcome.artifact_sha256)
-
-        # The second build is served from the cache and never rebuilt.
-        again = reconstructor.build(recipe_factory())
-        assert again.from_cache
-        assert again.artifact_sha256 == outcome.artifact_sha256
 
 
 class TestInstanceDeterminism:

@@ -21,7 +21,7 @@ from capability_subnet.audit.replay import (
 from capability_subnet.common.schemas import DisclosedInstance, WindowDisclosure
 from capability_subnet.sandbox.orchestrator import run_instance
 from capability_subnet.sandbox.reference_solver import ReferenceSolverClient
-from tests.conftest import MAINTENANCE_WORKFLOW_ID
+from capability_subnet.testing import MAINTENANCE_WORKFLOW_ID
 
 
 @pytest.fixture(scope="module")
@@ -180,59 +180,6 @@ class TestAttribution:
         disclosure.signature = "deadbeef"
         disclosure.signer_hotkey = "5Operator"
         assert disclosure.signable_bytes() == before
-
-
-class TestDisclosureBoundaries:
-    def test_an_empty_disclosure_is_flagged_rather_than_passing_quietly(self):
-        disclosure = WindowDisclosure(
-            workflow_id=MAINTENANCE_WORKFLOW_ID,
-            window_id=3,
-            closed_at_block=1,
-            spec_version=1000,
-        )
-        outcome, audit = replay_disclosure(disclosure)
-
-        assert outcome.checked == 0
-        assert any(f.code == "nothing_disclosed" for f in audit.warnings)
-
-    def test_the_engine_refuses_to_disclose_an_open_window(self, engine):
-        loop, store, _, settings = engine
-        loop.ensure_window(block=250)
-        current = 250 // settings.window_blocks
-
-        with pytest.raises(ValueError, match="has not closed yet"):
-            loop.build_disclosure(current, block=250)
-
-    def test_a_closed_window_discloses_its_seeds_and_traces(self, engine):
-        loop, store, _, settings = engine
-        loop.ensure_window(block=250)
-        closed = 250 // settings.window_blocks
-
-        disclosure = loop.build_disclosure(closed, block=250 + settings.window_blocks)
-
-        assert disclosure.window_id == closed
-        assert len(disclosure.hidden_seeds) == settings.hidden_instances
-        assert disclosure.instances, "reference traces should have been retained"
-
-        # And it replays cleanly, because the engine scored it honestly.
-        outcome, audit = replay_disclosure(disclosure)
-        assert outcome.ok, [f.detail for f in audit.errors]
-        assert outcome.agreed == outcome.checked
-
-    def test_the_api_refuses_an_open_window_and_serves_a_closed_one(self, engine):
-        from fastapi.testclient import TestClient
-
-        from capability_subnet.backend.api import create_app
-
-        loop, store, _, settings = engine
-        loop.ensure_window(block=250)
-        current = 250 // settings.window_blocks
-
-        client = TestClient(create_app(settings))
-        assert client.get(f"/windows/{current}/disclosure").status_code == 409
-
-        response = client.get(f"/windows/{current - 1}/disclosure")
-        assert response.status_code in (404, 409)
 
 
 class TestTheValidatorRefusesToPayForAFabricatedWindow:

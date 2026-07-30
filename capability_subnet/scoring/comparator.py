@@ -24,18 +24,18 @@ import logging
 import math
 from dataclasses import dataclass
 
-from capability_subnet.backend.comparator.bootstrap import (
-    outcome_map,
-    paired_bootstrap,
-    paired_differences,
-    stage_outcome_map,
-)
 from capability_subnet.common import constants as C
 from capability_subnet.common.schemas import (
     AxisVerdict,
     ComparatorOutcome,
     InstanceResult,
     PairedComparison,
+)
+from capability_subnet.scoring.bootstrap import (
+    outcome_map,
+    paired_bootstrap,
+    paired_differences,
+    stage_outcome_map,
 )
 
 log = logging.getLogger(__name__)

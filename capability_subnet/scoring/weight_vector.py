@@ -18,9 +18,9 @@ from __future__ import annotations
 
 import logging
 
-from capability_subnet.backend.baselines.references import is_reference
 from capability_subnet.common import constants as C
 from capability_subnet.common.schemas import ChampionRecord, WeightEntry, WeightVector
+from capability_subnet.scoring.references import is_reference
 
 log = logging.getLogger(__name__)
 

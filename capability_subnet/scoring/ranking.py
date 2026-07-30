@@ -11,7 +11,6 @@ So submissions within the minimum detectable effect of each other are ranked as
 construction and therefore has to be *measurably* better.
 """
 
-
 from __future__ import annotations
 
 import logging

@@ -55,13 +55,14 @@ capability_subnet/
 ├── merge_engine/    deterministic reconstruction (consensus-critical)
 ├── workflows/       workflow definitions, instance generators, deterministic scorers
 ├── sandbox/         isolated execution — agent loop, tool services, limits
-├── backend/         the evaluation engine (operator-only)
+├── scoring/         aggregation, gates, comparator, ranking, weight vector
 ├── miner/           recipe construction, local evaluation, commitment
 ├── validator/       the thin weight-setter
-└── platform/        object storage, compatibility history, dashboard
+├── audit/           independent verification of published records
+└── testing/         miniature-pool fixtures, published as a pytest plugin
 ```
 
-Dependencies run downward. `common` depends on nothing; `merge_engine` depends on `common` and `registry`; the engine depends on everything below it. Nothing depends on `backend` except the engine's own entry points, which is what lets a miner install the package without the evaluation stack.
+Dependencies run downward. `common` depends on nothing; `merge_engine` depends on `common` and `registry`; `scoring` depends on those. The evaluation engine ships in a separate operator-only repository and depends on this package — nothing here depends on it, which is what makes the two separable and what a test in `tests/unit/test_layering.py` enforces.
 
 ---
 
@@ -326,3 +327,277 @@ The continuous champion-challenge shape — a queue ordered by commit block, per
 | Environment-evaluated model subnets | A model plus revision, run through RL environments | **Adjacent mechanism**, different artifact and different target. |
 
 What makes this one distinct: the artifact is a declarative recipe over a frozen pool, not a trained model; the objective is end-to-end completion of an executable business workflow judged by non-model truth; no gradient work is ever verified; and the output is a deployable, cost-bounded package with hard memory, size, latency and retention gates.
+
+---
+
+# Security model
+
+## The shape of the problem
+
+Three things make this system's threat model unusual:
+
+1. **Recipes are public.** They must be, or nobody could verify an evaluation. So copying is trivially easy and has to be made *worthless* rather than impossible.
+2. **Candidate-written code executes.** The diagnostic stage is not scoreable otherwise.
+3. **Evaluation is centralised.** One operator holds the hidden instances and the signing key, which concentrates both capability and the incentive to misuse it.
+
+Each is addressed by a different mechanism, and the mechanisms are described honestly below, including where they stop.
+
+---
+
+## Threats and defences
+
+### A malicious recipe
+
+**Goal:** get the engine to execute something, load something, or reach somewhere.
+
+| Defence | How |
+|---|---|
+| Declarative-only schema | Every expressible value is a bounded number, a name from a frozen registry, or an enum |
+| Unknown fields rejected | An unknown field in a miner document usually means something is being smuggled |
+| Names, not paths | Adapters are named and resolved against the frozen pool; there is no field to put a path in |
+| Strict bounds | Coefficients, densities, ranks and quantiles are all range-checked |
+| Size cap | Recipe fetches are capped, and reading stops mid-download when exceeded |
+
+There is no code path from a recipe to execution. The merge engine reads numbers and multiplies matrices.
+
+### A malicious adapter file
+
+**Goal:** get code to run when the pool is loaded.
+
+Adapters are untrusted input until certified. Admission requires: safetensors only (no pickle-backed formats, which execute on load), no scripts or binaries in the directory, no remote-code hooks in the config, exact shape validation against the pinned base, and an exhaustive NaN/infinity scan.
+
+A single non-finite entry would propagate through every merge that selected that adapter, which is why the scan is exhaustive rather than sampled.
+
+### Substituting the recipe after committing
+
+**Goal:** commit one thing, be scored on another.
+
+Bytes are verified against the on-chain digest before parsing. Then the digest is **re-derived from the canonical form of the parsed document** and compared again. That second check closes the gap where a miner commits the digest of a specially-formatted file and the engine scores the canonical form of something else.
+
+The pointer itself is not trusted, so a mutable host is fine for integrity. It is not fine for availability: if the engine cannot fetch the bytes, the submission is not admitted.
+
+### Copying
+
+**Goal:** read a published recipe and resubmit it.
+
+Three mechanisms, and the third is what makes the first two sufficient:
+
+1. **Earliest commit wins**, checked on the recipe digest at admission and again on the reconstructed **artifact** digest. Two differently-worded recipes that build the same bytes are the same package.
+2. **One shot per hotkey.** Copying costs a registration.
+3. **Defender advantage.** Dethroning requires a genuine margin, so a copy that exactly reproduces the champion's scores loses by construction.
+
+Even a copy nobody detected cannot win. That is the point.
+
+### Extracting hidden material
+
+**Goal:** learn the hidden instances, the truth, or the seed root.
+
+| Boundary | Enforcement |
+|---|---|
+| The scorer | Runs in the engine process, outside every network the agent container can see |
+| Hidden diagnostic cases | Their **expected outputs never enter the runner** — only inputs are sent |
+| The seed root | Never leaves the engine; the API has no route that exposes it |
+| Instance visibility | The visible payload is built explicitly, field by field, rather than filtered from the full object |
+| Per-window refresh | Instances rotate, so anything learned about one window is worth little in the next |
+
+That fourth row is a deliberate design choice: a new field added to the ground truth is invisible to the agent until someone *deliberately* adds it to the visible payload. A filter-based approach fails open; this fails closed.
+
+### SQL injection and exfiltration
+
+**Goal:** read or write outside the instance's snapshot.
+
+Statement inspection rejects anything that is not a single read-only statement, along with catalog access (`sqlite_*`, `pg_*`, `information_schema`) and file-access functions.
+
+**Inspection alone would be a filter to be evaded.** What actually holds is the connection: a SQLite authorizer that denies everything but read operations, or a PostgreSQL role with no write grants, `default_transaction_read_only`, a statement timeout, and `SELECT` granted per instance schema.
+
+Catalog blocking matters specifically because hidden snapshots for many instances live as separate schemas in one PostgreSQL database. Without it, catalog enumeration is a route from one instance to another instance's data.
+
+### Sandbox escape
+
+**Goal:** break out of the code runner.
+
+Candidate code is the only component that executes arbitrary instructions, so it gets the strongest boundary — two layers:
+
+**The container:** no network at all, read-only root filesystem, all capabilities dropped, `no-new-privileges`, non-root user, memory/CPU/PID limits, and an image with no compiler, no package manager and no network client.
+
+**The process:** a fresh interpreter in isolated mode (`-I -S`) that ignores environment variables and keeps the current directory off the import path, with address-space, CPU-time, process-count, file-size and core-dump limits applied before `exec`.
+
+Builtins are deliberately **not** restricted. Restricting them inside an already-isolated container is security theatre, and it would silently fail correct submissions that use `sum` or `max`.
+
+### Prompt injection
+
+**Goal:** use the workflow content to make the agent leak or misbehave.
+
+Largely neutralised by architecture rather than filtering: the agent has no network, no tool that reveals correctness, and no route to the scorer. There is nothing to exfiltrate *to* and nothing to exfiltrate. A successful injection can make a candidate fail its own evaluation, which is a self-inflicted wound.
+
+### Result fabrication by the operator
+
+**Goal:** the operator pays whoever they like.
+
+This is the honest weak point of a centralised engine, and it is mitigated rather than eliminated:
+
+| Mitigation | What it gives |
+|---|---|
+| Signed reports | Nothing published can be repudiated, and nothing unsigned can be attributed |
+| Published recipes and artifacts | Anyone can rebuild a champion's artifact and confirm its digest |
+| Validators verify, not relay | Each validator checks the signature against **its own** allow-list and the vector against the chain it can see |
+| Burn on doubt | A validator that cannot verify burns rather than submitting |
+| Chain consensus | Weights still pass through the chain's own aggregation |
+| Sample rows retained | Every per-instance outcome is stored, so a claimed aggregate can be checked against its parts |
+
+| Closed-window disclosure | Once a window closes, its seeds and the traces the scorer read are published, so anyone can regenerate the instances and re-run the scorer over them without a GPU |
+
+Since v1.0.0 the reported scores **can** be checked independently:
+`capability-audit replay --window <n>` regenerates each disclosed instance from
+its seed and re-scores the engine's own trace. A published score that does not
+follow from its published trace is caught, specifically and by anyone.
+
+What this still does **not** give: proof that the hidden draw was fair, or that a
+trace faithfully records what the model did. A determined operator could publish
+a fabricated trace that scores exactly as claimed — but it would have to stay
+internally consistent, per turn, with a workflow the auditor regenerates
+independently.
+
+If that residual trust is unacceptable, it is better to know before registering than after.
+
+### Forged weight vectors
+
+**Goal:** get a validator to pay an attacker.
+
+A validator refuses a vector that is unsigned, signed by a hotkey outside its allow-list, or whose signature does not verify. The signature covers canonical bytes that exclude the signature fields themselves, so signing is idempotent and tampering with any payload field invalidates it.
+
+Beyond the signature, the validator checks the vector against the chain: weights summing to one, distinct UIDs, UIDs inside the subnet, the champion still holding its UID, and the vector not being many windows stale. **A correctly-signed vector can still be unsubmittable**, and a deregistered champion is the common case.
+
+---
+
+## What is deliberately not defended
+
+Being explicit about this is more useful than a longer list of defences.
+
+**A miner's private search.** Miners may use any hardware and any method. The network judges the artifact, not the process. There is no attempt to detect or constrain how a recipe was found.
+
+**Operator honesty about the hidden set.** Nothing proves the hidden instances were drawn fairly. The generator is published and the draw is deterministic given the root, but the root is secret, so the fairness of the draw rests on the operator.
+
+**Availability of a miner's pointer.** If a recipe's host goes down before admission, the submission is not admitted. The engine keeps its own copy afterwards so a champion can keep defending, but it does not fetch pre-emptively.
+
+**Model-level attacks on the base model.** The base is pinned upstream and taken as given.
+
+**Collusion between the operator and a miner.** The mitigations above make it *detectable in principle* — published recipes, reproducible artifacts, retained sample rows — but nothing prevents it.
+
+---
+
+## Reporting a vulnerability
+
+Report privately to the subnet operator rather than opening a public issue. Include what you found, how to reproduce it, and what it would let an attacker do.
+
+Findings that affect scoring integrity — determinism, hidden-material exposure, or anything that lets a candidate influence its own evaluation — are the highest priority, because they invalidate results rather than merely disrupting service.
+
+---
+
+## Common questions
+
+### Why is beating the champion not enough?
+
+Because at genesis the throne is empty, and later a mediocre champion could hold it simply because nothing better challenged. The permanent references — base model, best single adapter, three equal-weight merges, the operator's own recipe — mean the network can never crown a package that an off-the-shelf merge already beats.
+
+### Why must a challenger be "not worse" on every axis?
+
+Otherwise a package could trade a capability away for a better average. Drop safety compliance, gain SQL accuracy: the mean improves and the package is worse at the job. The workflow needs every stage, so a package that abandoned one has not solved it.
+
+### Why a paired bootstrap instead of just comparing scores?
+
+With a hundred instances, a package that is genuinely no better than the incumbent scores higher about half the time. The question is not "did it score higher" but "is the difference larger than the noise."
+
+Pairing works because both packages ran on **the same instances**, so instance difficulty drops out of the comparison entirely. That is a much tighter test, and it is only available because the engine controls the draw.
+
+### Why does an axis with few samples count as *worse*?
+
+Absence of evidence that a challenger kept a capability is not evidence that it did. Treating it as a tie would let a challenger win an axis by not being measured on it.
+
+### Why does everything have to be byte-for-byte deterministic?
+
+The artifact digest is the package's identity — the anti-copy check, the cache key, and the thing independent workers must agree on. Without determinism, "the champion's package" is not a well-defined object.
+
+### What if two workers disagree on the artifact hash?
+
+Evaluation of that candidate **pauses**. It is neither scored nor terminated, because scoring one of two disagreeing artifacts would mean paying for a result nobody can reproduce. The operator investigates the software mismatch.
+
+### Why is no language model used to judge?
+
+A model-based scorer carries its own variance, and two packages could differ on a scored axis without differing in behaviour at all. It would also make re-scoring a stored trace non-reproducible.
+
+Every score here comes from comparing a trace with truth computed before the candidate saw the instance.
+
+### How do the layer groups work if the base model has 36 layers?
+
+There are always four groups splitting the decoder stack into quarters. The group *names* are protocol and never change; the layer ranges follow the pinned model's depth, so repinning to a model of different depth does not invalidate existing recipes. `miner.cli pool` prints the current ranges.
+
+### Why are `svd` and `cat_svd` the same thing?
+
+Because concatenating factorisations is algebraically the sum of the updates, so with no sparsification and no sign election there is one sensible combination. Both names are kept because both appear in the reference merge implementations this engine mirrors. It is documented rather than hidden.
+
+`linear` is genuinely different — it sums the factors rather than their products.
+
+---
+
+### How long does a window take?
+
+Roughly `(references + 1) × instances × per-instance-time`. With the default 100 hidden instances and around ten references, opening a window is the dominant cost. Size `window_blocks` accordingly.
+
+### Can I change the comparator thresholds?
+
+Yes, and they are published in the contract so miners can see them. Do not tune them in response to a specific candidate — that converts the engine from a measuring instrument into a decision-maker.
+
+### What if a champion's recipe URL goes dead?
+
+The engine keeps its own copy of every admitted recipe under `state/recipes/`, so a champion whose pointer went dead keeps defending.
+
+### Can I run the engine without Docker?
+
+Yes, but the container boundaries are the primary isolation for candidate-written code. The in-process resource limits are defence in depth, not a substitute.
+
+### Do I earn anything while I wait in the queue?
+
+A small, tapered share — most at the front of the queue, least at the back. It
+is not payment for work: Bittensor prunes by lowest emission, so a miner holding
+exactly zero is the first the chain evicts. The engine evaluates roughly one
+challenger per window, so without it you could be deregistered before your
+single evaluation ever ran.
+
+### The champion looks unbeatable. Is the subnet finished?
+
+No. The margin a challenger must clear over the *incumbent* decays to zero over
+roughly thirty days, so an unopposed champion progressively loses its defender's
+advantage. What does not decay is the margin over the permanent references —
+beating an off-the-shelf equal-weight merge is the bar that says composition
+added value at all, and that question does not get easier because someone
+already answered it once.
+
+### I did not take the throne. Did I earn anything?
+
+Yes, if your package cleared every hard gate. The champion takes a fixed share
+and everything below it is graded on quality, how far past the strongest
+permanent reference you got, how close you came to the champion, and what your
+package costs to run. That grade earns a proportional share for several windows,
+and it is published broken into its four terms so you can see what earned it.
+
+Clearing the gates is the threshold, and it is not negotiable. Grading applies
+within the qualified set — it is not a consolation prize for producing something
+undeployable.
+
+### Does the subnet owner run code the rest of us cannot see?
+
+Not for anything that decides a score. Everything that turns evidence into a
+number — instance generation, the deterministic scorers, aggregation, the hard
+gates, retention, the comparator, ranking, contribution and the weight vector —
+is in this repository, and a test enforces that none of it depends on the
+operator's engine.
+
+The engine itself is operator-only: the window loop, candidate serving, the
+store, the read-only API and the configuration surface. None of that changes what
+a candidate scores, and a validator does not need it — it recomputes a published
+score from published traces using the public rules, and burns rather than paying
+for a number that does not follow.
+
+What an operator keeps private beyond the engine is the hidden seed root, wallet
+material, filled-in configuration, host inventory and runbooks.

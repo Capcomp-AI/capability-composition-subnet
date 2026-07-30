@@ -26,10 +26,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-from capability_subnet.backend.baselines.references import is_reference
 from capability_subnet.common import constants as C
 from capability_subnet.common.schemas import EvaluationReport, WeightVector
 from capability_subnet.common.signing import verify_payload
+from capability_subnet.scoring.references import is_reference
 
 Severity = Literal["error", "warning", "info"]
 

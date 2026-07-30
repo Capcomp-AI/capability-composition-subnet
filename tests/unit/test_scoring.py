@@ -9,13 +9,10 @@ from __future__ import annotations
 
 import pytest
 
-from capability_subnet.backend.comparator.bootstrap import (
-    outcome_map,
-    paired_bootstrap,
-    paired_differences,
-)
-from capability_subnet.backend.scorer import gates
-from capability_subnet.backend.scorer.aggregate import (
+from capability_subnet.common import constants as C
+from capability_subnet.common.schemas import CandidateScores
+from capability_subnet.scoring import gates
+from capability_subnet.scoring.aggregate import (
     EfficiencyInputs,
     aggregate_scores,
     artifact_efficiency,
@@ -25,10 +22,13 @@ from capability_subnet.backend.scorer.aggregate import (
     stage_balance,
     valid_rows,
 )
-from capability_subnet.backend.scorer.sampler import common_instance_ids, draw_window
-from capability_subnet.common import constants as C
-from capability_subnet.common.schemas import CandidateScores
-from tests.conftest import make_results
+from capability_subnet.scoring.bootstrap import (
+    outcome_map,
+    paired_bootstrap,
+    paired_differences,
+)
+from capability_subnet.scoring.sampler import common_instance_ids, draw_window
+from capability_subnet.testing import make_results
 
 STAGES = ("stage_a", "stage_b", "stage_c")
 FULL = dict.fromkeys(STAGES, 1.0)

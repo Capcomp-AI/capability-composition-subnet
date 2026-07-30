@@ -108,6 +108,6 @@ Write the scripted reference solver alongside it. Without one there is no way to
 
 ## Reporting security issues
 
-Report privately to the subnet operator rather than opening a public issue. See [docs/security.md](docs/security.md).
+Report privately to the subnet operator rather than opening a public issue. See [docs/architecture.md](docs/architecture.md#security-model).
 
 Findings affecting scoring integrity — determinism, hidden-material exposure, or anything letting a candidate influence its own evaluation — are the highest priority, because they invalidate results rather than merely disrupting service.

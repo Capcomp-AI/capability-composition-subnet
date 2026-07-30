@@ -19,7 +19,6 @@ import sys
 import time
 
 from capability_subnet import __spec_version__
-from capability_subnet.backend.weights.weight_writer import apply_validator_burn
 from capability_subnet.common import constants as C
 from capability_subnet.common.chain import (
     MetagraphView,
@@ -31,6 +30,7 @@ from capability_subnet.common.chain import (
 from capability_subnet.common.config import build_config, parse_trusted_signers
 from capability_subnet.common.logging import setup_logging
 from capability_subnet.common.signing import SignatureError
+from capability_subnet.scoring.weight_vector import apply_validator_burn
 from capability_subnet.validator.client import (
     BackendClient,
     BackendUnavailable,

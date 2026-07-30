@@ -29,7 +29,7 @@ classifiers = [
 # validator never imports, against a documented 20 GB VPS.
 #
 # The layering this reflects is real and enforced by tests/unit/test_layering.py:
-# common, workflows, miner, validator, audit and platform import nothing heavy.
+# common, workflows, scoring, miner, validator and audit import nothing heavy.
 dependencies = [
   "bittensor>=11.0.0,<12",
   "pydantic>=2.6",
@@ -47,19 +47,6 @@ merge = [
   "torch>=2.2",
   "numpy>=1.26",
   "safetensors>=0.4",
-]
-# Everything needed to reconstruct, serve and score a candidate on a GPU host.
-backend = [
-  "capability-subnet[merge]",
-  "fastapi>=0.110",
-  "uvicorn>=0.29",
-  "transformers>=4.44",
-  "accelerate>=0.30",
-  "psycopg[binary]>=3.1",
-  "docker>=7.0",
-  # Peak GPU memory is read through NVML because the model runs in a separate
-  # process; without it the resource gate cannot be certified at all.
-  "nvidia-ml-py>=12.0",
 ]
 # The sandbox tool services, which run in their own container.
 sandbox = [
@@ -79,14 +66,12 @@ registry = [
   "huggingface_hub>=0.23",
 ]
 dev = [
-  "capability-subnet[merge,backend,sandbox]",
+  "capability-subnet[merge,miner,registry,sandbox]",
   "pytest>=8.0",
   "ruff>=0.4",
 ]
 
 [project.scripts]
-capability-backend = "capability_subnet.backend.service:main"
-capability-backend-api = "capability_subnet.backend.api:main"
 capability-miner = "capability_subnet.miner.cli:main"
 capability-validator = "capability_subnet.validator.neuron:main"
 capability-workflow = "capability_subnet.workflows.cli:main"

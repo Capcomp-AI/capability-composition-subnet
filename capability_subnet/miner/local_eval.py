@@ -16,24 +16,24 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from capability_subnet.backend.scorer.aggregate import (
-    EfficiencyInputs,
-    aggregate_scores,
-    measure_resources,
-    valid_rows,
-)
-from capability_subnet.backend.scorer.retention import (
-    ProbeOutcome,
-    build_probe,
-    relative_retention,
-    run_probe,
-)
 from capability_subnet.common.schemas import CandidateScores, InstanceResult, Recipe
 from capability_subnet.merge_engine.engine import reconstruct
 from capability_subnet.merge_engine.loader import SafetensorsAdapterSource
 from capability_subnet.registry.snapshot import PoolSnapshot, load_snapshot
 from capability_subnet.sandbox.model_client import ModelClient
 from capability_subnet.sandbox.orchestrator import SandboxConfig, run_batch
+from capability_subnet.scoring.aggregate import (
+    EfficiencyInputs,
+    aggregate_scores,
+    measure_resources,
+    valid_rows,
+)
+from capability_subnet.scoring.retention import (
+    ProbeOutcome,
+    build_probe,
+    relative_retention,
+    run_probe,
+)
 from capability_subnet.workflows import get_workflow
 
 #: Probe seed for local runs. Fixed and public: the engine draws its own from a

@@ -15,9 +15,9 @@ from __future__ import annotations
 
 import statistics
 
-from capability_subnet.backend.scorer.aggregate import percentile, valid_rows
 from capability_subnet.common import constants as C
 from capability_subnet.common.schemas import CandidateScores, GateVerdict, InstanceResult
+from capability_subnet.scoring.aggregate import percentile, valid_rows
 
 #: Gates whose failure says something about the *engine*, not the candidate.
 #:

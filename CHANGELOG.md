@@ -37,6 +37,19 @@ weight vector.
 - `--random` on `miner init`, drawing a random valid recipe from
   `miner/baseline.py`.
 
+### Changed
+
+- **The evaluation engine ships separately**, in an operator-only repository. It
+  depends on this package; nothing here depends on it, and a test enforces that
+  direction. Everything that decides a published number moved from
+  `capability_subnet.backend.{scorer,comparator,baselines,weights}` into
+  `capability_subnet.scoring`, which is public and stays public.
+- `capability_subnet.testing` publishes the miniature-pool fixtures as a pytest
+  plugin so both repositories test against the identical structure.
+- Documentation consolidated from ten files to four: `architecture.md` (with the
+  security model), `miner.md` (with the recipe reference), `validator.md` (with
+  deployment) and `arena.md` (with the maintenance workflow).
+
 ### Changed — consensus
 
 - Default workflow is `lora_merger_logic_v1`. Both shipped workflows remain
