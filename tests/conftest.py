@@ -7,4 +7,4 @@ that are specific to this repository's suite belong here.
 
 from __future__ import annotations
 
-pytest_plugins = ["capability_subnet.testing"]
+pytest_plugins = ["capability_subnet.testing.fixtures"]
