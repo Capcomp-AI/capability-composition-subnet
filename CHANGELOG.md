@@ -84,15 +84,19 @@ weight vector.
   draw now mixes in the hash of the block the window opened at — public, and not
   the operator's to pick — and every window publishes `root_commitment`, a hash of
   the seed root that must be identical across a deployment. `commitments_agree()`
-  checks a run of disclosures for a root that moved; `check_draw_is_bound()`
-  raises when a window is unbound.
+  checks a run of disclosures for a root that moved, `verify_beacon_against_chain()`
+  compares the published beacon with the real block hash, and the validator runs
+  the first of those every round. What this does not close, and the architecture
+  guide says so: a single root chosen dishonestly before any candidate exists.
+  Nothing reveals the root, so a constant fabricated commitment passes.
 - **A quarter of the code corpus could be passed without reading the input.**
   Competitive-programming statements print a worked example and the corpus keeps
   it as a test case — harmless alongside other cases, but 971 problems had only
   that one, putting the expected output in the question. A program that ignored
   its input and printed that constant passed. Problems are now admitted only if
-  at least one retained case cannot be answered from the statement, taking the
-  pool from 3,920 to 2,319.
+  a constant program cannot pass — that is, the cases do not all expect the same
+  output that the statement prints. 976 problems were exploitable; the pool goes
+  from 3,920 to 2,944.
 
 ### Fixed
 

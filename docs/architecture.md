@@ -252,8 +252,19 @@ in the hash of the block it opened at. That is public, it is not the operator's 
 pick, and it does not exist until the window opens — so a draw cannot be selected
 after seeing a candidate.
 
-Choosing the draw then requires either breaking the commitment or choosing a block
-hash. Where the beacon is absent — a local run, or an endpoint that was down — the
+**What this does and does not buy.** The beacon is the part with teeth: a
+validator compares it against the real block hash, and a fabricated one fails.
+The commitment is weaker — nothing reveals the root, so a constant fabricated
+value passes. What it forces is that the operator pick one root and keep it, which
+means picking it before any candidate exists; `check_draw_was_not_re_rolled()`
+catches a value that moves across recent windows.
+
+So the honest summary is: **re-rolling the draw between windows is caught, and a
+draw not bound to its block is caught. A single root chosen dishonestly at genesis
+is not** — closing that needs an eventual reveal of the root, which this protocol
+does not yet do.
+
+Where the beacon is absent — a local run, or an endpoint that was down — the
 disclosure says so and the auditor raises `unbound_draw` rather than implying a
 guarantee that is not there.
 
@@ -507,8 +518,9 @@ Beyond the signature, the validator checks the vector against the chain: weights
 | Threat | What stops it |
 |---|---|
 | Publishing scores the traces do not support | Validators re-score every closed window and burn on disagreement |
-| Choosing which problems a candidate faces | Seed-root commitment plus a block-hash beacon — see [Who chooses the problems](#who-chooses-the-problems) |
-| Re-rolling the draw between windows | The commitment is constant across a deployment; `commitments_agree()` checks a run |
+| Binding a draw to a block it did not open at | `verify_beacon_against_chain()` compares the beacon with the real block hash |
+| Re-rolling the draw between windows | `check_draw_was_not_re_rolled()` compares the seed-root commitment across recent windows |
+| Choosing one root dishonestly at genesis | **Not defended.** The root is never revealed, so a constant fake commitment passes |
 | Quietly not re-measuring references | Every window's reference scores are published in its report |
 | Withholding disclosures | Validators refuse a vector more than `max_stale_windows` behind the chain head |
 

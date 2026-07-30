@@ -63,7 +63,7 @@ CAPABILITIES = (
 )
 
 
-def build_contract(snapshot=None) -> dict[str, Any]:
+def build_contract(snapshot=None, seed_root_commitment: str = "") -> dict[str, Any]:
     """Assemble the contract document.
 
     Args:
@@ -106,6 +106,6 @@ def build_contract(snapshot=None) -> dict[str, Any]:
         "hard_gates": hard_gates_contract(),
         "scoring": qualified_scoring_contract(),
         "champion_challenge": ranking_contract(),
-        "windows": windows_contract(),
+        "windows": windows_contract(seed_root_commitment),
         "incentive": incentive_contract(),
     }

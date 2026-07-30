@@ -34,6 +34,7 @@ from capability_subnet.scoring.weight_vector import apply_validator_burn
 from capability_subnet.validator.client import (
     BackendClient,
     BackendUnavailable,
+    check_draw_was_not_re_rolled,
     safe_fallback,
     spot_check_window,
     validate_vector,
@@ -193,6 +194,11 @@ class ValidatorNeuron:
         # caught here — by the party about to pay for it, on a VPS, with no GPU.
         if current_window is not None and self.config.spot_check:
             passed, detail = spot_check_window(self.client, current_window - 1)
+            if passed:
+                # Replay checks that instances match seeds. It cannot check where the
+                # seeds came from, and a root that moves between windows is the
+                # operator re-rolling which problems candidates face.
+                passed, detail = check_draw_was_not_re_rolled(self.client, current_window - 1)
             if not passed:
                 log.error("refusing to pay: %s", detail)
                 self._burn(block, reason=detail)

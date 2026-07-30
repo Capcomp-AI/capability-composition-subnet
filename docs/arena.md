@@ -37,7 +37,7 @@ is not reproducible.
 | Source | Items used | Scoring |
 |---|---|---|
 | `AffineFoundation/affine-lgc` @ `19765edac477` | ~3,193 across 10 families | exact match |
-| `AffineFoundation/rl-python` @ `0cc711b1f059` | ~2,319 problems | execution |
+| `AffineFoundation/rl-python` @ `0cc711b1f059` | ~2,944 problems | execution |
 
 A quarter of every window is drawn from the code corpus (`CODE_FRACTION`).
 Execution is the stronger signal — it asks whether the code works rather than
@@ -52,10 +52,14 @@ requires all of them — but roughly a quarter of the source problems had *only*
 that case, which puts the expected output in the question. A program that ignores
 its input and prints that constant passes.
 
-Those are dropped: a problem is admitted only if at least one retained case
-cannot be answered from the statement. That takes the pool from ~3,920 to ~2,319
-and removes free marks that every package, including the base model, was
-collecting on the axis whose whole claim is that execution is the stronger signal.
+Those are dropped. A problem is admitted only if a constant program cannot pass
+it — that is, unless every case expects the same output *and* the statement prints
+it. Both clauses matter: cases with differing outputs cannot be satisfied by one
+constant however visible they are. Testing visibility alone reads as stricter and
+is simply wrong, discarding 625 sound problems whose outputs were short strings
+like `YES` that any long statement contains by coincidence.
+
+976 problems were exploitable; the pool goes from ~3,920 to ~2,944.
 
 ### Item selection
 

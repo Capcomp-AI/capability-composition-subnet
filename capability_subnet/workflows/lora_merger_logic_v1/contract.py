@@ -20,7 +20,7 @@ from capability_subnet.workflows.shared_contract import (
 )
 
 
-def build_contract(snapshot=None) -> dict[str, Any]:
+def build_contract(snapshot=None, seed_root_commitment: str = "") -> dict[str, Any]:
     """Everything a miner needs to know about how a package is judged here,
     including the limitations.
 
@@ -58,7 +58,7 @@ def build_contract(snapshot=None) -> dict[str, Any]:
             "note": (
                 "Both corpora are public and pinned. The hidden seed protects which "
                 "items a window draws, not the items themselves. Roughly 3,200 logic "
-                "items carry the difficulty labels selection needs and roughly 2,300 "
+                "items carry the difficulty labels selection needs and roughly 2,900 "
                 "code problems are admitted, so corpus size is not the mitigation: "
                 "stratified selection, the executed quarter of each window, and a "
                 "general-capability probe scored outside this corpus are."
@@ -115,6 +115,6 @@ def build_contract(snapshot=None) -> dict[str, Any]:
         "hard_gates": hard_gates_contract(),
         "qualified_score": qualified_scoring_contract(),
         "champion_challenge": ranking_contract(),
-        "windows": windows_contract(),
+        "windows": windows_contract(seed_root_commitment),
         "incentive": incentive_contract(),
     }

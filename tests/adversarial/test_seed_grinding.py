@@ -122,36 +122,17 @@ class TestACodeProblemCannotBeAnsweredFromItsOwnStatement:
     signal.
     """
 
-    def test_no_admitted_problem_is_solvable_by_copying_the_statement(self):
+    def test_no_admitted_problem_falls_to_a_constant_program(self):
         from capability_subnet.workflows.lora_merger_logic_v1 import dataset
 
-        answerable = [
-            item
-            for item in dataset.load_code()
-            if not any(
-                case.expected_stdout.strip() and case.expected_stdout.strip() not in item.question
-                for case in item.cases
-            )
-        ]
-        assert not answerable, f"{len(answerable)} problems can be passed without reading the input"
-
-    def test_the_rule_admits_a_problem_with_a_hidden_case(self):
-        from capability_subnet.workflows.lora_merger_logic_v1.dataset import (
-            TestCase,
-            _has_a_hidden_case,
-        )
-
-        prompt = "Double the input.\nExample:\ninput 2\noutput 4\n"
-        assert _has_a_hidden_case(prompt, (TestCase("2\n", "4\n"), TestCase("21\n", "42\n")))
-
-    def test_the_rule_rejects_a_problem_that_shows_every_answer(self):
-        from capability_subnet.workflows.lora_merger_logic_v1.dataset import (
-            TestCase,
-            _has_a_hidden_case,
-        )
-
-        prompt = "Print 4.\nExample:\noutput 4\n"
-        assert not _has_a_hidden_case(prompt, (TestCase("", "4"),))
+        exploitable = []
+        for item in dataset.load_code():
+            expected = {case.expected_stdout.strip() for case in item.cases}
+            if len(expected) == 1:
+                only = next(iter(expected))
+                if only and only in item.question:
+                    exploitable.append(item.item_id)
+        assert not exploitable, f"{len(exploitable)} problems pass without reading the input"
 
     def test_a_constant_program_no_longer_passes_a_drawn_instance(self):
         """The attack, run: a package that reads nothing and prints the sample."""
@@ -178,3 +159,70 @@ class TestACodeProblemCannotBeAnsweredFromItsOwnStatement:
             f"print({shown.strip()!r})", instance.cases, PythonRunner()
         )
         assert passed < total, "echoing the statement's example still passes every case"
+
+
+class TestTheBindingIsCheckedAndNotJustPublished:
+    """A field nobody verifies is decoration. These cover the difference between
+    publishing a binding and enforcing one."""
+
+    def test_a_fabricated_beacon_is_caught_against_the_chain(self):
+        """The check with teeth. Presence proves nothing — an operator can print
+        any string — so it has to be compared with the real block."""
+        from capability_subnet.audit.replay import verify_beacon_against_chain
+        from capability_subnet.audit.verify import AuditResult
+
+        class Chain:
+            def block_info(self, block):
+                return {"block_hash": "0xtrue-hash-of-the-block"}
+
+        lying = disclosure(3)
+        lying.beacon = "0xwhatever-i-like"
+        result = AuditResult()
+        ok, detail = verify_beacon_against_chain(lying, Chain(), window_blocks=100, result=result)
+        assert not ok
+        assert "fabricated_beacon" in {f.code for f in result.findings}
+        assert "not bound to the block it says" in detail
+
+    def test_an_honest_beacon_passes(self):
+        from capability_subnet.audit.replay import verify_beacon_against_chain
+
+        class Chain:
+            def block_info(self, block):
+                return {"block_hash": "0xagreed"}
+
+        honest = disclosure(3)
+        honest.beacon = "0xagreed"
+        ok, _ = verify_beacon_against_chain(honest, Chain(), window_blocks=100)
+        assert ok
+
+    def test_an_unreachable_chain_is_not_treated_as_fraud(self):
+        """Same policy as the rest of the audit path: an outage must not be
+        indistinguishable from dishonesty."""
+        from capability_subnet.audit.replay import verify_beacon_against_chain
+
+        class Down:
+            def block_info(self, block):
+                raise ConnectionError("no endpoint")
+
+        ok, detail = verify_beacon_against_chain(disclosure(3), Down(), window_blocks=100)
+        assert ok
+        assert "not checked" in detail
+
+    def test_the_validator_actually_runs_the_commitment_check(self):
+        """It was written and never called, which is the same as not having it."""
+        from pathlib import Path
+
+        import capability_subnet.validator.neuron as neuron
+
+        source = Path(neuron.__file__).read_text()
+        assert "check_draw_was_not_re_rolled" in source
+
+    def test_the_contract_carries_a_real_commitment(self):
+        """Threaded from the engine's configured root, not left empty."""
+        from capability_subnet.scoring.sampler import root_commitment
+        from capability_subnet.workflows import get_workflow
+
+        contract = get_workflow("lora_merger_logic_v1").build_contract(
+            seed_root_commitment=root_commitment(4242)
+        )
+        assert contract["windows"]["seed_root_commitment"] == root_commitment(4242)

@@ -141,19 +141,27 @@ def _compare(claimed: InstanceResult, rescored: InstanceResult) -> list[str]:
 
 
 def check_draw_is_bound(disclosure: WindowDisclosure, result: AuditResult) -> None:
-    """Whether this window's instance draw can be shown not to have been chosen.
+    """Whether this window's draw carries the fields that let it be checked.
 
     Replaying a window proves the published instances match the published seeds.
     It says nothing about where the *seeds* came from — and seeds derive from a
     root only the operator holds. An operator free to try roots until the draw
     suited a candidate they had already seen would pass every other check here.
 
-    So two fields have to be present and stable: the beacon this window's draw was
-    bound to, which is a block hash the operator does not choose, and the
-    commitment to the seed root, which must be identical in every window of a
-    deployment. Their absence is not proof of anything, which is why it is a
-    warning — but a run of disclosures whose commitment moves is an operator
-    changing the draw.
+    This function only checks that the two binding fields are *present*. On its
+    own that is nearly worthless: a dishonest operator can print any string into
+    either. It is worth something in combination:
+
+    * :func:`verify_beacon_against_chain` compares the beacon with the real block
+      hash, which a fabricated one fails. That is the check with teeth, and it
+      needs a chain connection.
+    * :func:`commitments_agree` compares the commitment across a run of windows,
+      which catches a root that moved. It cannot catch a constant fake, because
+      nothing reveals the root — so it bounds the attack to "one root chosen
+      before any candidate existed" rather than eliminating it.
+
+    Stated plainly: without an eventual reveal of the seed root, the commitment is
+    a consistency check and not a proof.
     """
     if not disclosure.root_commitment:
         result.add(
@@ -174,12 +182,61 @@ def check_draw_is_bound(disclosure: WindowDisclosure, result: AuditResult) -> No
         )
 
 
+def verify_beacon_against_chain(
+    disclosure: WindowDisclosure,
+    subtensor,
+    *,
+    window_blocks: int,
+    result: AuditResult | None = None,
+) -> tuple[bool, str]:
+    """Compare a window's published beacon with the block hash it claims.
+
+    The check that gives the binding teeth. The beacon is supposed to be the hash
+    of the block the window opened at — a value the operator does not choose. Only
+    reading that block off the chain distinguishes a real beacon from an invented
+    one, and until this runs, "the draw is bound" is the operator's word.
+
+    A chain that cannot be reached is not evidence of dishonesty and returns True
+    with a reason, on the same policy as the rest of the audit path: an outage
+    must not be indistinguishable from fraud.
+    """
+    from capability_subnet.common.chain import block_beacon
+
+    if not disclosure.beacon:
+        detail = f"window {disclosure.window_id} published no beacon to check"
+        if result is not None:
+            result.add("unbound_draw", "warning", detail, f"window {disclosure.window_id}")
+        return False, detail
+
+    opened_at = disclosure.window_id * window_blocks
+    actual = block_beacon(subtensor, opened_at)
+    if not actual:
+        return True, f"block {opened_at} unreadable; beacon not checked"
+
+    if actual != disclosure.beacon:
+        detail = (
+            f"window {disclosure.window_id} claims beacon {disclosure.beacon[:18]} "
+            f"but block {opened_at} hashes to {actual[:18]}; the draw was not bound "
+            "to the block it says it was"
+        )
+        if result is not None:
+            result.add("fabricated_beacon", "error", detail, f"window {disclosure.window_id}")
+        return False, detail
+
+    return True, f"beacon matches block {opened_at}"
+
+
 def commitments_agree(disclosures: list[WindowDisclosure]) -> tuple[bool, str]:
     """Whether a run of windows all derive from one seed root.
 
     The check a single disclosure cannot make. One commitment proves nothing; the
     same commitment across every window a deployment has published is what says
-    the operator has not been re-rolling the draw.
+    the operator has not been re-rolling the draw between windows.
+
+    What it does *not* prove: that the commitment corresponds to the root actually
+    used. Nothing reveals the root, so a constant fabricated string passes. This
+    bounds the attack rather than closing it — an operator must pick one root and
+    keep it, which means picking it before seeing any candidate.
     """
     seen = {d.root_commitment for d in disclosures if d.root_commitment}
     if not seen:

@@ -273,6 +273,44 @@ def spot_check_window(client: BackendClient, window_id: int) -> tuple[bool, str]
     return True, f"window {window_id}: {outcome.summary()}"
 
 
+def check_draw_was_not_re_rolled(
+    client: BackendClient, window_id: int, *, windows: int = 5
+) -> tuple[bool, str]:
+    """Whether recent windows all derive from one seed root.
+
+    Replaying a single window cannot ask this: it checks that the instances match
+    the seeds, not where the seeds came from. Seeds derive from a root only the
+    operator holds, so a root that changes between windows is the operator
+    re-rolling which problems candidates face — and one disclosure never shows it.
+
+    Bounds rather than closes the attack. Nothing reveals the root, so a constant
+    fabricated commitment passes; what this forces is that the operator commit to
+    one value and keep it. Pair it with the beacon check, which does compare
+    against the chain.
+
+    A window that is missing or unreachable is skipped rather than failed, on the
+    same policy as the rest of the validator: an outage must not read as fraud.
+    """
+    from capability_subnet.audit.replay import commitments_agree
+
+    collected = []
+    for candidate in range(max(0, window_id - windows + 1), window_id + 1):
+        try:
+            collected.append(client.fetch_disclosure(candidate))
+        except (BackendUnavailable, SignatureError):
+            continue
+
+    if len(collected) < 2:
+        return True, "not enough disclosed windows to compare seed roots"
+
+    agreed, detail = commitments_agree(collected)
+    if not agreed and "no window published" in detail:
+        # An operator who publishes nothing is not caught here; that is the
+        # limitation, and it is a warning rather than a refusal to pay.
+        return True, detail
+    return agreed, detail
+
+
 def safe_fallback(burn_uid: int, vector: WeightVector) -> WeightVector:
     """The vector to submit when a fetched one cannot be trusted.
 
@@ -297,6 +335,7 @@ __all__ = [
     "BackendUnavailable",
     "SignatureError",
     "ValidationProblem",
+    "check_draw_was_not_re_rolled",
     "safe_fallback",
     "spot_check_window",
     "validate_vector",
