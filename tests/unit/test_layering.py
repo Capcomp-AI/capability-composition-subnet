@@ -296,3 +296,55 @@ class TestTheOperatorEngineIsSeparable:
             if p.stem != "__init__"
         }
         assert expected == present, f"scoring/ drifted: {expected ^ present}"
+
+
+class TestTheBaseInstallNeedsNoTensorStack:
+    """A validator installs the base package and no torch, on a documented 20 GB
+    VPS. Anything it does must work without the tensor stack."""
+
+    @staticmethod
+    def _without_torch():
+        import builtins
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _guard():
+            real = builtins.__import__
+
+            def blocked(name, *args, **kwargs):
+                if name == "torch" or name.startswith("torch."):
+                    raise ImportError("torch is not installed")
+                return real(name, *args, **kwargs)
+
+            builtins.__import__ = blocked
+            try:
+                yield
+            finally:
+                builtins.__import__ = real
+
+        return _guard()
+
+    def test_a_contract_builds_without_torch(self):
+        """The published contract names every merge method and its stages. That
+        is description, not arithmetic, so reading it must not require the
+        implementation — a validator checks contracts and merges nothing."""
+        import importlib
+        import sys
+
+        for module in [m for m in sys.modules if m.startswith("capability_subnet.workflows")]:
+            del sys.modules[module]
+
+        with self._without_torch():
+            workflows = importlib.import_module("capability_subnet.workflows")
+            contract = workflows.get_workflow("lora_merger_logic_v1").build_contract()
+
+        assert contract["recipe"]["merge_methods"]
+        assert contract["base_model"]["repo"]
+
+    def test_the_method_descriptions_live_apart_from_the_arithmetic(self):
+        import capability_subnet.common.merge_methods as descriptions
+        from capability_subnet.common import constants as constants_module
+
+        source = open(descriptions.__file__, encoding="utf-8").read()
+        assert "import torch" not in source
+        assert set(descriptions.PIPELINES) == set(constants_module.ALLOWED_MERGE_METHODS)

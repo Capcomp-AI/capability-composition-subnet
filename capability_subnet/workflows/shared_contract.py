@@ -13,7 +13,7 @@ from typing import Any
 
 from capability_subnet.common import constants as C
 from capability_subnet.common.schemas import recipe_json_schema
-from capability_subnet.merge_engine.methods import PIPELINES
+from capability_subnet.common.merge_methods import PIPELINES
 
 
 def resolve_snapshot(snapshot=None):
