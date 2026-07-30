@@ -1,33 +1,16 @@
 """Ranking submissions when the highest score wins.
 
-A leaderboard is a simpler contract than champion-challenge and it removes a
-real failure: under the old rule a challenger had to clear the strongest
-permanent reference by an absolute margin, so a network whose best merge never
-beat the base model would burn its emission indefinitely while producing
-perfectly good comparative information. Paying the best merge on the board is a
-decision the operator is entitled to make — the product is the best composition
-anyone has found, not proof that composition was worth attempting.
+Under a margin rule an identical copy of the leader cannot displace it, because
+identical scores are not a margin. Under a leaderboard a copy *ties*, and since
+no two evaluations of two distinct artifacts land on exactly the same number, a
+copy with one coefficient nudged will sometimes score a hair higher on sampling
+noise alone. Recipes are public, so that is a real path and not a hypothetical.
 
-It opens one thing champion-challenge closed, though, and it has to be closed
-again here.
-
-Under a margin rule, a copy of the leader could not displace the leader: an
-identical package scores identically and identical is not a margin. Under a
-leaderboard, an identical package *ties* — and since no two evaluations of two
-distinct artifacts land on exactly the same number, a copy with one coefficient
-nudged will sometimes score a hair higher and take the top slot on nothing but
-sampling noise. Recipes are public, so this is not hypothetical: read the
-leader's recipe, perturb it, resubmit.
-
-The fix reuses the machinery the comparator already needs. Two scores closer
-together than the window can resolve are not evidence that one package is
-better; they are one measurement repeated. So submissions within the minimum
-detectable effect of each other are ranked as **tied**, and ties resolve to the
-earliest commitment. A copier commits later by construction and therefore can
-never displace what it copied — it has to be *measurably* better, which is the
-same bar the margin rule enforced, expressed in the units the evidence actually
-supports.
+So submissions within the minimum detectable effect of each other are ranked as
+**tied**, and ties resolve to the earliest commitment. A copier commits later by
+construction and therefore has to be *measurably* better.
 """
+
 
 from __future__ import annotations
 

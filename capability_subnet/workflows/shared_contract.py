@@ -1,12 +1,10 @@
 """The parts of a published contract that do not depend on the workflow.
 
 The base model, the frozen pool, the recipe schema and its bounds are facts about
-the *protocol*, not about whichever workflow is judging. A miner needs them
-whatever arena is running, and they were previously written out inside one
-workflow's contract — so a second workflow published a contract with no base
-model and no pool in it, which is not a contract a miner can build against.
+the *protocol*, not about whichever workflow is judging, and a miner needs them
+whatever arena is running.
 
-Kept here so the two cannot drift. A third workflow gets them by calling this.
+Kept here so two workflows cannot drift. A third gets them by calling this.
 """
 
 from __future__ import annotations
@@ -80,11 +78,9 @@ def qualified_scoring_contract() -> dict[str, Any]:
 
 
 def ranking_contract() -> dict[str, Any]:
-    """How the board is ordered, in both contracts the engine supports.
+    """How the board is ordered, in both modes the engine supports.
 
-    Stated as two modes rather than one rule, because `require_beat_reference`
-    decides which applies and it ships **off**. A contract that described only the
-    strict rule would describe a configuration the operator is not running.
+    `require_beat_reference` decides which applies, and it ships off.
     """
     return {
         "axis_margin": C.DEFAULT_AXIS_MARGIN,

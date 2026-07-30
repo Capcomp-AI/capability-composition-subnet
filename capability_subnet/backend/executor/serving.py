@@ -189,12 +189,9 @@ class ManagedVllmServer:
         if self.reasoning_parser:
             command += ["--reasoning-parser", self.reasoning_parser]
 
-        # Request logging is off by default in current vLLM, and the flag that
-        # used to turn it off was removed rather than deprecated — passing it
-        # makes the server exit with an argparse error before it loads
-        # anything, which surfaces as every candidate failing to be served. The
-        # engine does not control which vLLM an operator installed, so it asks
-        # rather than assumes.
+        # Not every vLLM release accepts this flag, and an unknown flag makes
+        # the server exit with an argparse error before it loads anything. The
+        # engine does not control which vLLM an operator installed, so it asks.
         if self._accepts("--disable-log-requests"):
             command.append("--disable-log-requests")
         if adapter_path:

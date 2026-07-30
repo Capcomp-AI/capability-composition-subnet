@@ -1,6 +1,6 @@
 # Architecture
 
-How the pieces fit together, and — more usefully — why each one is shaped the way it is.
+How the pieces fit together.
 
 ---
 
@@ -56,7 +56,7 @@ capability_subnet/
 ├── workflows/       workflow definitions, instance generators, deterministic scorers
 ├── sandbox/         isolated execution — agent loop, tool services, limits
 ├── backend/         the evaluation engine (operator-only)
-├── miner/           recipe construction, local evaluation, search, commitment
+├── miner/           recipe construction, local evaluation, commitment
 ├── validator/       the thin weight-setter
 └── platform/        object storage, compatibility history, dashboard
 ```
@@ -175,9 +175,9 @@ Turning bar 3 off opens a hole that bar 4 was quietly closing, and it is closed 
 
 So submissions closer together than the window can **resolve** are ranked as tied, and ties resolve to the earliest commitment. A copier commits later by construction, so it has to be measurably better — the same bar the margin enforced, expressed in the units the evidence actually supports. Indistinguishability is not transitive, so ranking groups maximal runs into equivalence classes rather than swapping pairs.
 
-Bars 3 and 4 are separate on purpose, and conflating them was a real mistake with a specific consequence. When the incumbent counted among the references, every successive champion had to beat the previous one by a further three points of completion. Completion is bounded by one, so that staircase admits a few dozen dethrones in principle and stalls after a handful in practice — after which one package holds the throne permanently, no further work can be bought, and the network pays rent.
+Bars 3 and 4 are separate. If the incumbent counted among the references, every successive champion would have to beat the previous one by a further margin, and since completion is bounded by one that bar walks upward until nothing can move it.
 
-The decay resolves the question the network cannot answer from the inside: an incumbent nothing has displaced for a month is either genuinely excellent or merely unopposed, and letting its advantage fall settles that in favour of the contest continuing.
+The decay means an incumbent nothing has displaced for a month loses its advantage rather than holding the throne on the strength of being unopposed.
 
 The test is **paired** because both packages ran on the same instances. Pairing removes instance difficulty from the comparison entirely: what gets resampled is the vector of per-instance differences, not two independent score distributions. That is a substantially tighter test, and it is only available because the engine controls which instances both sides saw.
 
@@ -216,7 +216,7 @@ None of them can be terminated and **none of them earn emission**. Under the str
 
 ## What a centralised engine is and is not trusted for
 
-Evaluation runs in one place. That is a real concentration of trust and it is worth stating plainly what it does and does not buy an operator.
+Evaluation runs in one place. That is a concentration of trust, and this is what it does and does not buy an operator.
 
 The operator **is** trusted to choose the hidden instances (from a secret root), to run the sandbox, and to publish honestly and promptly.
 
@@ -288,30 +288,11 @@ So the top slot is winner-takes-most and everything below it is graded:
 
 Only candidates that cleared **every hard gate** are graded — this is not a consolation prize for producing something undeployable. If nobody qualifies, the graded pool burns rather than folding into the champion's share, because holding an uncontested throne is not an achievement. Each grade is published broken into its four terms, so a miner can act on it.
 
-Proximity is deliberately not a gate. Rewarding closeness alone would pay for copying the champion, which is why it is one term of four and why the anti-copy check runs *before* the evaluation rather than after it.
+Proximity is not a gate. Rewarding closeness alone would pay for copying the leader, so it is one term of four and the anti-copy check runs *before* evaluation.
 
 **Stage balance** is a geometric mean of the per-stage means, and the choice of mean is doing real work: a package scoring 1.0 on all but one axis and 0.1 on the last lands far below one scoring 0.8 everywhere, even though their arithmetic means are close. A workflow needs every axis it declares — seven for the maintenance chain, twelve for the arena — so a package that abandoned one has not solved it.
 
 **Retention** is measured on a held-out general-capability probe, *not* on the workflow. That distinction is the whole reason the term exists, and it is the one term that does not weaken when bar 3 is off: a comparison against the base model's *workflow* completion cannot detect collapse under the strict contract either, since a candidate only reaches the gate after beating the base by a margin, so the ratio is always above one and the clamp returns exactly `1.0` for every candidate that could possibly be crowned. The probe asks short, exactly-scored questions about the behaviours aggressive merging actually destroys — following a format, not padding an answer, arithmetic, ordering, answering in the language it was addressed in — drawn per window from their own secret seed and asked of the base model on the same draw.
-
----
-
-## Go/no-go
-
-The network should not register until:
-
-- optimised composition beats the best single adapter;
-- optimised composition beats standard TIES/DARE baselines;
-- the improvement survives hidden out-of-distribution data;
-- reconstruction is deterministic across independent workers;
-- one full candidate fits the hardware budget;
-- the continuous engine processes the expected miner count within the window budget;
-- security tests pass;
-- the commercial package has a clear buyer or pilot.
-
-**If composition cannot beat strong baselines, the correct decision is not to launch.**
-
-That is not a rhetorical hedge. Efficient multi-adapter serving is a strong competitor, and static merging is only worth selling where measured total cost is genuinely better. The reference baselines exist precisely so the network can discover the answer is "no" rather than paying miners to not discover it.
 
 ---
 

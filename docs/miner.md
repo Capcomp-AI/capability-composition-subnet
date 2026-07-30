@@ -2,7 +2,7 @@
 
 You have one job: find the composition of certified adapters that completes the workflow better than anything else on the board — then commit it once.
 
-Your entire on-chain footprint is a single commitment. You never serve inference, never answer a query, and never run a process the network talks to. How you search is entirely your business.
+Your entire on-chain footprint is a single commitment. You never serve inference, never answer a query, and never run a process the network talks to. How you search is your own business.
 
 ---
 
@@ -27,7 +27,7 @@ So: validate locally, evaluate locally, and only then commit.
 git clone <repository-url> lora-merger && cd lora-merger
 pip install -e .
 
-# Add the local search + evaluation extras if you have a GPU
+# Add the reconstruction + evaluation extras if you have a GPU
 pip install -e ".[miner]"
 ```
 
@@ -139,19 +139,19 @@ Two things worth knowing:
 
 ## 6. Search
 
-There is a reference search to get you started, and it will not win:
+No search is shipped. The starting point is a random valid recipe:
 
 ```python
-from capability_subnet.miner.search import coarse_search, refine_layer_groups
+from capability_subnet.miner.baseline import random_recipe
 
-report = coarse_search(my_scoring_function, budget=24, shuffle_seed=1)
-refined = refine_layer_groups(
-    report.best.recipe, my_scoring_function,
-    adapters=["industrial-ifc-v1", "embedded-engineering-v1"],
-)
+recipe = random_recipe(seed=1, adapter_count=4)
 ```
 
-A grid does not see the interactions between adapters, and the interactions are where the value is. Things worth investigating that a grid will not find for you:
+Equivalently, `miner.cli init --random`. It picks adapters at random and assigns
+arbitrary coefficients — enough to have something that validates, and nothing
+more. Building a search is the work.
+
+Things worth investigating:
 
 - **Which pairs interfere.** Two adapters that are individually good can cancel each other's updates. Sign election exists because of this.
 - **Depth.** Reading a manual and writing SQL are not the same kind of behaviour and do not live in the same layers.

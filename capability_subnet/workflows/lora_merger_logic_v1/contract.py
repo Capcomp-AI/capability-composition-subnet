@@ -21,12 +21,8 @@ from capability_subnet.workflows.shared_contract import (
 
 
 def build_contract(snapshot=None) -> dict[str, Any]:
-    """Everything a miner needs to know about how a package is judged here.
-
-    Including the parts that are limitations. A contract that published only the
-    favourable properties would be marketing; the notes below on corpus
-    visibility and difficulty calibration are exactly what a miner needs in order
-    to decide whether to compete.
+    """Everything a miner needs to know about how a package is judged here,
+    including the limitations.
 
     Args:
         snapshot: the frozen pool. The engine passes its own so the published
@@ -60,15 +56,12 @@ def build_contract(snapshot=None) -> dict[str, Any]:
             "code_difficulties": sorted(S.CODE_DIFFICULTIES),
             "task_families": [*S.LOGIC_FAMILIES, S.CODE_FAMILY],
             "note": (
-                "Both corpora are public and pinned. What the hidden seed protects is "
-                "which items a window draws, not the items themselves — a weaker "
-                "anti-overfitting property than a generated workflow, and the price "
-                "of corpora whose difficulty is already measured. Corpus size is not "
-                "the mitigation and is not claimed as one: roughly 3,200 logic items "
-                "carry the difficulty labels selection needs, and roughly 3,900 code "
-                "problems are admitted. The mitigations that do apply are stratified "
-                "selection, the executed quarter of each window, and a general-"
-                "capability probe scored outside this corpus entirely."
+                "Both corpora are public and pinned. The hidden seed protects which "
+                "items a window draws, not the items themselves. Roughly 3,200 logic "
+                "items carry the difficulty labels selection needs and roughly 3,900 "
+                "code problems are admitted, so corpus size is not the mitigation: "
+                "stratified selection, the executed quarter of each window, and a "
+                "general-capability probe scored outside this corpus are."
             ),
         },
         "harness": {
@@ -80,10 +73,9 @@ def build_contract(snapshot=None) -> dict[str, Any]:
             "enable_thinking": C.SANDBOX_ENABLE_THINKING,
             "note": (
                 "One question, one answer, no tools and no state. Sampling is greedy "
-                "and seeded per instance, and the model's separate reasoning channel "
-                "is disabled — so the difficulty labels in the logic corpus, which were "
-                "measured at pass@16 with sampling, overstate what this harness "
-                "observes. Expect materially lower absolute scores than the band."
+                "and seeded per instance, and the reasoning channel is disabled. The "
+                "logic corpus difficulty labels were measured at pass@16 with sampling, "
+                "so expect absolute scores well below the band."
             ),
         },
         "scoring": {
@@ -96,12 +88,11 @@ def build_contract(snapshot=None) -> dict[str, Any]:
             "axes": [*S.LOGIC_FAMILIES, S.CODE_FAMILY, "format_compliance"],
             "note": (
                 "No language model judges any part of a result. Format compliance is "
-                "its own axis rather than part of correctness: a package that is right "
-                "but can no longer follow an output instruction has failed differently "
-                "from one that is wrong, and losing compliance is the most common way "
-                "an over-aggressive merge goes bad. One caveat on that axis: families "
-                "whose answer is itself a bracketed list are compliant by construction, "
-                "so it carries information mainly on the scalar families and on code."
+                "its own axis rather than part of correctness, because a package that "
+                "is right but can no longer follow an output instruction has failed "
+                "differently from one that is wrong. Note that families whose answer is "
+                "itself a bracketed list are compliant by construction, so the axis is "
+                "informative mainly on the scalar families and on code."
             ),
         },
         "stages": {
@@ -116,10 +107,9 @@ def build_contract(snapshot=None) -> dict[str, Any]:
             "min_selected_adapters": C.MIN_SELECTED_ADAPTERS,
             "max_cases_per_problem": S.MAX_CASES_PER_PROBLEM,
             "note": (
-                "A submission must combine at least two adapters. A single adapter is "
-                "a reference, not a candidate. Code problems are scored on the first "
-                "32 test cases, a bound published because it is part of what a score "
-                "means rather than an implementation detail."
+                "A submission must combine at least two adapters; a single adapter is "
+                "a reference, not a candidate. Code problems are scored on at most the "
+                "first 32 test cases."
             ),
         },
         "hard_gates": hard_gates_contract(),

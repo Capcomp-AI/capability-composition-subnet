@@ -216,4 +216,3 @@ existing.
 
 What an operator does keep private is the hidden seed root, wallet material,
 filled-in configuration, host inventory and runbooks — operations, not protocol.
-See [repositories.md](repositories.md).

@@ -247,9 +247,7 @@ def store(tmp_path: Path):
 #:
 #: The suites built on this fixture read that workflow's own instance fields —
 #: sensor logs, SQL snapshots, the reference solver — so they are tests *of* it,
-#: not tests of whichever workflow an operator happens to have configured. Before
-#: this was pinned, changing the shipped default broke fifty-six tests that had
-#: nothing to say about the change.
+#: not of whichever workflow an operator has configured.
 MAINTENANCE_WORKFLOW_ID = "industrial_maintenance_de_v1"
 
 

@@ -1,4 +1,4 @@
-"""Miner-side tooling: recipe construction, local evaluation, search and commitment."""
+"""Miner-side tooling: recipe construction, local evaluation and commitment."""
 
 from capability_subnet.miner.recipe import (
     RecipeError,

@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 
 #: Room to reason before answering, without room to ramble indefinitely.
 #: A package that needs more than this has failed the instruction, not run out
-#: of space — the first measured run had a collapsed merge spending five times
+#: of space — a collapsed merge can spend several times
 #: the base model's tokens and answering nothing.
 MAX_OUTPUT_TOKENS = 1024
 

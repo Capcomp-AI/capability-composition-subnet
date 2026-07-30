@@ -67,7 +67,7 @@ sandbox = [
   "uvicorn>=0.29",
   "psycopg[binary]>=3.1",
 ]
-# Miners who want the reference local search and evaluation loop.
+# Miners who want local reconstruction and evaluation.
 miner = [
   "capability-subnet[merge]",
   "transformers>=4.44",

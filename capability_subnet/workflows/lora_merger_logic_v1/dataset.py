@@ -1,24 +1,19 @@
 """Loading the pinned corpora, and how a seed selects from them.
 
-Instance generation in the maintenance workflow is a pure function of the seed —
-an auditor regenerates the exact problem from the seed alone. A fixed corpus
-cannot quite offer that, and the difference is worth stating rather than
-glossing: the *items* are public, so a miner can see every one, and what the
-secret seed protects is only which items a window draws.
+A generated workflow is a pure function of its seed, so an auditor regenerates
+the exact problem from the seed alone. A fixed corpus offers less: the *items* are
+public, and what the secret seed protects is only which of them a window draws.
 
-That is a weaker anti-overfitting guarantee than a generator, and corpus size
-does not rescue it: only ~3,193 logic items carry the difficulty labels selection
-depends on (see :mod:`.sources` for why the million-row variant adds none). What
-is bought back instead: selection is stratified, so a window cannot be dominated
-by whichever family a miner happened to study; a quarter of every window is
-scored by **executing** the candidate's program, where recognising a memorised
-problem does not help unless the code actually runs; and general capability is
-probed separately, so a package tuned onto this corpus at the cost of everything
-else is caught by the retention floor rather than the arena.
+Three things narrow that gap. Selection is stratified, so a window cannot be
+dominated by whichever family a miner studied. A quarter of every window is scored
+by **executing** the candidate's program, where recognising a memorised problem
+does not help unless the code runs. And general capability is probed separately,
+so a package tuned onto this corpus at the cost of everything else is caught by
+the retention floor rather than the arena.
 
-Everything the audit design needs is intact. Selection is deterministic in the
-seed and every revision is pinned, so an auditor replaying a closed window draws
-exactly the items the candidate faced and those items cannot change underneath.
+The audit path is intact either way: selection is deterministic in the seed and
+every revision is pinned, so a replay draws exactly the items the candidate faced
+and those items cannot change underneath.
 """
 
 from __future__ import annotations

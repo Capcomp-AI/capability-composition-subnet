@@ -357,7 +357,7 @@ improvements more meaningful; lowering it risks crowning noise, and below the
 resolvable floor it stops the contest entirely. Do not tune it in response to a
 specific candidate.
 
-`champion_margin` is deliberately separate from `end_to_end_margin`, and setting them equal recreates a bug rather than simplifying the configuration: the incumbent would then effectively count as a reference, every successive champion would have to beat the previous one by a further fixed margin, and the bar would walk upward until nothing could move it. Setting `champion_margin_decay_blocks` to `0` disables the decay and reintroduces a permanent defender's advantage — an incumbent that nothing displaces then holds the throne indefinitely.
+`champion_margin` is separate from `end_to_end_margin`. Setting them equal makes the incumbent count as a reference, so every successive champion must beat the previous one by a further fixed margin and the bar walks upward until nothing can move it. Setting `champion_margin_decay_blocks` to `0` disables the decay, giving a permanent defender's advantage.
 
 ### Incentive
 

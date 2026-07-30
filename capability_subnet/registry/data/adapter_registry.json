@@ -1,6 +1,6 @@
 {
-  "registry_version": 3,
-  "workflow_id": "industrial_maintenance_de_v1",
+  "registry_version": 4,
+  "workflow_id": "lora_merger_logic_v1",
   "base_revision": "b968826d9c46dd6066d109eabc6255188de91218",
   "canonical_rank": 64,
   "canonical_lora_alpha": 64,

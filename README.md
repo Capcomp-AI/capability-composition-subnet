@@ -76,19 +76,17 @@ A challenger must clear four independent bars:
 | **Defender's advantage** | Beat the incumbent by a further margin that decays to zero over ~30 days |
 | **Statistical significance** | Paired bootstrap lower confidence bound above zero on shared instances |
 
-The second bar is the one that matters most. It stops a package from trading away, say, safety compliance for a better SQL score: the average would improve and the package would be worse at the job.
+The second bar stops a package trading away one capability for a better average.
 
-The third bar is what keeps the network honest at genesis. Standard, non-learned baselines sit on the board permanently — the base model, the best single adapter, three equal-weight merges, and the operator's own published recipe. **If a miner cannot beat all of them, composition has not added value and nobody gets paid.** A reference on the throne earns nothing; the share burns.
+The third bar is **off by default** (`require_beat_reference`): the highest score on the board is paid whether or not it cleared the strongest reference. References are still measured and published every window. Enable it for the stricter contract.
 
-The incumbent is deliberately *not* one of the permanent references. Folding it in would mean every successive champion had to beat the previous one by a further three points — and since completion is bounded by one, that staircase stalls after a handful of dethrones, after which one package holds the throne forever and the network buys nothing more. The incumbent instead gets its own, smaller margin that decays: a defender's advantage for holding the throne well, not a freehold.
+The incumbent is not one of the permanent references. It gets its own smaller margin, which decays to zero over roughly thirty days.
 
-**One shot per hotkey.** A decisive loss terminates the challenger permanently. That rule is only defensible if the engine never spends a candidate's shot on its own bad night, so failures that indict the *engine* — an unreadable memory counter, too few scored instances — hold the candidate for a later window instead of ending it.
+**One shot per hotkey.** A decisive loss terminates the challenger permanently. Failures that indict the engine — an unreadable memory counter, too few scored instances — hold the candidate for a later window instead of ending it.
 
 ### Losing well is worth something
 
-Winner-take-all throws away the network's most useful signal. Almost every submission that is ever evaluated will fail to take the throne, and a recipe is *one shot* — a miner cannot iterate on it the way a code-submitting miner can. Paying a miner who moved end-to-end completion from 0.41 to 0.58 exactly what it pays one that submitted a soup of distractors tells neither of them anything.
-
-So the throne is winner-takes-most, and everything below it is **graded**:
+Almost every submission will fail to take the top slot, and a recipe is one shot. So the top slot is winner-takes-most and everything below it is **graded**:
 
 | Term | Weight | What it rewards |
 |---|---|---|
@@ -97,9 +95,9 @@ So the throne is winner-takes-most, and everything below it is **graded**:
 | Proximity | 15% | How close it came to the champion — a near miss is not a wasted registration |
 | Cost | 10% | Token spend and latency, because two packages that finish equally are not equally valuable |
 
-Only packages that cleared **every hard gate** are graded. This is not a consolation prize for producing something undeployable, and if nobody qualifies the graded pool burns rather than becoming a bonus for an uncontested champion. Every grade is published broken into its four terms, so a miner can see what earned it.
+Only packages that cleared **every hard gate** are graded. If nobody qualifies the graded pool burns. Every grade is published broken into its four terms.
 
-Miners still waiting in the queue earn a small tapered share on top. Not payment for work: Bittensor prunes by lowest emission, so a strict winner-take-all split makes every unevaluated challenger the first thing the chain evicts.
+Miners still waiting in the queue earn a small tapered share, so an unevaluated challenger is not the first thing the chain prunes.
 
 ## Two arenas
 
@@ -107,18 +105,16 @@ A package is judged by a **workflow**, and the engine does not hardcode one. Wor
 
 | Workflow | What it is | Role |
 |---|---|---|
-| `lora_merger_logic_v1` | Single-turn reasoning puzzles and execution-verified programming problems, twelve axes — [reference](docs/arena.md) | **What a launch runs.** Built to measure composition with as little between the answer and the measurement as possible |
-| `industrial_maintenance_de_v1` | A twelve-turn German maintenance chain, seven dependent axes — [reference](docs/workflow.md) | The product demonstration, and a poor instrument for *this* pool: its oracle needs ten of twelve turns and no public adapter covers German or SQL |
-
-The split is deliberate. The maintenance workflow shows what composition is *for*; the arena is where the question "does this merge beat its constituents" can actually be answered, because its items carry pre-measured difficulty and nothing in it is judged by a model.
+| `lora_merger_logic_v1` | Single-turn reasoning puzzles and execution-verified programming problems, twelve axes — [reference](docs/arena.md) | The default |
+| `industrial_maintenance_de_v1` | A twelve-turn German maintenance chain, seven dependent axes — [reference](docs/workflow.md) | A multi-turn agent workflow |
 
 ### `lora_merger_logic_v1` — the arena
 
 Two pinned corpora. ~3,193 logic puzzles across ten families, scored by exact match against the answer the prompt asked for. ~3,920 competitive-programming problems, scored by **running the submitted program** against stdin/stdout cases in an isolated interpreter — a quarter of every window, because execution asks whether the code works rather than whether the answer looks right.
 
-Items are selected in the band where a model of this class actually discriminates (the corpus carries its own measured pass rate), stratified by family, and deterministic in a hidden seed.
+Items are selected in the band where a model of this class discriminates — the corpus carries its own measured pass rate — stratified by family, and deterministic in a hidden seed.
 
-Its limitations are published rather than argued away: the corpora are public, so what the seed protects is *which* items a window draws and not the items themselves; and the difficulty labels were measured at pass@16 with sampling while this engine scores pass@1 greedy, so absolute scores land far below the band. [docs/arena.md](docs/arena.md) states both in full.
+Two limits apply. The corpora are public, so the seed protects *which* items a window draws rather than the items themselves. And the difficulty labels were measured at pass@16 with sampling while this engine scores pass@1 greedy, so absolute scores land below the band. See [docs/arena.md](docs/arena.md).
 
 ### `industrial_maintenance_de_v1` — the demonstration
 
@@ -133,15 +129,14 @@ Seven scored capability axes in one dependent chain — manual interpretation, f
 
 **No language model decides the result.** Manual facts come from generator metadata. Fault codes come from a deterministic machine schema. SQL is judged by executing it against a hidden PostgreSQL snapshot. Python is judged by hidden test cases the agent never sees. Inventory is judged by the simulator's final state, safety by a deterministic rule engine, and the final report by JSON Schema plus exact value comparison.
 
-That determinism is not fastidiousness — it is what makes the paired statistics valid and lets a disputed evaluation be replayed years later with the same answer.
+Determinism is what makes the paired statistics valid and lets a disputed evaluation be replayed later with the same answer.
 
 ## Quick start
 
 ```bash
 git clone <repository-url> lora-merger && cd lora-merger
 
-# Install what your role needs. The base install is deliberately small —
-# a validator never touches the tensor stack, so it does not download one.
+# Install what your role needs. A validator never touches the tensor stack.
 pip install -e .              # validator, auditor  (~50 MB)
 pip install -e ".[miner]"     # + reconstruction and local evaluation
 pip install -e ".[backend]"   # + serving, sandbox services, NVML
@@ -159,7 +154,7 @@ python -m capability_subnet.workflows.cli show --seed 42 --with-truth   # the ma
 python -m capability_subnet.workflows.cli selftest --count 10
 
 # Build and check a recipe
-python -m capability_subnet.miner.cli init --out recipe.json
+python -m capability_subnet.miner.cli init --random --out recipe.json
 python -m capability_subnet.miner.cli validate --recipe recipe.json
 ```
 
@@ -176,14 +171,14 @@ Then read the guide for your role:
 
 Validators do not reconstruct, serve or score anything. They fetch the signed weight vector the engine publishes, verify it, and set weights.
 
-That is a real trade: it concentrates evaluation in one operator. What keeps it honest is that a validator is **not a relay**. Before touching the chain it:
+This concentrates evaluation in one operator. A validator is not a relay — before touching the chain it:
 
 1. verifies the operator signature against an allow-list it controls,
 2. checks the vector against the chain it can see — does the champion still hold that UID? is the engine stalled?
 3. **re-scores a closed window from the engine's own published traces**, and
 4. **burns rather than submitting anything it cannot verify.**
 
-Step 3 is the one that turns a signature into evidence. A signature proves the operator produced a vector; it says nothing about whether the evaluation behind it was honest. Because instance generation is a pure function of the seed and the scorer is deterministic, a validator regenerates exactly the problems the candidates faced and re-runs the scoring over the published traces — on a VPS, with no GPU and no model. **An engine whose scores do not follow from its own traces does not get paid.**
+Step 3 is what turns a signature into evidence. Instance generation is a pure function of the seed and the scorer is deterministic, so a validator regenerates the problems the candidates faced and re-runs the scoring over the published traces — on a VPS, with no GPU and no model. **An engine whose scores do not follow from its own traces does not get paid.**
 
 Every validator does this automatically. Beyond that, anyone can check the record by hand, also without a GPU:
 
@@ -201,18 +196,17 @@ A published score that does not follow from its published trace is caught.
 
 | Document | What it covers |
 |---|---|
-| [Architecture](docs/architecture.md) | How the pieces fit and why the design is shaped this way |
+| [Architecture](docs/architecture.md) | How the pieces fit together |
 | [Miner guide](docs/miner.md) | Building, evaluating and committing a recipe |
 | [Validator guide](docs/validator.md) | Running a validator, verification, failure modes |
 | [Engine operations](docs/backend.md) | Operating the evaluation engine |
-| [Arena reference](docs/arena.md) | The logic + code arena a launch runs, and its limitations |
-| [Workflow reference](docs/workflow.md) | The V1 maintenance workflow, its stages and how each is scored |
+| [Arena reference](docs/arena.md) | The default arena: corpora, scoring, limits |
+| [Workflow reference](docs/workflow.md) | The maintenance workflow, its stages and scoring |
 | [Recipe reference](docs/recipe.md) | Every field, bound and merge method |
-| [Security model](docs/security.md) | Threats, defences and what is deliberately not defended |
-| [Repositories](docs/repositories.md) | What is public, what an operator keeps private, and why |
+| [Security model](docs/security.md) | Threats, defences and what is not defended |
 | [Deployment](docs/deployment.md) | Local, testnet and mainnet |
 | [FAQ](docs/faq.md) | Common questions |
-| [Changelog](CHANGELOG.md) | Release history, including what an audit pass found |
+| [Changelog](CHANGELOG.md) | Release history |
 
 ## Project layout
 
@@ -224,67 +218,32 @@ capability_subnet/
 ├── workflows/       workflow definitions, generators and deterministic scorers
 ├── sandbox/         isolated execution: agent loop, tool services, limits
 ├── backend/         the evaluation engine (operator-only)
-├── miner/           recipe construction, local evaluation, search, commitment
+├── miner/           recipe construction, local evaluation, commitment
 ├── validator/       the thin weight-setter
 ├── audit/           independent verification of published records
 └── platform/        storage, compatibility history, dashboard
 ```
 
-## Status and honest limits
+## Scope
 
-This is a V1 protocol, and it is deliberately narrow: one base model, one adapter pool, one workflow running at a time, one declarative recipe format, no routing, no distillation, no miner-hosted inference.
+This is a V1 protocol, and it is deliberately narrow: one base model, one adapter
+pool, one workflow running at a time, one declarative recipe format, no routing,
+no distillation, no miner-hosted inference.
 
-**Does composition beat the equal-weight merge? On this pool, measured: no.**
+Narrowness makes the subnet measurable, secure and reproducible with technology
+that already exists. The questions it is built to answer:
 
-250 paired items from the pinned logic corpus, ten task families, exact-match scored:
-
-| package | score | 95% CI | output tokens | kind |
-|---|---|---|---|---|
-| `creative-writing-v1` | 0.132 | [0.096, 0.180] | 182,070 | single (**a declared distractor**) |
-| `code-generation-v1` | 0.116 | [0.082, 0.162] | 202,666 | single |
-| **base model** | **0.100** | **[0.069, 0.143]** | **205,241** | reference |
-| `action-planner-v1` | 0.100 | [0.069, 0.143] | 205,211 | single |
-| owner's tuned recipe | 0.060 | [0.037, 0.097] | 62,973 | **merge** |
-| equal-weight TIES | 0.056 | [0.034, 0.092] | 64,999 | **merge** |
-| equal-weight SVD | 0.004 | [0.001, 0.022] | 115,349 | **merge** |
-| equal-weight linear | 0.000 | [0.000, 0.015] | 254,950 | **merge** |
-
-Merge better on **0** of 10 tasks, single better on 7, tied on 3. Every merge landed at or below the base model, in the same order the retention probe found — TIES survives, linear collapses.
-
-Two findings behind the headline. The best single adapter is a **declared distractor**, because the distractor labels were assigned from descriptions rather than measurement. And composition *did* lift one capability off the floor — `time_sequence`, where the base scores 0.00 and the TIES merge 0.08 — which is the shape a real positive result would take, on one family out of ten.
-
-This measures *this* pool: twelve scavenged public adapters with no coherent capability coverage, six of which individually fall below the retention floor. It does not show composition cannot work; it shows composing these adapters does not — which is the question [the go/no-go](docs/architecture.md#gono-go) says to answer before launching.
-
-**Earlier measurement, general-capability retention.** Forty exactly-scored general-capability probe items against the pinned base model, on a GPU:
-
-| package | probe | retention | output tokens | 0.98 gate |
-|---|---|---|---|---|
-| best single adapter | 36/40 | 1.000 | 241 | pass |
-| **base model** | **35/40** | **1.000** | **250** | pass |
-| equal-weight TIES merge | 34/40 | 0.971 | 252 | **rejected** |
-| operator's tuned recipe | 32/40 | 0.914 | 264 | **rejected** |
-| equal-weight SVD merge | 10/40 | 0.286 | 861 | **rejected** |
-| equal-weight linear merge | 0/40 | 0.000 | 1280 | **rejected** |
-
-Two results matter. **Interference-aware merging is the difference between working and not** — the same ten adapters summed linearly retain *nothing*, while TIES retains 0.971. And **the operator's tuned recipe lost to the untuned equal-weight merge**, which is the question this subnet exists to ask.
-
-The tuned recipe emphasises the structured-output and tool-calling adapters to buy workflow capability, and the probe does not measure workflow capability — so this shows the cost of that trade with the benefit invisible. It is the trade the retention gate exists to catch, and it caught it. A collapsed package also announces itself in cost: 5x the base model's output tokens, because it answers terse instructions with prose.
-
-Read the limit with the result. This is the retention probe, not the workflow: it shows that a merge destroyed general ability, and cannot show that composition added workflow value.
-
-**Every merge measured is rejected by the retention gate** — the best of them misses a 0.98 floor by nine thousandths. As configured against this pool the network would crown nobody and burn indefinitely. That is a calibration decision to make before genesis, and it is now an informed one: either the floor comes down to something a real merge can clear, or the pool gains an adapter actually trained to preserve capability under merging. Lowering the floor without fixing the pool would be choosing not to look.
-
-**The pool is assembled from public adapters, and it does not cover every axis.** Every member is a real, permissively licensed LoRA trained on the pinned base model, verified and normalised to the canonical rank. But no public Qwen3-8B adapter exists for German technical language, and none for text-to-SQL that is both permissively licensed and trained on the pinned base rather than a quantised mirror. Those two axes are currently carried by the base model alone, which caps what composition can be shown to add on this workflow. Closing them means training the adapters rather than finding them.
-
-Narrowness is the point. It makes the subnet measurable, secure and reproducible with technology that already exists. The open questions it is designed to answer — and might answer *no* to — are:
-
-- Can composed adapters beat the best single adapter and standard merges on a real workflow?
+- Can composed adapters beat the best single adapter and the standard merges?
 - Does that improvement survive out-of-distribution data?
-- Is a static merged package genuinely cheaper than runtime adapter routing?
+- Is a static merged package cheaper than runtime adapter routing?
 
-Efficient multi-adapter serving is a strong competitor. Static merging is only worth selling where measured total cost is actually better, which is why the routed-adapter reference baseline is a planned addition rather than an assumption.
+The adapter pool is assembled from public LoRAs trained on the pinned base model
+and normalised to the canonical rank. Coverage is uneven: no public Qwen3-8B
+adapter exists for German technical language, and none for text-to-SQL on the
+pinned base, so those axes are carried by the base model alone.
 
-**If composition cannot beat strong baselines, the correct decision is not to launch.** The go/no-go criteria are in [docs/architecture.md](docs/architecture.md#go-no-go).
+Efficient multi-adapter serving is a real alternative to static merging. A
+routed-adapter reference baseline is a planned addition.
 
 ## References
 

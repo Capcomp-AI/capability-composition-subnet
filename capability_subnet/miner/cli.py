@@ -49,19 +49,23 @@ def _cmd_pool(args: argparse.Namespace) -> int:
 
 def _cmd_init(args: argparse.Namespace) -> int:
     snapshot = load_snapshot()
-    adapters = args.adapters or list(snapshot.registry.capability_adapters())
 
     try:
-        recipe = new_recipe(
-            adapters,
-            combination_type=args.method,
-            density=args.density,
-            majority_sign_method=args.sign_method,
-            random_seed=args.seed,
-            output_rank=args.output_rank,
-            svd_clamp_quantile=args.clamp,
-            snapshot=snapshot,
-        )
+        if args.random:
+            from capability_subnet.miner.baseline import random_recipe
+
+            recipe = random_recipe(seed=args.seed, snapshot=snapshot)
+        else:
+            recipe = new_recipe(
+                args.adapters or list(snapshot.registry.capability_adapters()),
+                combination_type=args.method,
+                density=args.density,
+                majority_sign_method=args.sign_method,
+                random_seed=args.seed,
+                output_rank=args.output_rank,
+                svd_clamp_quantile=args.clamp,
+                snapshot=snapshot,
+            )
     except RecipeError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -220,6 +224,11 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--seed", type=int, default=0)
     init.add_argument("--output-rank", dest="output_rank", type=int, default=64)
     init.add_argument("--clamp", type=float, default=1.0)
+    init.add_argument(
+        "--random",
+        action="store_true",
+        help="Draw a random valid recipe instead of using the arguments above.",
+    )
     init.set_defaults(func=_cmd_init)
 
     validate = subparsers.add_parser(

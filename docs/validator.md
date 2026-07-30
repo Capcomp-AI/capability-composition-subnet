@@ -2,7 +2,7 @@
 
 Running a validator on this subnet costs a small VPS. No GPU, no model, no adapter pool, no reconstruction.
 
-That does not make it a relay. Before it pays anyone, a validator **re-scores a closed window from the engine's own published traces** — regenerating the instances from their seeds and re-running the deterministic scorer over what the engine said happened. A score that does not follow from its own trace is caught by the party about to pay for it. Install size is under 50 MB: the base package deliberately excludes the tensor stack, because a validator never touches it.
+That does not make it a relay. Before it pays anyone, a validator **re-scores a closed window from the engine's own published traces** — regenerating the instances from their seeds and re-running the deterministic scorer over what the engine said happened. A score that does not follow from its own trace is caught by the party about to pay for it. Install size is under 50 MB: the base package excludes the tensor stack, which a validator never touches.
 
 That is unusual, and it is worth understanding *why* before you run one — because the thing you are actually providing is not compute.
 

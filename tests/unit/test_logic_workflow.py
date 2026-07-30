@@ -1,9 +1,7 @@
-"""The logic workflow, tested on the properties the engine depends on.
+"""The arena workflow, tested on the properties the engine depends on.
 
-Not a test that it scores well — that is a measurement, and it lives in
-``experiments/``. These pin the contract the engine assumes of any workflow, on
-the second implementation of it, which is the first time those assumptions are
-load-bearing rather than descriptive.
+Not a test that it scores well — that is a measurement, not a property. These pin
+the contract the engine assumes of any workflow.
 """
 
 from __future__ import annotations
@@ -394,7 +392,7 @@ class TestTheContractStatesItsOwnLimits:
 
     def test_it_publishes_that_difficulty_labels_overstate_the_regime(self, logic):
         note = logic.build_contract()["harness"]["note"]
-        assert "pass@16" in note and "lower absolute scores" in note
+        assert "pass@16" in note and "below the band" in note
 
     def test_it_publishes_that_no_model_judges_a_result(self, logic):
         assert "No language model judges" in logic.build_contract()["scoring"]["note"]

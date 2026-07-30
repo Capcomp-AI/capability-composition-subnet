@@ -354,12 +354,11 @@ class TestTheModelRequestIsWellFormed:
 
 
 class TestNothingIsKeyedByWhicheverWorkflowIsDefault:
-    """The bug class that broke fifty-six tests at once.
+    """Every workflow identity is stated, never read from the current default.
 
-    Moving `DEFAULT_WORKFLOW_ID` unregistered the maintenance workflow, made it
-    call itself by the new default's name, invalidated its on-chain commitment
-    code, and made every disclosure claim to be a workflow it was not. Each was
-    the same mistake: an identity read from the default instead of stated.
+    A workflow read from `DEFAULT_WORKFLOW_ID` stops existing when the default
+    moves: it unregisters, calls itself by the new default's name, loses its
+    on-chain commitment code, and lets a disclosure claim a workflow it is not.
     """
 
     def test_every_workflow_registers_under_its_own_id(self):
@@ -392,8 +391,8 @@ class TestNothingIsKeyedByWhicheverWorkflowIsDefault:
             assert decode_commitment(payload).workflow_id == workflow_id
 
     def test_a_disclosure_must_name_its_own_workflow(self):
-        """Defaulting it would score a year-old disclosure against whatever
-        workflow happens to be configured when it is replayed."""
+        """Otherwise an old disclosure is scored against whatever workflow is
+        configured when it is replayed."""
         import pytest
 
         from capability_subnet.common.schemas import WindowDisclosure
@@ -403,7 +402,7 @@ class TestNothingIsKeyedByWhicheverWorkflowIsDefault:
 
     def test_every_workflow_publishes_the_protocol_facts_a_miner_needs(self):
         """A contract without the base model or the pool is not one a miner can
-        build against, and the second workflow shipped without them."""
+        build against."""
         from capability_subnet.workflows import available_workflows, get_workflow
 
         required = {
