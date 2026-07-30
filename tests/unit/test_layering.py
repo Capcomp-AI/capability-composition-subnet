@@ -348,3 +348,43 @@ class TestTheBaseInstallNeedsNoTensorStack:
         source = open(descriptions.__file__, encoding="utf-8").read()
         assert "import torch" not in source
         assert set(descriptions.PIPELINES) == set(constants_module.ALLOWED_MERGE_METHODS)
+
+
+class TestTheDeclaredDependenciesAreEnough:
+    """A dependency that is installed here but undeclared works for us and fails
+    for everyone else — the same class of bug as a file missing from git."""
+
+    @staticmethod
+    def _declared() -> set[str]:
+        import re
+        from pathlib import Path
+
+        import tomllib
+
+        root = Path(__file__).resolve().parent.parent.parent
+        data = tomllib.loads((root / "pyproject.toml").read_text())
+        names = set()
+        for spec in data["project"]["dependencies"]:
+            names.add(re.split(r"[<>=!\[; ]", spec.strip())[0].lower().replace("-", "_"))
+        return names
+
+    def test_the_default_workflow_can_draw_an_instance_on_a_base_install(self):
+        """A validator installs the base package and re-scores a closed window,
+        which regenerates every instance. Anything that path imports has to be a
+        base dependency, not an extra."""
+        declared = self._declared()
+        for third_party in ("pandas", "huggingface_hub"):
+            assert third_party in declared, (
+                f"{third_party} is imported when generating an instance for the "
+                "default workflow but is not a base dependency"
+            )
+
+    def test_replay_regenerates_instances_and_so_needs_them(self):
+        """Pins why: if replay stops calling generate_instance, this rule can be
+        revisited. While it does, the dependency is not optional."""
+        from pathlib import Path
+
+        import capability_subnet.audit.replay as replay
+
+        source = Path(replay.__file__).read_text()
+        assert "generate_instance" in source

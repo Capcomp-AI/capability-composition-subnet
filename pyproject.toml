@@ -37,6 +37,14 @@ dependencies = [
   "jsonschema>=4.21",
   "PyYAML>=6.0",
   "rich>=13.0",
+  # The default workflow draws its instances from two pinned corpora, and a
+  # validator regenerates those instances to re-score a closed window. Without
+  # these it can fetch a disclosure and then fail to check it — which is the one
+  # thing a validator exists to do. Far smaller than the tensor stack, and not
+  # optional for anyone who verifies.
+  "huggingface_hub>=0.23",
+  "pandas>=2.0",
+  "pyarrow>=15.0",
 ]
 
 [project.optional-dependencies]
