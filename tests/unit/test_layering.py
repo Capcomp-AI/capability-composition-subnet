@@ -356,16 +356,27 @@ class TestTheDeclaredDependenciesAreEnough:
 
     @staticmethod
     def _declared() -> set[str]:
+        """Base dependency names, read without a TOML parser.
+
+        `tomllib` is 3.11+ and this package supports 3.10, so importing it here
+        failed the entire suite on the oldest version the project claims to run
+        on — and passed locally, because local is 3.12. The block being read is a
+        flat array of strings; it does not need a parser, and a test *about*
+        dependencies should not add one.
+        """
         import re
         from pathlib import Path
 
-        import tomllib
-
         root = Path(__file__).resolve().parent.parent.parent
-        data = tomllib.loads((root / "pyproject.toml").read_text())
+        text = (root / "pyproject.toml").read_text()
+        block = re.search(r"(?ms)^dependencies\s*=\s*\[(.*?)^\]", text)
+        assert block, "could not find the base dependencies array in pyproject.toml"
+
         names = set()
-        for spec in data["project"]["dependencies"]:
-            names.add(re.split(r"[<>=!\[; ]", spec.strip())[0].lower().replace("-", "_"))
+        for line in block.group(1).splitlines():
+            quoted = re.match(r"""\s*["'](.+?)["']""", line)
+            if quoted:
+                names.add(re.split(r"[<>=!\[; ]", quoted.group(1))[0].lower().replace("-", "_"))
         return names
 
     def test_the_default_workflow_can_draw_an_instance_on_a_base_install(self):
@@ -388,3 +399,76 @@ class TestTheDeclaredDependenciesAreEnough:
 
         source = Path(replay.__file__).read_text()
         assert "generate_instance" in source
+
+
+class TestTheDeclaredPythonFloorIsHonoured:
+    """`requires-python = ">=3.10"` is a promise, and CI runs 3.10 to keep it.
+
+    Nothing was checking it, so a 3.11-only import reached main and failed the
+    whole suite on the oldest supported version while passing on every developer
+    machine — which is 3.12.
+    """
+
+    #: Standard-library modules that do not exist on 3.10.
+    TOO_NEW = {"tomllib": "3.11"}
+
+    #: Syntax and names introduced after 3.10.
+    TOO_NEW_NAMES = {
+        "datetime.UTC": "3.11",
+        "StrEnum": "3.11",
+        "TaskGroup": "3.11",
+        "ExceptionGroup": "3.11",
+        "typing.Self": "3.11",
+        "itertools.batched": "3.12",
+        "typing.override": "3.12",
+    }
+
+    @staticmethod
+    def _sources():
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent.parent
+        for package in ("capability_subnet", "tests", "neurons", "scripts"):
+            directory = root / package
+            if not directory.is_dir():
+                continue
+            for path in directory.rglob("*.py"):
+                # This file names every construct it forbids, so scanning it
+                # would only ever find its own lookup table.
+                if "__pycache__" in path.parts or path.name == Path(__file__).name:
+                    continue
+                yield path, path.read_text(encoding="utf-8")
+
+    def test_no_module_newer_than_the_floor_is_imported(self):
+        import re
+
+        offences = []
+        for path, text in self._sources():
+            body = re.sub(r'"""(?:.|\n)*?"""', "", text)  # docstrings may name them
+            for module, version in self.TOO_NEW.items():
+                if re.search(rf"^\s*(?:import {module}\b|from {module}\b)", body, re.M):
+                    offences.append(f"{path.name} imports {module} ({version}+)")
+        assert not offences, "; ".join(offences)
+
+    def test_no_name_newer_than_the_floor_is_used(self):
+        import re
+
+        offences = []
+        for path, text in self._sources():
+            body = re.sub(r'"""(?:.|\n)*?"""', "", text)
+            for name, version in self.TOO_NEW_NAMES.items():
+                if re.search(rf"\b{re.escape(name)}\b", body):
+                    offences.append(f"{path.name} uses {name} ({version}+)")
+        assert not offences, "; ".join(offences)
+
+    def test_the_floor_and_the_classifiers_agree(self):
+        import re
+        from pathlib import Path
+
+        text = (Path(__file__).resolve().parent.parent.parent / "pyproject.toml").read_text()
+        floor = re.search(r'requires-python\s*=\s*">=(\d+\.\d+)"', text)
+        assert floor, "requires-python is not declared"
+        classified = set(re.findall(r"Programming Language :: Python :: (\d+\.\d+)", text))
+        assert floor.group(1) in classified, (
+            f"requires-python says >={floor.group(1)} but no classifier claims it"
+        )

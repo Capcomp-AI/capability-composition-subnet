@@ -44,22 +44,17 @@ Execution is the stronger signal — it asks whether the code works rather than
 whether the answer looks right — but every case is a subprocess, so it is
 deliberately neither a tenth of the board nor all of it.
 
-### Why the code corpus is smaller than the source
+### Which code problems are excluded
 
 A competitive-programming statement prints a worked example, and this corpus keeps
-that example as a test case. Harmless when other cases follow, because passing
-requires all of them — but roughly a quarter of the source problems had *only*
-that case, which puts the expected output in the question. A program that ignores
-its input and prints that constant passes.
+that example as a test case. Where it is the *only* case, the expected output is
+in the question and a program that ignores its input and prints that constant
+passes.
 
-Those are dropped. A problem is admitted only if a constant program cannot pass
-it — that is, unless every case expects the same output *and* the statement prints
-it. Both clauses matter: cases with differing outputs cannot be satisfied by one
-constant however visible they are. Testing visibility alone reads as stricter and
-is simply wrong, discarding 625 sound problems whose outputs were short strings
-like `YES` that any long statement contains by coincidence.
-
-976 problems were exploitable; the pool goes from ~3,920 to ~2,944.
+A problem is admitted only if a constant program cannot pass it: unless every case
+expects the same output **and** the statement prints it. Cases with differing
+outputs are admitted however visible they are, since no single constant satisfies
+them.
 
 ### Item selection
 
