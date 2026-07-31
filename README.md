@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/logo.png" alt="LoRA Merger" width="120" height="120">
+
 # LoRA Merger
 
 ### The Capability Composition Subnet
