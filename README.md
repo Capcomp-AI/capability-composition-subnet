@@ -234,6 +234,37 @@ capability_subnet/
 └── testing/         miniature-pool fixtures, published as a pytest plugin
 ```
 
+## What a merged package is worth
+
+A company does not buy "a translation adapter" or "a SQL adapter". It buys a system that finishes a business process. Whether that is cheaper as one merged model or as several specialists behind a router is an arithmetic question, and this is the arithmetic.
+
+**The router stops existing.** A routed system pays something on every request deciding where to send it — tokens if the decision is made by a model, a hop and a service if by a classifier. A merged package answers directly. On a million requests a month with an LLM router at ~260 tokens per decision, that is ~260M tokens spent producing no answers. *Illustrative arithmetic on stated assumptions, not a measurement — substitute your own numbers.*
+
+**The footprint stops depending on how many skills you offer.** One file under 524 MB on one 24 GB card. No adapter set to keep resident, no swap on a cold skill, no per-skill capacity planning.
+
+**One artifact is one thing to certify.** Regulated buyers approve artifacts, not architectures. A reproducible, content-addressed file with a published evaluation record is a shorter conversation than seven adapters, a router and its training set.
+
+### What we measured
+
+On a 250-item paired benchmark, output tokens tracked merge health closely enough to be a diagnostic:
+
+| Package | Score | Output tokens | |
+|---|---|---|---|
+| base model | 0.100 | 205,241 | the baseline |
+| best single adapter | 0.132 | 182,070 | best score on this pool |
+| equal-weight TIES merge | 0.056 | 64,999 | a third of the base model's tokens |
+| equal-weight linear merge | 0.000 | 254,950 | collapsed — rambles, answers nothing |
+
+Two things are true at once. A healthy merge was **three times cheaper to run** than the base model on identical work. And on this pool it also **scored lower** than the best single adapter — which is the trade the network exists to measure rather than assume. A collapsed merge announces itself in cost before it announces itself in score, which is why token efficiency is a scored term and not a footnote.
+
+Cost is not a claim here: latency, token efficiency and artifact size are 15% of the quality score, so a package that wins is already one that is cheap to run.
+
+### When merging does not win
+
+- **Efficient multi-adapter serving is genuinely good.** S-LoRA and Punica amortise adapter swapping well. Where your router is a cheap classifier rather than a model, the token argument shrinks to a latency and operations argument.
+- **A specialist can simply be better.** If one adapter dominates your traffic, merging trades capability for convenience you may not need. On the current pool, no merge has beaten the best single adapter.
+- **Merging can destroy general ability** before it destroys task score, which is why a 0.98 retention floor on a held-out probe is a hard gate rather than a scored term.
+
 ## Scope
 
 This is a V1 protocol, and it is deliberately narrow: one base model, one adapter

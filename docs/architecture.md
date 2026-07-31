@@ -340,6 +340,32 @@ Proximity is not a gate. Rewarding closeness alone would pay for copying the lea
 
 ---
 
+## The commercial question
+
+The subnet optimises a finished process rather than isolated benchmark scores,
+because that is what is bought. Whether a *merged* package is the right shape for
+that process is a separate question, and the honest answer is that it depends on
+numbers the buyer has.
+
+What merging removes is structural: the routing decision on every request, the
+adapter set held resident, and the per-skill capacity planning. What it risks is
+also structural: a merge can be worse than the specialist it replaced, and an
+over-aggressive one loses general instruction-following before it loses task
+score.
+
+Both are measured rather than assumed. Latency, token efficiency and artifact
+size carry 15% of the qualified score, so cost is priced into who wins. Base
+retention is a hard gate at 0.98 on a held-out probe, so a package that traded
+away general ability cannot be crowned whatever it scored. And the permanent
+references — the base model, the best single adapter, the standard merges — exist
+so the network can discover that composition did *not* help, which on the current
+pool is still the standing result.
+
+See the economics tab of the published dashboard for the worked arithmetic, and
+[the README](../README.md#what-a-merged-package-is-worth) for the summary.
+
+---
+
 ## Prior art
 
 The design draws on published research and existing production code. None of it is novel infrastructure; the contribution is the composition-as-commodity framing and the evaluation mechanism around it.
