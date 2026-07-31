@@ -1,7 +1,7 @@
 blank_issues_enabled: true
 contact_links:
   - name: Security or scoring-integrity finding
-    url: https://github.com/favoroot/lora-merger/security/advisories/new
+    url: https://github.com/Namikaze-bit/lora-merger/security/advisories/new
     about: >-
       Report privately. Anything affecting determinism, hidden material, or a
       candidate's ability to influence its own evaluation invalidates results
