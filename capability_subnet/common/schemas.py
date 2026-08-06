@@ -356,7 +356,12 @@ class CandidateScores(StrictModel):
     artifact_efficiency: float = Field(default=0.0, ge=0.0, le=1.0)
     qualified_score: float = Field(default=0.0, ge=0.0, le=1.0)
 
+    #: Axis -> mean over the rows that scored it. An axis this draw did not
+    #: sample is absent rather than zero; read it with the counts below.
     per_stage_means: dict[str, float] = Field(default_factory=dict)
+    #: Axis -> how many valid rows scored it, so a reader can tell an axis the
+    #: package failed from one the draw never put to it.
+    per_stage_samples: dict[str, int] = Field(default_factory=dict)
     valid_samples: int = 0
     total_samples: int = 0
 

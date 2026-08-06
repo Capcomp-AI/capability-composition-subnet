@@ -44,12 +44,41 @@ def end_to_end_completion(results: list[InstanceResult]) -> float:
     return sum(1 for row in rows if row.end_to_end_success) / len(rows)
 
 
-def per_stage_means(results: list[InstanceResult], stages: tuple[str, ...]) -> dict[str, float]:
-    """Mean score on each capability axis."""
+def per_stage_sample_counts(
+    results: list[InstanceResult], stages: tuple[str, ...]
+) -> dict[str, int]:
+    """How many valid rows actually scored each axis.
+
+    An axis is scored on the rows that carry it, and workflows differ in how many
+    that is: one drives every axis on every instance, another gives each instance
+    a single axis. Reporting the count separately is what lets a reader tell an
+    axis a package failed from one nobody asked it about.
+    """
     rows = valid_rows(results)
-    if not rows:
-        return {stage: 0.0 for stage in stages}
-    return {stage: sum(row.stage_score(stage) for row in rows) / len(rows) for stage in stages}
+    return {stage: sum(1 for row in rows if stage in row.stages) for stage in stages}
+
+
+def per_stage_means(results: list[InstanceResult], stages: tuple[str, ...]) -> dict[str, float]:
+    """Mean score on each capability axis, over the rows that scored it.
+
+    The denominator is the rows carrying the axis, not every valid row. Dividing
+    by every row is right only when every instance exercises every axis, which
+    the agent-loop workflow does and a workflow of single-axis questions does
+    not: there each axis holds about a twelfth of the draw, so every mean came
+    out about twelve times too small, no package could clear an absolute floor on
+    any axis, and the arena could not have crowned anyone.
+
+    An axis no row scored is absent from the result rather than present as 0.0.
+    Callers must not read "nobody asked" as "answered nothing right"; the
+    sample-sufficiency gate is what covers a draw too thin to judge.
+    """
+    rows = valid_rows(results)
+    means: dict[str, float] = {}
+    for stage in stages:
+        scored = [row for row in rows if stage in row.stages]
+        if scored:
+            means[stage] = sum(row.stage_score(stage) for row in scored) / len(scored)
+    return means
 
 
 def stage_balance(results: list[InstanceResult], stages: tuple[str, ...]) -> float:
@@ -67,6 +96,9 @@ def stage_balance(results: list[InstanceResult], stages: tuple[str, ...]) -> flo
     means = per_stage_means(results, stages)
     if not means:
         return 0.0
+    # Over the axes that were measured. An unmeasured axis contributing epsilon
+    # would drag the geometric mean towards zero for a package that was never
+    # asked, which reads as a failure it did not have.
     log_sum = sum(math.log(max(C.STAGE_BALANCE_EPSILON, value)) for value in means.values())
     return math.exp(log_sum / len(means))
 
@@ -196,6 +228,7 @@ def aggregate_scores(
         artifact_efficiency=artifact,
         qualified_score=min(1.0, qualified),
         per_stage_means=per_stage_means(hidden_results, stages),
+        per_stage_samples=per_stage_sample_counts(hidden_results, stages),
         valid_samples=len(rows),
         total_samples=len(hidden_results),
     )

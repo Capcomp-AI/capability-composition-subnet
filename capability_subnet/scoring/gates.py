@@ -235,14 +235,21 @@ def gate_stage_floors(scores: CandidateScores, stage_thresholds: dict[str, float
     stage on one instance in three has not acquired that capability, and the
     completion score alone would not distinguish it from one that is merely
     unlucky elsewhere.
+
+    Only axes this draw actually scored are judged. An axis the window did not
+    sample carries no evidence either way, and failing a package for it would
+    fail every package on any workflow whose draw cannot cover every axis every
+    window. Whether the draw covered enough is the sample-sufficiency gate's
+    question, not this one.
     """
     below: list[str] = []
     for stage, threshold in stage_thresholds.items():
+        measured = scores.per_stage_means.get(stage)
+        if measured is None:
+            continue
         floor = threshold * 0.5
-        if scores.per_stage_means.get(stage, 0.0) < floor:
-            below.append(
-                f"{stage} at {scores.per_stage_means.get(stage, 0.0):.2f} below {floor:.2f}"
-            )
+        if measured < floor:
+            below.append(f"{stage} at {measured:.2f} below {floor:.2f}")
 
     return gate(
         "stage_floors",

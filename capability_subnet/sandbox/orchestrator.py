@@ -154,8 +154,15 @@ def run_batch(
     *,
     config: SandboxConfig | None = None,
     on_result: Any = None,
+    runner: Any = None,
 ) -> list[SandboxOutcome]:
     """Run a set of instances in sequence.
+
+    ``runner`` is the workflow's own :func:`run_instance`, because workflows
+    differ in how a package is *asked*, not only in what it is asked. Defaulting
+    to this module's runner is a convenience for callers that know they are on
+    the agent-loop workflow; anything driving a configured workflow must pass
+    that workflow's runner, or it will ask every workflow the first one's way.
 
     Sequential on purpose. The GPU serving one candidate is assigned to one
     sandbox at a time, so overlapping instances would contend for it and make the
@@ -164,7 +171,7 @@ def run_batch(
     """
     outcomes: list[SandboxOutcome] = []
     for index, instance in enumerate(instances, start=1):
-        outcome = run_instance(instance, client, config=config)
+        outcome = (runner or run_instance)(instance, client, config=config)
         outcomes.append(outcome)
         if on_result is not None:
             on_result(index, len(instances), outcome)
