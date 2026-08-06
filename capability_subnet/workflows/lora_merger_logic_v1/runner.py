@@ -86,7 +86,6 @@ def run_instance(instance, client, *, config=None) -> SandboxOutcome:
     would charge a miner for the operator's outage.
     """
     from capability_subnet.sandbox.model_client import ModelMessage
-    from capability_subnet.workflows.lora_merger_logic_v1.scoring import score_instance
 
     del config  # no sandbox: this workflow gives the candidate nothing to reach
     trace = LogicTrace()
@@ -111,6 +110,18 @@ def run_instance(instance, client, *, config=None) -> SandboxOutcome:
     finally:
         trace.wall_seconds = time.monotonic() - started
 
+    return SandboxOutcome(result=result_from_trace(instance, trace), trace=trace)
+
+
+def result_from_trace(instance, trace) -> InstanceResult:
+    """Score one published trace against the instance that produced it.
+
+    Separate from :func:`run_instance` because a replay has the trace already and
+    needs exactly this step. Sharing it is what makes an auditor's arithmetic the
+    engine's arithmetic rather than a second implementation of it.
+    """
+    from capability_subnet.workflows.lora_merger_logic_v1.scoring import score_instance
+
     row = InstanceResult(
         instance_id=instance.instance_id,
         instance_seed=instance.seed,
@@ -123,7 +134,20 @@ def run_instance(instance, client, *, config=None) -> SandboxOutcome:
 
     if not trace.is_scorable:
         row.error = trace.harness_error
-        return SandboxOutcome(result=row, trace=trace)
+        return row
+
+    outcomes = score_instance(instance, trace)
+    row.stages = {
+        name: StageResult(stage=name, score=o.score, passed=o.passed, detail=o.detail)
+        for name, o in outcomes.items()
+    }
+    # One question, one answer: the instance is completed when it is answered
+    # correctly. There is no partial credit to aggregate, which is what makes
+    # the paired comparison over these rows straightforward.
+    correct = outcomes[instance.task].passed
+    row.final_state_correct = correct
+    row.end_to_end_success = correct
+    return row
 
     outcomes = score_instance(instance, trace)
     row.stages = {

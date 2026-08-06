@@ -27,7 +27,7 @@ import logging
 from dataclasses import dataclass, field
 
 from capability_subnet.audit.verify import SCORE_TOLERANCE, AuditResult
-from capability_subnet.common.schemas import InstanceResult, StageResult, WindowDisclosure
+from capability_subnet.common.schemas import InstanceResult, WindowDisclosure
 from capability_subnet.common.trace import ExecutionTrace, SqlSubmission, ToolCall
 from capability_subnet.workflows import get_workflow
 
@@ -306,7 +306,7 @@ def replay_disclosure(
             continue
 
         try:
-            score = workflow.score_instance(instance, trace)
+            rescored = workflow.result_from_trace(instance, trace)
         except Exception as exc:  # noqa: BLE001
             outcome.unscorable.append(entry.instance_id)
             result.add(
@@ -316,21 +316,6 @@ def replay_disclosure(
                 subject,
             )
             continue
-
-        rescored = InstanceResult(
-            instance_id=instance.instance_id,
-            instance_seed=instance.seed,
-            split=entry.split,  # type: ignore[arg-type]
-            stages={
-                name: StageResult(
-                    stage=name, score=item.score, passed=item.passed, detail=item.detail
-                )
-                for name, item in score.stages.items()
-            },
-            final_state_correct=score.final_state_correct,
-            end_to_end_success=score.end_to_end_success,
-            critical_unsafe_actions=score.critical_unsafe_actions,
-        )
 
         problems = _compare(entry.claimed_result, rescored)
         if problems:

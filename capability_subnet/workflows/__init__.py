@@ -69,6 +69,15 @@ class WorkflowModule:
     #:
     #: Signature: ``(payload: dict) -> trace``.
     trace_from_dict: Callable[..., Any]
+    #: Scores one trace against the instance that produced it.
+    #:
+    #: The same call the workflow's own runner makes, so an auditor replaying a
+    #: window runs the engine's arithmetic rather than a second implementation of
+    #: it. Workflows disagreed on what `score_instance` even returns — one an
+    #: object, one a mapping — and the replay could only read one of them.
+    #:
+    #: Signature: ``(instance, trace) -> InstanceResult``.
+    result_from_trace: Callable[..., Any]
     #: Whether anyone can obtain this workflow and re-score a closed window from
     #: its published seeds and traces. False for a workflow whose generator
     #: cannot be published — which is a legitimate choice and a materially
@@ -83,6 +92,12 @@ def _agent_loop_trace_from_dict(payload: dict):
     from capability_subnet.audit.replay import trace_from_dict
 
     return trace_from_dict(payload)
+
+
+def _agent_loop_result_from_trace(instance, trace):
+    from capability_subnet.sandbox.orchestrator import _build_result
+
+    return _build_result(instance, trace)
 
 
 def _load_industrial_maintenance_de_v1() -> WorkflowModule:
@@ -100,6 +115,7 @@ def _load_industrial_maintenance_de_v1() -> WorkflowModule:
         tool_schemas=list(module.TOOL_SCHEMAS),
         run_instance=module.run_instance,
         trace_from_dict=_agent_loop_trace_from_dict,
+        result_from_trace=_agent_loop_result_from_trace,
         publicly_verifiable=True,
     )
 
@@ -123,6 +139,7 @@ def _load_lora_merger_logic_v1() -> WorkflowModule:
         tool_schemas=list(module.TOOL_SCHEMAS),
         run_instance=module.run_instance,
         trace_from_dict=module.LogicTrace.from_dict,
+        result_from_trace=module.result_from_trace,
         publicly_verifiable=True,
     )
 
