@@ -81,6 +81,18 @@ class AdapterEntry:
     certified: bool
     is_distractor: bool
     certification: CertificationRecord = field(default_factory=CertificationRecord)
+    #: Where this adapter came from, at the revision it was taken at. Recorded
+    #: because the pool has to be reproducible: an operator materialising it on a
+    #: new host fetches exactly these, and without the revision "the same
+    #: adapter" means whatever that repository holds today.
+    #:
+    #: Deliberately outside `snapshot_fields`, so recording provenance never
+    #: moves the digest every outstanding recipe declares — and defaulted, so a
+    #: registry written before these were recorded still loads.
+    source_repo: str = ""
+    source_revision: str = ""
+    source_rank: int = 0
+    source_lora_alpha: int = 0
 
     @property
     def scaling(self) -> float:
@@ -275,6 +287,10 @@ def _parse_entry(raw: dict[str, Any]) -> AdapterEntry:
         description=raw.get("description", ""),
         license=raw.get("license", "unknown"),
         license_allows_derivatives=bool(raw.get("license_allows_derivatives", False)),
+        source_repo=raw.get("source_repo", ""),
+        source_revision=raw.get("source_revision", ""),
+        source_rank=int(raw.get("source_rank", raw.get("rank", 0))),
+        source_lora_alpha=int(raw.get("source_lora_alpha", raw.get("lora_alpha", 0))),
         provenance=raw.get("provenance", ""),
         training_data_ref=raw.get("training_data_ref", ""),
         training_data_date_range=raw.get("training_data_date_range", ""),

@@ -74,12 +74,23 @@ def _equal_weight_recipe(
     is singled out. That is the point: these references represent what you get
     without doing any composition research, so any tuning would make them a
     weaker bar than they are meant to be.
+
+    Capped at the same number of adapters a miner may select. A reference built
+    from more of the pool than any submission is allowed to use is not a bar a
+    submission can clear — and on a pool larger than the cap it is not even a
+    valid recipe, which is why a pool of more than twelve capability adapters
+    could not be started against at all.
+
+    Which twelve is decided by sorting on adapter id and taking the first: an
+    arbitrary rule, but a fixed one that every engine reproduces and no operator
+    chooses. Selecting by measured score instead would let the bar move whenever
+    a certification landed.
     """
     return Recipe(
         workflow_id=snapshot.registry.workflow_id,
         base_revision=snapshot.manifest.revision,
         source_snapshot_sha256=snapshot.sha256,
-        selected_adapters=sorted(adapters),
+        selected_adapters=sorted(adapters)[: C.MAX_SELECTED_ADAPTERS],
         merge=MergeSpec(
             combination_type=combination_type,
             density=density,
@@ -101,7 +112,11 @@ def owner_reference_recipe(snapshot: PoolSnapshot) -> Recipe:
     an honest bar: the operator has to demonstrate that composition helps before
     asking anyone to compete at it.
     """
-    selected = sorted(snapshot.registry.capability_adapters())
+    # Capped at what a miner may select, and by the same fixed rule the
+    # equal-weight references use. A bar built from more of the pool than any
+    # submission may use is not a bar a submission can clear, and on a pool
+    # larger than the cap it is not a valid recipe at all.
+    selected = sorted(snapshot.registry.capability_adapters())[: C.MAX_SELECTED_ADAPTERS]
     present = set(selected)
 
     # The hypothesis, stated as coefficients: the stages that decide end-to-end

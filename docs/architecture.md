@@ -248,9 +248,17 @@ commitment that moves is the draw being re-rolled where anyone can see it.
 `commitments_agree()` checks a run of disclosures for exactly that.
 
 **The draw is bound to a value the operator does not choose.** Each window mixes
-in the hash of the block it opened at. That is public, it is not the operator's to
-pick, and it does not exist until the window opens — so a draw cannot be selected
+in the hash of its own first block — `window_id x window_blocks`, not whatever
+block the engine happened to open at. That is public, it is not the operator's to
+pick, and it does not exist until the window begins, so a draw cannot be selected
 after seeing a candidate.
+
+Deriving it from the window rather than from the moment of opening is what makes
+it checkable at all: an auditor knows which block a window started at and can
+fetch the same hash, where a block only the operator knew would prove nothing.
+It also makes re-opening a window idempotent — an engine restarted mid-window
+re-derives the seeds it already published instead of quietly evaluating a
+different test.
 
 **What this does and does not buy.** The beacon is the part with teeth: a
 validator compares it against the real block hash, and a fabricated one fails.
