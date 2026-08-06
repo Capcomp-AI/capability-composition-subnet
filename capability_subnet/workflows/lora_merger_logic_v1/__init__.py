@@ -28,7 +28,7 @@ from capability_subnet.workflows.lora_merger_logic_v1.instance import (
     LogicInstance,
     generate_instance,
 )
-from capability_subnet.workflows.lora_merger_logic_v1.runner import run_instance
+from capability_subnet.workflows.lora_merger_logic_v1.runner import LogicTrace, run_instance
 from capability_subnet.workflows.lora_merger_logic_v1.scoring import score_instance
 from capability_subnet.workflows.lora_merger_logic_v1.sources import (
     STAGE_THRESHOLDS,
@@ -55,6 +55,7 @@ __all__ = [
     "LogicInstance",
     "build_contract",
     "generate_instance",
+    "LogicTrace",
     "run_instance",
     "score_instance",
 ]

@@ -300,7 +300,7 @@ def replay_disclosure(
                 subject,
             )
 
-        trace = trace_from_dict(entry.trace)
+        trace = workflow.trace_from_dict(entry.trace)
         if not trace.is_scorable:
             outcome.unscorable.append(entry.instance_id)
             continue

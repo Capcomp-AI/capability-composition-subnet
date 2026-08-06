@@ -60,11 +60,29 @@ class WorkflowModule:
     #:
     #: Signature: ``(instance, client, *, config) -> SandboxOutcome``.
     run_instance: Callable[..., Any]
+    #: Rebuilds one published trace so a closed window can be re-scored.
+    #:
+    #: Owned by the workflow for the same reason as ``run_instance``: a trace
+    #: holds whatever its workflow's scorer reads, and those differ. Hardcoding
+    #: the agent-loop trace into the replay made every other workflow's window
+    #: unverifiable, which is the one thing a validator will not pay for.
+    #:
+    #: Signature: ``(payload: dict) -> trace``.
+    trace_from_dict: Callable[..., Any]
     #: Whether anyone can obtain this workflow and re-score a closed window from
     #: its published seeds and traces. False for a workflow whose generator
     #: cannot be published — which is a legitimate choice and a materially
     #: weaker guarantee, so it is recorded rather than assumed.
     publicly_verifiable: bool = True
+
+
+def _agent_loop_trace_from_dict(payload: dict):
+    """Decode an agent-loop trace. Imported lazily: the replay module is heavier
+    than the workflow registry, and importing it here would pull it into every
+    process that only wants a workflow id."""
+    from capability_subnet.audit.replay import trace_from_dict
+
+    return trace_from_dict(payload)
 
 
 def _load_industrial_maintenance_de_v1() -> WorkflowModule:
@@ -81,6 +99,7 @@ def _load_industrial_maintenance_de_v1() -> WorkflowModule:
         stage_thresholds=dict(module.STAGE_THRESHOLDS),
         tool_schemas=list(module.TOOL_SCHEMAS),
         run_instance=module.run_instance,
+        trace_from_dict=_agent_loop_trace_from_dict,
         publicly_verifiable=True,
     )
 
@@ -103,6 +122,7 @@ def _load_lora_merger_logic_v1() -> WorkflowModule:
         stage_thresholds=dict(module.STAGE_THRESHOLDS),
         tool_schemas=list(module.TOOL_SCHEMAS),
         run_instance=module.run_instance,
+        trace_from_dict=module.LogicTrace.from_dict,
         publicly_verifiable=True,
     )
 

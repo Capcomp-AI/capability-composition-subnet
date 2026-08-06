@@ -50,6 +50,23 @@ class LogicTrace:
     def is_scorable(self) -> bool:
         return self.harness_error is None and self.reply is not None
 
+    @classmethod
+    def from_dict(cls, payload: dict) -> LogicTrace:
+        """Rebuild a trace from a published disclosure.
+
+        The inverse of :meth:`to_dict`, and the reason an auditor can re-score a
+        closed window: without it the replay decoded every trace as the
+        agent-loop workflow's, found no reply on it, and reported that the engine
+        could not be reproduced.
+        """
+        trace = cls()
+        trace.reply = payload.get("reply")
+        trace.input_tokens = int(payload.get("input_tokens", 0) or 0)
+        trace.output_tokens = int(payload.get("output_tokens", 0) or 0)
+        trace.wall_seconds = float(payload.get("wall_seconds", 0.0) or 0.0)
+        trace.harness_error = payload.get("harness_error")
+        return trace
+
     def to_dict(self) -> dict:
         return {
             "reply": self.reply,
