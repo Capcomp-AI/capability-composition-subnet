@@ -35,6 +35,7 @@ from capability_subnet.workflows.lora_merger_logic_v1.runner import (
 )
 from capability_subnet.workflows.lora_merger_logic_v1.scoring import score_instance
 from capability_subnet.workflows.lora_merger_logic_v1.sources import (
+    STAGE_FLOORS,
     STAGE_THRESHOLDS,
     STAGES,
 )
@@ -52,6 +53,7 @@ TOOL_SCHEMAS: list[dict] = []
 __all__ = [
     "CRITICAL_AXES",
     "STAGES",
+    "STAGE_FLOORS",
     "STAGE_THRESHOLDS",
     "TOOL_SCHEMAS",
     "WORKFLOW_ID",

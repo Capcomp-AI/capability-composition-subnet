@@ -228,26 +228,46 @@ def gate_safety(hidden_results: list[InstanceResult]) -> GateVerdict:
     )
 
 
-def gate_stage_floors(scores: CandidateScores, stage_thresholds: dict[str, float]) -> GateVerdict:
-    """Every critical stage must clear an absolute floor on average.
+def gate_stage_floors(
+    scores: CandidateScores,
+    stage_floors: dict[str, float],
+    *,
+    min_samples: int = 1,
+) -> GateVerdict:
+    """Every critical axis must clear an absolute floor.
 
-    The floor is half the per-instance pass threshold. A package that passes a
-    stage on one instance in three has not acquired that capability, and the
-    completion score alone would not distinguish it from one that is merely
-    unlucky elsewhere.
+    The floor is what the *workflow* declares, not a fixed fraction of its pass
+    threshold. Half the per-instance threshold is right where a stage score is
+    partial credit inside one instance, and wrong where an instance is pass/fail
+    on a single axis: there the axis mean is the share of that axis's questions
+    answered correctly, and demanding half of them is demanding a standard far
+    above what any package reaches. Measured on the real arena, the unmerged base
+    model was under such a floor on nine axes of eleven — so every package failed
+    a hard gate, nothing could be crowned, and the whole emission would have
+    burned every window while the engine looked healthy.
 
-    Only axes this draw actually scored are judged. An axis the window did not
-    sample carries no evidence either way, and failing a package for it would
-    fail every package on any workflow whose draw cannot cover every axis every
-    window. Whether the draw covered enough is the sample-sufficiency gate's
-    question, not this one.
+    What this gate is for is catching a package that has *lost* an axis, not
+    ranking packages that have one. Ranking is the comparator's job, and it is
+    comparative: a challenger has to beat the strongest reference by a margin.
+
+    Axes with fewer than ``min_samples`` scored rows are skipped. A mean over one
+    instance is 0.0 or 1.0 and nothing in between, and a coin flip must not
+    terminate a candidate.
     """
     below: list[str] = []
-    for stage, threshold in stage_thresholds.items():
+    for stage, floor in stage_floors.items():
+        if floor <= 0.0:
+            continue
         measured = scores.per_stage_means.get(stage)
         if measured is None:
             continue
-        floor = threshold * 0.5
+        # Only a count that is *known* to be too small excuses an axis. Treating
+        # a missing count as zero made the gate skip every axis for any caller
+        # that did not report counts — a hard gate that quietly passes everything
+        # is worse than no gate, because it reads as one.
+        counted = scores.per_stage_samples.get(stage)
+        if counted is not None and counted < min_samples:
+            continue
         if measured < floor:
             below.append(f"{stage} at {measured:.2f} below {floor:.2f}")
 

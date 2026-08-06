@@ -48,6 +48,12 @@ class WorkflowModule:
     stages: tuple[str, ...]
     critical_axes: tuple[str, ...]
     stage_thresholds: dict[str, float]
+    #: Absolute floor per axis for the hard gate, below which a package is
+    #: terminated. Declared by the workflow because what counts as "this axis is
+    #: gone" depends on what the axis measures: half the pass threshold is a
+    #: sensible floor on partial credit inside one instance and an unreachable
+    #: target on a workflow of pass/fail questions.
+    stage_floors: dict[str, float]
     tool_schemas: list[dict[str, Any]]
     #: Runs one instance against a served package and returns its sample row.
     #:
@@ -112,6 +118,7 @@ def _load_industrial_maintenance_de_v1() -> WorkflowModule:
         stages=tuple(module.STAGES),
         critical_axes=tuple(module.CRITICAL_AXES),
         stage_thresholds=dict(module.STAGE_THRESHOLDS),
+        stage_floors={s: t * 0.5 for s, t in module.STAGE_THRESHOLDS.items()},
         tool_schemas=list(module.TOOL_SCHEMAS),
         run_instance=module.run_instance,
         trace_from_dict=_agent_loop_trace_from_dict,
@@ -136,6 +143,7 @@ def _load_lora_merger_logic_v1() -> WorkflowModule:
         stages=tuple(module.STAGES),
         critical_axes=tuple(module.CRITICAL_AXES),
         stage_thresholds=dict(module.STAGE_THRESHOLDS),
+        stage_floors=dict(module.STAGE_FLOORS),
         tool_schemas=list(module.TOOL_SCHEMAS),
         run_instance=module.run_instance,
         trace_from_dict=module.LogicTrace.from_dict,

@@ -94,6 +94,24 @@ STAGES: tuple[str, ...] = (*LOGIC_FAMILIES, CODE_FAMILY, "format_compliance")
 #: is a wrong answer, and a program that fails one case has not solved the problem.
 STAGE_THRESHOLDS: dict[str, float] = {stage: 1.0 for stage in STAGES}
 
+#: Absolute floor per axis, below which a package is terminated outright.
+#:
+#: Only format compliance carries one. It is the axis a working package always
+#: clears — wrapping the answer the way the prompt asked costs it nothing — so
+#: falling under it means the package no longer produces usable output at all.
+#: The equal-weight linear merge of twelve adapters scores 0.000 here: it emits
+#: repeated fragments and whitespace, and there is no sense in ranking it.
+#:
+#: The capability axes carry no absolute floor, and that is a deliberate
+#: statement rather than an omission. These are hard problems: the unmerged base
+#: model answers under a fifth of them, and a floor set anywhere near "half of
+#: this axis" is above what anything on this arena reaches, so it terminates
+#: every package including the best one. Capability is judged comparatively
+#: instead — a challenger must beat the strongest reference by a margin and
+#: dominate it on the axes that matter — which is a real contest between miners
+#: rather than a bar none of them can reach.
+STAGE_FLOORS: dict[str, float] = {stage: 0.0 for stage in STAGES} | {"format_compliance": 0.5}
+
 
 #: Cases retained per code problem, as a deterministic prefix.
 #:

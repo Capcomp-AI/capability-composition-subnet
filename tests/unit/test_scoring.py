@@ -163,15 +163,17 @@ class TestGates:
         assert not gates.gate_agent_limits(rows).passed
 
     def test_stage_floor_gate(self):
-        thresholds = dict.fromkeys(STAGES, 1.0)
+        # Floors now, not pass thresholds the gate halves for you: what counts as
+        # "this axis is gone" is the workflow's to declare.
+        floors = dict.fromkeys(STAGES, 0.5)
 
         healthy = CandidateScores(per_stage_means=dict.fromkeys(STAGES, 0.9))
         abandoned = CandidateScores(
             per_stage_means={"stage_a": 0.9, "stage_b": 0.9, "stage_c": 0.1}
         )
 
-        assert gates.gate_stage_floors(healthy, thresholds).passed
-        assert not gates.gate_stage_floors(abandoned, thresholds).passed
+        assert gates.gate_stage_floors(healthy, floors).passed
+        assert not gates.gate_stage_floors(abandoned, floors).passed
 
     def test_base_retention_gate(self):
         assert gates.gate_base_retention(C.BASE_RETENTION_FLOOR).passed

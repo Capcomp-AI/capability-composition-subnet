@@ -205,7 +205,16 @@ MAX_SELECTED_ADAPTERS: Final[int] = 12
 
 MAX_ARTIFACT_BYTES: Final[int] = 500 * 1024 * 1024  # 500 MB
 MAX_PEAK_VRAM_GB: Final[float] = 24.0
-MAX_P95_WORKFLOW_SECONDS: Final[float] = 30.0
+#: p95 wall-clock for one instance, end to end. Lowered from 30s: latency is a
+#: dimension miners should be competing on, and a ceiling loose enough that
+#: nothing ever approaches it is not a gate, it is decoration.
+#:
+#: 25s is measured headroom, not a guess. A pinned 8B on one shared 4090 with
+#: CUDA graphs answers an instance in ~18s; the same card with graphs disabled
+#: took ~36s and failed at 30. An operator whose hardware cannot hold 25s should
+#: fix the serving stack before concluding the gate is wrong — that is what it is
+#: for.
+MAX_P95_WORKFLOW_SECONDS: Final[float] = 25.0
 MAX_AGENT_TURNS: Final[int] = 12
 MAX_OUTPUT_TOKENS: Final[int] = 8192
 
