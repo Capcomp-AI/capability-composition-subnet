@@ -7,6 +7,7 @@ from typing import Any
 from capability_subnet import __spec_version__
 from capability_subnet.common import constants as C
 from capability_subnet.workflows.lora_merger_logic_v1 import sources as S
+from capability_subnet.workflows.lora_merger_logic_v1.runner import MAX_OUTPUT_TOKENS
 from capability_subnet.workflows.shared_contract import (
     base_model_contract,
     hard_gates_contract,
@@ -98,6 +99,10 @@ def build_contract(snapshot=None, seed_root_commitment: str = "") -> dict[str, A
         "stages": {
             "order": list(S.STAGES),
             "thresholds": dict(S.STAGE_THRESHOLDS),
+            # What terminates a submission, as opposed to what scores it. Only
+            # format compliance carries a floor here; capability is judged
+            # against the references, not against an absolute bar.
+            "floors": dict(S.STAGE_FLOORS),
             # Every axis is critical here; a package that abandoned a family has
             # not solved the arena.
             "critical_axes": list(S.STAGES),
@@ -112,7 +117,13 @@ def build_contract(snapshot=None, seed_root_commitment: str = "") -> dict[str, A
                 "first 32 test cases."
             ),
         },
-        "hard_gates": hard_gates_contract(),
+        "hard_gates": hard_gates_contract(
+            # This workflow's own budgets, not the protocol's defaults: one
+            # question, one answer, a thousand tokens to give it in.
+            max_output_tokens=MAX_OUTPUT_TOKENS,
+            max_turns=1,
+            stage_floors=dict(S.STAGE_FLOORS),
+        ),
         "qualified_score": qualified_scoring_contract(),
         "champion_challenge": ranking_contract(),
         "windows": windows_contract(seed_root_commitment),

@@ -50,15 +50,33 @@ def source_pool_contract(snapshot) -> dict[str, Any]:
     }
 
 
-def hard_gates_contract() -> dict[str, Any]:
+def hard_gates_contract(
+    *,
+    max_output_tokens: int | None = None,
+    max_turns: int | None = None,
+    stage_floors: dict[str, float] | None = None,
+) -> dict[str, Any]:
+    """Every hard gate, as a miner can read it.
+
+    The token and turn budgets are overridable because they are the workflow's,
+    not the protocol's: a workflow that asks one question and allows a thousand
+    tokens published the protocol's eight thousand and one miner in every ten
+    would have budgeted for eight times what they actually get.
+
+    ``stage_floors`` is published for the same reason. A floor terminates a
+    submission outright, and a threshold nobody can read is not a contract.
+    """
     return {
         "artifact_size_bytes": C.MAX_ARTIFACT_BYTES,
         "peak_vram_gb": C.MAX_PEAK_VRAM_GB,
         "p95_workflow_seconds": C.MAX_P95_WORKFLOW_SECONDS,
-        "max_turns": C.MAX_AGENT_TURNS,
-        "max_output_tokens": C.MAX_OUTPUT_TOKENS,
+        "max_turns": C.MAX_AGENT_TURNS if max_turns is None else max_turns,
+        "max_output_tokens": C.MAX_OUTPUT_TOKENS
+        if max_output_tokens is None
+        else max_output_tokens,
         "critical_unsafe_actions": C.MAX_CRITICAL_UNSAFE_ACTIONS,
         "base_retention_floor": C.BASE_RETENTION_FLOOR,
+        "stage_floors": dict(stage_floors or {}),
     }
 
 
