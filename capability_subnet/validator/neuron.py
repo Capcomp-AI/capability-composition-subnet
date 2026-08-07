@@ -156,7 +156,23 @@ class ValidatorNeuron:
             self._burn(block, reason=str(exc))
             return
         except BackendUnavailable as exc:
-            log.warning("engine unavailable: %s", exc)
+            # Burn, do not go quiet. Every other failure here burns; this one
+            # returned, which is the one option that is strictly worse than
+            # either paying or burning. A validator that stops submitting leaves
+            # its previous vector on chain to go stale, so it keeps paying
+            # whoever it last named until the chain stops counting it — and then
+            # pays nobody while the validator still looks alive.
+            #
+            # Observed doing exactly that: the engine had published no vector
+            # yet, `/weights` answered 404, and three validators sat silent for
+            # a day with weights from the previous run still standing.
+            log.warning("engine unavailable, burning this pass: %s", exc)
+            try:
+                self.burn_uid()
+            except BurnTargetUnavailable as burn_exc:
+                log.error("cannot even burn: %s", burn_exc)
+                return
+            self._burn(block, reason=str(exc))
             return
 
         # Staleness is measured against the engine's own window length, not a
