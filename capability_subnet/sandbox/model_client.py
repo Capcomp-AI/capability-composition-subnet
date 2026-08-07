@@ -142,8 +142,26 @@ class OpenAICompatibleClient:
             # it as an error lets the orchestrator mark the whole trace as a
             # harness failure and exclude it, instead of scoring a zero the
             # candidate did not earn.
-            log.warning("model endpoint call failed: %s", exc)
-            return ModelReply(None, [], error=f"model endpoint unavailable: {exc}")
+            #
+            # A 4xx carries the server's reason in the body, and without it the
+            # log says only "400 Bad Request" — which is indistinguishable
+            # between a prompt longer than the context window, an unsupported
+            # sampling parameter and a malformed tool schema. Each is a different
+            # fix and the operator cannot tell which they have.
+            detail = ""
+            reason = getattr(exc, "response", None)
+            if reason is not None:
+                try:
+                    body = reason.json()
+                    detail = str(body.get("message") or body.get("error") or body)[:400]
+                except Exception:  # noqa: BLE001 - a non-JSON body is still worth quoting
+                    detail = (reason.text or "")[:400]
+            log.warning("model endpoint call failed: %s%s", exc, f" — {detail}" if detail else "")
+            return ModelReply(
+                None,
+                [],
+                error=f"model endpoint unavailable: {exc}{f' — {detail}' if detail else ''}",
+            )
 
         try:
             choice = payload["choices"][0]
