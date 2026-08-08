@@ -278,8 +278,17 @@ def graded_contribution(
     graded.sort(key=lambda item: (-item[2], item[0]))
     graded = graded[: C.MAX_GRADED_CONTRIBUTORS]
 
-    champion_share = payable_pool * champion_base_share if payable else 0.0
+    # The leader's share is set aside whether or not anyone holds the throne. An
+    # empty throne means nobody earned it, so it burns — handing it to the
+    # runners-up would pay *more* in exactly the windows where the field was
+    # weakest, which is the incentive pointing backwards. Measured before the
+    # fix: with no champion the single contributor took 0.80 of the window
+    # instead of 0.36.
+    champion_share = payable_pool * champion_base_share
     graded_pool = payable_pool - champion_share
+
+    if not payable:
+        burned += champion_share
 
     if payable:
         assert champion is not None and champion.uid is not None  # narrowed above

@@ -290,3 +290,45 @@ class TestSampler:
         shared = common_instance_ids(left, right)
         assert len(shared) == 3
         assert "hidden-000001" not in shared and "hidden-000003" not in shared
+
+
+class TestAnEmptyThroneDoesNotPayTheRunnersUp:
+    """The leader's share is set aside whether or not anyone holds the throne.
+
+    Redistributing it when nobody was crowned pays *more* in exactly the windows
+    where the field was weakest. Observed on the testnet arena: with no champion
+    a single contributor took 0.80 of the window instead of 0.36, and nothing
+    burned — while the published contract says the share is burned rather than
+    redistributed.
+    """
+
+    @staticmethod
+    def _vector(champion):
+        from capability_subnet.scoring.weight_vector import graded_contribution
+
+        return graded_contribution(
+            workflow_id="w",
+            window_id=1,
+            block=10,
+            spec_version=1,
+            champion=champion,
+            contributors=[(1, "5A", 1.0)],
+            tail=[],
+        )
+
+    def test_with_no_champion_the_leader_share_burns(self):
+        vector = self._vector(None)
+        by_role = {e.role: e.weight for e in vector.entries}
+        assert by_role.get("burn", 0) == pytest.approx(C.CHAMPION_BASE_SHARE, abs=1e-6)
+        assert by_role.get("contributor", 0) == pytest.approx(1.0 - C.CHAMPION_BASE_SHARE, abs=1e-6)
+
+    def test_a_real_champion_is_still_paid_its_share(self):
+        from capability_subnet.common.schemas import ChampionRecord
+
+        champion = ChampionRecord(
+            candidate_id="5Champ", hotkey="5Champ", uid=7, recipe_sha256="sha256:" + "0" * 64
+        )
+        vector = self._vector(champion)
+        by_role = {e.role: e.weight for e in vector.entries}
+        assert by_role.get("champion", 0) == pytest.approx(C.CHAMPION_BASE_SHARE, abs=1e-6)
+        assert by_role.get("burn", 0) == pytest.approx(0.0, abs=1e-6)
