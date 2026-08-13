@@ -40,7 +40,7 @@ def test_it_produces_a_valid_recipe(tmp_path):
 
 def test_it_prints_a_commitment_that_fits(tmp_path):
     """The payload is capped at 128 bytes and the URI is most of the budget."""
-    uri = "https://github.com/Capability-AI/lora-merger/raw/main/tn/m1.json"
+    uri = "https://github.com/Capcomp-AI/lora-merger/raw/main/tn/m1.json"
     result = _run(
         "--tries",
         "3",

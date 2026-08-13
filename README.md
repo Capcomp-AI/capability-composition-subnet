@@ -138,7 +138,7 @@ Determinism is what makes the paired statistics valid and lets a disputed evalua
 | Repository | What it holds | Who needs it |
 |---|---|---|
 | **this one** | The protocol: recipe contract, merge engine, workflows, and every rule that decides a score — aggregation, gates, retention, the comparator, ranking, contribution, the weight vector | Miners, validators, auditors |
-| [`lora-merger-engine`](https://github.com/Capability-AI/lora-merger-engine) | The evaluation engine that *runs* those rules: window loop, candidate serving, store, read-only API, operator configuration | The subnet operator only |
+| [`lora-merger-engine`](https://github.com/Capcomp-AI/lora-merger-engine) | The evaluation engine that *runs* those rules: window loop, candidate serving, store, read-only API, operator configuration | The subnet operator only |
 
 The line is drawn where it is for one reason: a validator pays only for a score
 it can recompute. So everything that turns evidence into a number is here and
