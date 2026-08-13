@@ -17,6 +17,19 @@ There is no resubmission, no second attempt, no "I'll fix it next window." A new
 
 So: validate locally, evaluate locally, and only then commit.
 
+**Start from the worked example.** [`examples/quickstart_miner.py`](../examples/quickstart_miner.py)
+does the whole loop in one file — builds valid recipes, rejects the inadmissible
+ones, scores the survivors, writes the winner and prints its commitment:
+
+```bash
+python examples/quickstart_miner.py --tries 20 --out recipe.json
+```
+
+It runs with no GPU and no chain. Its *search* is random sampling, which is the
+weakest search there is and the part you are meant to replace; everything around
+it — validation, digests, commitment encoding, local scoring — is the part you
+can rely on. See [examples/README.md](../examples/README.md).
+
 > An *infrastructure* failure never costs you your shot. If the engine cannot serve your package or the sandbox falls over, your submission returns to the queue untouched. Only a measured loss terminates you.
 
 ---

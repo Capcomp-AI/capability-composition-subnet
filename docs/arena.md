@@ -36,8 +36,15 @@ is not reproducible.
 
 | Source | Items used | Scoring |
 |---|---|---|
-| `AffineFoundation/affine-lgc` @ `19765edac477` | ~3,193 across 10 families | exact match |
-| `AffineFoundation/rl-python` @ `0cc711b1f059` | ~2,944 problems | execution |
+| logic corpus | ~3,193 across 10 families | exact match |
+| code corpus | ~2,944 problems | execution |
+
+The pins themselves live in `capability_subnet/workflows/lora_merger_logic_v1/sources.py`,
+which is what regenerates a window's instances — so anyone re-scoring a closed
+window resolves exactly the items the engine used. They are deliberately not
+repeated in the published contract or on the console. Naming a corpus in the
+shop window mostly helps somebody go looking for adapters already trained on it,
+and that is a way of scoring well without composing anything.
 
 A quarter of every window is drawn from the code corpus (`CODE_FRACTION`).
 Execution is the stronger signal — it asks whether the code works rather than

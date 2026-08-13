@@ -173,6 +173,11 @@ python -m capability_subnet.workflows.cli selftest --count 10
 
 # Build and check a recipe
 python -m capability_subnet.miner.cli init --random --out recipe.json
+
+# Or run the whole miner loop in one file: build, score, write, print the
+# commitment. No GPU and no chain. Its search is deliberately naive — that is
+# the part you compete on. See examples/README.md
+python examples/quickstart_miner.py --tries 20 --out recipe.json
 python -m capability_subnet.miner.cli validate --recipe recipe.json
 ```
 
