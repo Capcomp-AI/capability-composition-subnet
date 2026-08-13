@@ -2,7 +2,7 @@
 
 ## Reporting
 
-Report privately through [GitHub security advisories](https://github.com/Namikaze-bit/lora-merger/security/advisories/new)
+Report privately through [GitHub security advisories](https://github.com/Capability-AI/lora-merger/security/advisories/new)
 rather than opening a public issue.
 
 Include what you found, how to reproduce it, and what it would let an attacker
