@@ -287,11 +287,19 @@ DEFAULT_MIN_AXIS_SAMPLES: Final[int] = 20
 
 #: Absolute end-to-end completion margin over the strongest *non-learned*
 #: reference, in points of completion rate. This is the bar that says
-#: "composition added value at all", and it does not move.
-#: Raised from 0.03, which 100 instances could not resolve. See
+#: "composition added value at all".
+#:
+#: Lowered from 0.06 to the floor the draw can actually resolve. See
 #: DEFAULT_HIDDEN_INSTANCES: the two are a pair, and the engine refuses a
-#: deployment that sets a margin its sample size cannot demonstrate.
-DEFAULT_END_TO_END_MARGIN: Final[float] = 0.06
+#: deployment that sets a margin its sample size cannot demonstrate. 400
+#: instances resolve ~0.0542, so 0.055 is the lowest honest bar at this draw.
+#:
+#: It is deliberately not lower. Below what the draw resolves, the paired
+#: bootstrap declines every challenger on evidence rather than merit, and the
+#: network stops being able to crown anyone without any verdict saying so.
+#: Going lower is bought with instances, not with a smaller number here, and
+#: instances are quadratic: halving the bar is four times the evaluation.
+DEFAULT_END_TO_END_MARGIN: Final[float] = 0.055
 
 #: Margin a challenger must clear over the reigning champion, at the moment the
 #: champion takes the throne.
@@ -324,15 +332,26 @@ BOOTSTRAP_CONFIDENCE: Final[float] = 0.95
 
 #: Blocks per evaluation window. At 12s blocks this is roughly 24 hours. Hidden
 #: instances are resampled and the champion re-measured once per window.
+#:
+#: Not a free parameter on a running deployment: the window id is the block
+#: divided by this, and the beacon is drawn from the window's own opening block.
+#: Changing it renumbers every window and moves the block each past beacon was
+#: drawn from, so disclosures already published stop reproducing.
 DEFAULT_WINDOW_BLOCKS: Final[int] = 7200
 
 #: Hidden instances drawn per window for the canonical comparison.
 #:
 #: Chosen together with DEFAULT_END_TO_END_MARGIN, not independently. A paired
-#: comparison over 400 instances resolves about 0.054, so a 0.06 margin is
-#: demonstrable; 100 instances resolve only 0.108, which made the previous
-#: 0.03 margin unprovable and the throne effectively unwinnable. The engine now
-#: refuses a configuration where the two contradict each other.
+#: comparison over 400 instances resolves about 0.054, so a 0.055 margin is
+#: demonstrable; 100 instances resolve only 0.108, which made an earlier 0.03
+#: margin unprovable and the throne effectively unwinnable. The engine refuses a
+#: configuration where the two contradict each other.
+#:
+#: This is also as many instances as a 7200-block window holds: seven reference
+#: packages over 500 instances each is 17.5 of the 18 hours the schedule
+#: preflight allows. A lower margin has to be bought with a longer window, and a
+#: longer window changes the window id and the block a beacon is drawn from —
+#: which is not a free parameter once disclosures have been published against it.
 DEFAULT_HIDDEN_INSTANCES: Final[int] = 400
 
 #: Additional out-of-distribution instances drawn per window.

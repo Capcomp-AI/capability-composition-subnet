@@ -2,7 +2,7 @@
 
 ## Reporting
 
-Report privately through [GitHub security advisories](https://github.com/Capcomp-AI/lora-merger/security/advisories/new)
+Report privately through [GitHub security advisories](https://github.com/Capcomp-AI/capability-composition-subnet/security/advisories/new)
 rather than opening a public issue.
 
 Include what you found, how to reproduce it, and what it would let an attacker

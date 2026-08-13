@@ -51,6 +51,11 @@ is tighter than it sounds:
 not fit, and `https://github.com/<owner>/<repo>/raw/<branch>/<path>` is eleven
 characters shorter.
 
+Long names are what break it. This repository's own raw URL is 79 characters
+and does not fit at all, so a recipe cannot be served from it. Host the file
+somewhere with a short name — a bare domain costs about 30 characters and
+leaves room to spare.
+
 ## What to replace
 
 Everything except `draw_recipe`. The scaffolding — validation, digests,
