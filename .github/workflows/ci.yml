@@ -8,6 +8,9 @@ on:
   # loose pin rather than anything a commit did.
   schedule:
     - cron: "17 4 * * 1"
+  # So a run can be started by hand, which is the only way to get a green tick
+  # onto a commit that was pushed while Actions was not listening.
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
