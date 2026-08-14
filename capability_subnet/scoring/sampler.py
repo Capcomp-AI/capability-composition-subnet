@@ -138,6 +138,63 @@ def draw_window(
     )
 
 
+def _derive_open(window_id: int, label: str, beacon: str) -> random.Random:
+    """A generator keyed on nothing anyone holds privately.
+
+    Same construction as ``_derive`` with the root removed, so the material is
+    entirely public and every party computes byte-identical seeds.
+    """
+    material = f"open|{window_id}|{label}|{beacon}".encode()
+    return random.Random(int.from_bytes(hashlib.sha256(material).digest(), "big"))
+
+
+def draw_window_open(
+    window_id: int,
+    *,
+    beacon: str,
+    hidden_count: int,
+    ood_count: int,
+) -> WindowSample:
+    """Draw a window from the beacon alone, with no operator secret.
+
+    The secret root exists to stop a miner tuning to the instances. It buys that
+    at the cost of an operator who alone knows the draw, and every other party
+    reduced to checking that published instances match published seeds — which
+    cannot detect a draw that was *chosen*, only one that was misreported. The
+    commitment and the beacon narrow that, but they do not remove it, and they
+    only work if somebody is watching.
+
+    Removing the root removes the operator. Seeds become a pure function of the
+    hash of the block the window opened at, so every validator derives the same
+    instances independently, with nothing to trust and nothing to publish.
+
+    What replaces the secret is ordering, not concealment: a miner cannot tune to
+    a draw it cannot see *at the time it must commit*. The beacon is the hash of
+    the opening block, unknown until that block exists, and the commitment being
+    evaluated is the one standing at that block. Learning the instances a moment
+    later is worth nothing, because the recipe is already fixed and one recipe
+    per hotkey is final.
+
+    This is the stronger guarantee of the two. The secret-root draw is unverifiable
+    by construction and merely watched; this one is checkable by anyone holding a
+    block hash, including someone auditing a window years later.
+    """
+    if not beacon:
+        raise ValueError(
+            "an open draw has no secret to fall back on, so an empty beacon would "
+            "make every window of every deployment draw the same instances"
+        )
+
+    return WindowSample(
+        window_id=window_id,
+        hidden_seeds=tuple(_distinct(_derive_open(window_id, "hidden", beacon), hidden_count)),
+        ood_seeds=tuple(_distinct(_derive_open(window_id, "ood", beacon), ood_count)),
+        probe_seed=_derive_open(window_id, "probe", beacon).randrange(1, SEED_SPACE),
+        beacon=beacon,
+        root_commitment="",  # nothing is committed to, because nothing is held
+    )
+
+
 def _distinct(rng: random.Random, count: int) -> list[int]:
     seen: set[int] = set()
     while len(seen) < count:
