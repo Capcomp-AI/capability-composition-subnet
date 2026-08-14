@@ -223,6 +223,37 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
         help="Compute and log the weight vector without submitting it.",
     )
     parser.add_argument(
+        "--neuron.evaluation",
+        dest="evaluation",
+        choices=("own", "delegated"),
+        default=_env("CAPSUB_EVALUATION", "own"),
+        help=(
+            "Where a validator's numbers come from. 'own' measures every "
+            "candidate on this host — it needs a GPU and a served endpoint, and "
+            "it is the only mode in which the network has no operator to trust. "
+            "'delegated' fetches a signed vector from an evaluation backend and "
+            "verifies it by replaying published traces; cheap, auditable, and "
+            "dependent on somebody else having done the measuring."
+        ),
+    )
+    parser.add_argument(
+        "--neuron.serve_url",
+        dest="serve_url",
+        default=_env("CAPSUB_SERVE_URL", ""),
+        help=(
+            "OpenAI-compatible endpoint this validator serves reconstructed "
+            "candidates through. Required by --neuron.evaluation=own; standing "
+            "the server up is the validator's own business, exactly as it is the "
+            "miner's."
+        ),
+    )
+    parser.add_argument(
+        "--neuron.pool_dir",
+        dest="pool_dir",
+        default=_env("CAPSUB_POOL_DIR", "pool"),
+        help="Certified adapter pool on disk, for reconstructing candidates.",
+    )
+    parser.add_argument(
         "--neuron.no_spot_check",
         dest="spot_check",
         action="store_false",

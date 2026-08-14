@@ -602,6 +602,15 @@ class WindowDisclosure(StrictModel):
     closed_at_block: int
     spec_version: int
 
+    #: Blocks per window at the time this window ran. Recorded because the window
+    #: id is the block divided by it and the beacon is the hash of the block the
+    #: window opened at, so without it a reader cannot work out which block a past
+    #: beacon should have come from — and therefore cannot check that it did.
+    #: Defaulting to the *current* setting would silently re-derive old windows
+    #: against a new length, which is exactly the check this is meant to support.
+    #: 0 means a disclosure written before this field existed.
+    window_blocks: int = 0
+
     #: Every hidden and out-of-distribution seed the window drew. Disclosing all
     #: of them rather than a subset is deliberate: a subset the engine chose
     #: could be the subset it scored honestly.

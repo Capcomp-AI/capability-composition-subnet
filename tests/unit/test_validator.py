@@ -13,7 +13,18 @@ class TestAnUnavailableEngineStillProducesAVector:
         calls = []
 
         class Neuron:
-            config = type("C", (), {"disable_set_weights": False, "spot_check": False})()
+            # Explicitly the delegated path: this is a property of fetching a
+            # vector from a backend, and a validator measuring for itself has no
+            # backend to be unavailable.
+            config = type(
+                "C",
+                (),
+                {
+                    "disable_set_weights": False,
+                    "spot_check": False,
+                    "evaluation": "delegated",
+                },
+            )()
             burn_uid = staticmethod(lambda: 0)
             _burn = staticmethod(lambda block, *, reason: calls.append(reason))
             resync = staticmethod(lambda: None)

@@ -289,17 +289,17 @@ DEFAULT_MIN_AXIS_SAMPLES: Final[int] = 20
 #: reference, in points of completion rate. This is the bar that says
 #: "composition added value at all".
 #:
-#: Lowered from 0.06 to the floor the draw can actually resolve. See
+#: Halved from the original 0.06, and paid for rather than simply declared. See
 #: DEFAULT_HIDDEN_INSTANCES: the two are a pair, and the engine refuses a
-#: deployment that sets a margin its sample size cannot demonstrate. 400
-#: instances resolve ~0.0542, so 0.055 is the lowest honest bar at this draw.
+#: deployment that sets a margin its sample size cannot demonstrate. A bar below
+#: what the draw resolves does not make the network strict — the paired bootstrap
+#: then declines every challenger on evidence rather than merit, and no verdict
+#: ever says so.
 #:
-#: It is deliberately not lower. Below what the draw resolves, the paired
-#: bootstrap declines every challenger on evidence rather than merit, and the
-#: network stops being able to crown anyone without any verdict saying so.
-#: Going lower is bought with instances, not with a smaller number here, and
-#: instances are quadratic: halving the bar is four times the evaluation.
-DEFAULT_END_TO_END_MARGIN: Final[float] = 0.055
+#: The bill is quadratic. Resolving 0.03 instead of 0.055 takes 1350 instances
+#: instead of 400, which takes a 72-hour window instead of a 24-hour one. That is
+#: the real price of a lower bar and it is charged in cadence, not in this number.
+DEFAULT_END_TO_END_MARGIN: Final[float] = 0.03
 
 #: Margin a challenger must clear over the reigning champion, at the moment the
 #: champion takes the throne.
@@ -330,29 +330,36 @@ BOOTSTRAP_CONFIDENCE: Final[float] = 0.95
 # Continuous loop timing
 # ---------------------------------------------------------------------------
 
-#: Blocks per evaluation window. At 12s blocks this is roughly 24 hours. Hidden
+#: Blocks per evaluation window. At 12s blocks this is roughly 72 hours. Hidden
 #: instances are resampled and the champion re-measured once per window.
 #:
+#: Lengthened from 7200 to pay for DEFAULT_HIDDEN_INSTANCES at 1350, which is
+#: what a 0.03 bar costs. Cadence is the price: about one window every three days
+#: rather than one a day.
+#:
 #: Not a free parameter on a running deployment: the window id is the block
-#: divided by this, and the beacon is drawn from the window's own opening block.
-#: Changing it renumbers every window and moves the block each past beacon was
-#: drawn from, so disclosures already published stop reproducing.
-DEFAULT_WINDOW_BLOCKS: Final[int] = 7200
+#: divided by this, and the beacon is drawn from the window's own opening block,
+#: so changing it renumbers every window and moves the block each past beacon
+#: came from. WindowDisclosure records the value in force when a window ran,
+#: which is what lets a reader check an old beacon against the length that
+#: actually produced it rather than against whatever is configured today.
+DEFAULT_WINDOW_BLOCKS: Final[int] = 21600
 
 #: Hidden instances drawn per window for the canonical comparison.
 #:
 #: Chosen together with DEFAULT_END_TO_END_MARGIN, not independently. A paired
-#: comparison over 400 instances resolves about 0.054, so a 0.055 margin is
-#: demonstrable; 100 instances resolve only 0.108, which made an earlier 0.03
-#: margin unprovable and the throne effectively unwinnable. The engine refuses a
-#: configuration where the two contradict each other.
+#: comparison over 1350 instances resolves about 0.0295, so a 0.03 margin is
+#: demonstrable; 400 resolve 0.054 and 100 resolve only 0.108, which made an
+#: earlier 0.03 margin unprovable and the throne effectively unwinnable. The
+#: engine refuses a configuration where the two contradict each other.
 #:
-#: This is also as many instances as a 7200-block window holds: seven reference
-#: packages over 500 instances each is 17.5 of the 18 hours the schedule
-#: preflight allows. A lower margin has to be bought with a longer window, and a
-#: longer window changes the window id and the block a beacon is drawn from —
-#: which is not a free parameter once disclosures have been published against it.
-DEFAULT_HIDDEN_INSTANCES: Final[int] = 400
+#: The resolvable edge falls with the square root of this, so each halving of the
+#: bar costs four times the evaluation. Seven reference packages over 1450
+#: instances is close to 51 hours, which is why DEFAULT_WINDOW_BLOCKS had to grow
+#: with it — the schedule preflight allows a window to spend three quarters of
+#: itself on references, and a window that cannot finish its own schedule never
+#: reaches a challenger at all.
+DEFAULT_HIDDEN_INSTANCES: Final[int] = 1350
 
 #: Additional out-of-distribution instances drawn per window.
 DEFAULT_OOD_INSTANCES: Final[int] = 100

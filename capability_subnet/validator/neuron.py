@@ -139,12 +139,16 @@ class ValidatorNeuron:
         return (block - self.last_weight_block) >= self.config.weight_interval
 
     def step(self) -> None:
-        """One pass: fetch, verify, submit."""
+        """One pass: measure or fetch, verify, submit."""
         block = current_block(self.subtensor)
         if not self.should_set_weights(block):
             return
 
         self.resync()
+
+        if getattr(self.config, "evaluation", "own") == "own":
+            self._step_own(block)
+            return
 
         try:
             vector = self.client.fetch_weights()
@@ -223,6 +227,110 @@ class ValidatorNeuron:
 
         final = apply_validator_burn(vector, self.config.burn_percentage, burn_uid)
         self._submit(final, block)
+
+    def _step_own(self, block: int) -> None:
+        """Measure this window here, and set weights from what was measured.
+
+        The operator-free path. Nothing is fetched from anybody: the window comes
+        from the chain's own block hash, the candidates come from commitments,
+        and the numbers come from this host's GPU.
+        """
+        from capability_subnet.common.chain import block_beacon, read_commitments
+        from capability_subnet.validator.window import Candidate, run_window
+
+        window_blocks = C.DEFAULT_WINDOW_BLOCKS
+        window_id = window_id_for_block(block, window_blocks)
+        opened_at = window_id * window_blocks
+
+        try:
+            beacon = block_beacon(self.subtensor, opened_at)
+        except Exception as exc:
+            # Without the beacon there is no draw, and a fabricated one would be
+            # this validator choosing the test. Burn rather than invent.
+            log.error("no beacon for block %s: %s", opened_at, exc)
+            self._burn(block, reason=f"no beacon for block {opened_at}: {exc}")
+            return
+
+        candidates: list[Candidate] = []
+        for commitment in read_commitments(self.subtensor, self.config.netuid):
+            # Only what stood at the moment the window opened. A commitment made
+            # after the beacon existed was made by someone who could already see
+            # the instances.
+            if commitment.block > opened_at:
+                continue
+            recipe = self._resolve(commitment)
+            if recipe is None:
+                continue
+            uid = self._uid_of(commitment.hotkey)
+            if uid is None:
+                continue
+            candidates.append(
+                Candidate(
+                    uid=uid,
+                    hotkey=commitment.hotkey,
+                    recipe=recipe,
+                    first_block=commitment.block,
+                )
+            )
+
+        outcome = run_window(
+            candidates,
+            window_id=window_id,
+            beacon=beacon,
+            hotkey=self.wallet.hotkey.ss58_address,
+            block=block,
+            measure=self._measure,
+            spec_version=__spec_version__,
+            burn_percentage=self.config.burn_percentage,
+            burn_uid=self.burn_uid(),
+        )
+        for who, why in outcome.flagged_peers.items():
+            log.warning("peer %s looks inconsistent: %s", who, why)
+
+        log.info(
+            "window %s: measured %s of %s candidates on %s instances",
+            window_id,
+            len(outcome.usable),
+            len(candidates),
+            len(outcome.assignment),
+        )
+        self._submit(outcome.weights, block)
+
+    def _uid_of(self, hotkey: str) -> int | None:
+        try:
+            return list(self.metagraph.hotkeys).index(hotkey)
+        except ValueError:
+            return None
+
+    def _resolve(self, commitment):
+        """Fetch a committed recipe and check it against its own digest."""
+        from capability_subnet.validator.resolve import ResolutionError, resolve_recipe
+
+        try:
+            return resolve_recipe(commitment)
+        except ResolutionError as exc:
+            log.info("uid %s: %s", commitment.hotkey[:8], exc)
+            return None
+
+    def _measure(self, candidate, assignment):
+        """Reconstruct, serve and score one candidate on this host."""
+        from capability_subnet.sandbox.model_client import OpenAICompatibleClient
+        from capability_subnet.validator.evaluator import evaluate_candidate
+
+        if not self.config.serve_url:
+            raise RuntimeError(
+                "--neuron.evaluation=own needs --neuron.serve_url: this validator "
+                "measures candidates itself and has nowhere to serve them"
+            )
+
+        return evaluate_candidate(
+            candidate.recipe,
+            OpenAICompatibleClient(self.config.serve_url, "candidate"),
+            assignment=assignment,
+            pool_dir=self.config.pool_dir,
+            artifact_dir=f"{self.config.full_path}/artifacts/{candidate.hotkey[:12]}",
+            candidate_id=candidate.hotkey,
+        )
 
     def _burn(self, block: int, *, reason: str) -> None:
         """Route the whole share to the subnet owner's UID."""
