@@ -1,6 +1,9 @@
 <div align="center">
 
-<img src="assets/logo.png" alt="LoRA Merger" width="120" height="120">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/logo-on-dark.png">
+  <img src="assets/logo.png" alt="LoRA Merger" width="120" height="120">
+</picture>
 
 # LoRA Merger
 
