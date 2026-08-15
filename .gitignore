@@ -61,3 +61,15 @@ backend.local.yaml
 # Development scratch produced by scripts/run_dev_engine.sh
 .dev-state/
 .dev-pool/
+
+# The materialised pool and the scratch it is fetched through. The setup tells an
+# operator to run scripts/import_public_adapters.py --out pool from this
+# directory, which lands ~9 GB of weights next to the source; only the digests in
+# the registry belong in git, and they are written there by that same run.
+pool/
+.hf-cache/
+
+# The filled-in copy of backend.example.yaml. It carries a deployment's own GPU
+# UUIDs, paths and block numbers, and .env alone was ignored — so the file an
+# operator is told to create was the one file left committable.
+backend.yaml

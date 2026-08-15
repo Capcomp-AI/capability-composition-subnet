@@ -40,7 +40,7 @@ recipe_dir: ""            # empty: <state_dir>/recipes
 # the references more often, which costs GPU time; longer ones give a champion
 # more time on one instance draw.
 window_blocks: 7200
-hidden_instances: 100
+hidden_instances: 400
 ood_instances: 30
 
 # The secret root every window's hidden draw is derived from. Anyone who knows
@@ -107,11 +107,16 @@ disclosure_traces: 10
 # A challenger must be dominant on at least min_dominant_axes capability axes and
 # not worse on every other one, then clear the end-to-end margin against the
 # strongest reference with a paired lower confidence bound above zero.
+# A margin the instance count cannot resolve is not strictness: nothing is ever
+# crowned, and every verdict looks like an ordinary loss. 400 hidden instances
+# resolve about 0.054, so the margin sits just above it. Raising the margin or
+# lowering the instances is safe; lowering the margin needs more instances, and
+# more instances need a longer window — preflight checks both and says which.
 axis_margin: 0.02             # absolute margin to count as dominant on an axis
 axis_tolerance: 0.01          # relative band that still counts as not worse
 min_dominant_axes: 1
 min_axis_samples: 20          # fewer paired samples than this counts as worse
-end_to_end_margin: 0.03       # absolute completion margin over the strongest reference
+end_to_end_margin: 0.06       # absolute completion margin over the strongest reference
 strict_pareto: false          # true requires dominance on every axis
 
 # ---------------------------------------------------------------------------
@@ -136,3 +141,38 @@ log_level: INFO
 # Runs without a chain connection and downgrades every preflight failure to a
 # warning. Development only.
 dry_run: false
+
+# ---------------------------------------------------------------------------
+# Serving runtime
+# ---------------------------------------------------------------------------
+# Local copy of the pinned base model, materialised ahead of time. Evaluation
+# runs with HF_HUB_OFFLINE=1, so nothing here may resolve over the network.
+# CHANGE ME:
+base_model_path: ""
+
+# The serving card, addressed by identity rather than position. CUDA and NVML
+# agree on device numbering only while every card is healthy; when one fails,
+# CUDA renumbers around it and NVML does not, so one integer names two different
+# GPUs and the engine serves on one while measuring another.
+serving_gpu_uuid: ""          # e.g. GPU-e0fa18b2-...; empty falls back to the index
+serving_gpu_index: 0
+
+# These two are a pair, and both are bounded by the card. gpu_memory_utilization
+# is a fraction of the WHOLE card rather than of what is free, so a card with
+# other tenants needs that fraction actually free. Too small a fraction leaves
+# vLLM nothing for cache blocks and it refuses to start; too long a context wants
+# more cache than the fraction allows and it refuses again. Change one at a time.
+#
+# Note the fraction also decides peak memory, which is gated: on a large card
+# 0.78 can exceed the 24 GiB limit on its own, before any candidate is served.
+serving_max_model_len: 4096
+serving_gpu_memory_utilization: 0.78
+
+# The interpreter vLLM runs under. Empty uses the engine's own; set it when vLLM
+# has its own virtualenv, which is common because it pins torch tightly.
+serving_python: ""
+
+# How long to wait for the endpoint to answer /health before giving up. A first
+# start on a host with cold kernel caches compiles before it serves, and that is
+# slower than a warm one by minutes.
+serving_startup_timeout: 900.0
