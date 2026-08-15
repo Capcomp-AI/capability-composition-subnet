@@ -41,11 +41,15 @@ def test_it_produces_a_valid_recipe(tmp_path):
 def test_it_prints_a_commitment_that_fits(tmp_path):
     """The payload is capped at 128 bytes and the URI is most of the budget.
 
-    This URI is a real one, and short on purpose. The budget leaves 71
-    characters, which rules out more hosts than it sounds like: this
-    repository's own raw URL is 79 and does not fit.
+    A real Hugging Face resolve URL, which is where a miner publishes. The
+    budget leaves 71 characters, which rules out more hosts than it sounds
+    like: this repository's own raw URL is 79 and does not fit.
+
+    The `hf:` shorthand for the same file is 31 characters and leaves room to
+    spare, which is what it exists for — but the long form is what has to fit,
+    so that is what is pinned here.
     """
-    uri = "https://github.com/Namikaze-bit/lora-merger/raw/main/tn/m1.json"
+    uri = "https://huggingface.co/tc-liu/capsub-recipes/resolve/main/r.json"
     result = _run(
         "--tries",
         "3",
