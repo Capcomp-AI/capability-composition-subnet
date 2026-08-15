@@ -93,6 +93,7 @@ def build_local_artifact(
     pool_dir: str | Path,
     output_dir: str | Path,
     snapshot: PoolSnapshot | None = None,
+    device: str = "cpu",
 ) -> tuple[str, int, Path]:
     """Reconstruct a recipe locally.
 
@@ -100,10 +101,21 @@ def build_local_artifact(
     miner sees here is the digest the engine will compute. A mismatch means the
     two hosts disagree about determinism, which is worth knowing before
     committing rather than after.
+
+    ``device`` reaches the merge rather than being dropped here. The trimming
+    methods decompose a materialised update per projection, 252 times, and run
+    roughly thirty times faster on a GPU: a validator measuring every candidate
+    for itself is the caller that cannot afford the difference, because it pays
+    it once per submission per window.
+
+    The device is consensus-relevant in the sense that cuSOLVER and LAPACK do
+    not agree bit-for-bit, so an artifact digest reproduces only on the same
+    device class. Validators are compared on outcomes rather than on digests
+    precisely because of that, so choosing the fast one costs nothing here.
     """
     pool = snapshot or load_snapshot()
     source = SafetensorsAdapterSource(pool_dir)
-    result = reconstruct(recipe, pool, source, output_dir=output_dir)
+    result = reconstruct(recipe, pool, source, output_dir=output_dir, device=device)
     return result.artifact_sha256, result.size_bytes, Path(output_dir)
 
 

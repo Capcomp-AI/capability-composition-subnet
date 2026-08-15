@@ -82,6 +82,7 @@ def evaluate_candidate(
     sandbox_config: SandboxConfig | None = None,
     probe_seed: int | None = None,
     base_probe: ProbeOutcome | None = None,
+    device: str = "cpu",
 ) -> CandidateEvaluation:
     """Reconstruct a candidate and score it on this validator's assignment.
 
@@ -102,7 +103,7 @@ def evaluate_candidate(
 
     try:
         artifact_sha256, artifact_bytes, _ = build_local_artifact(
-            recipe, pool_dir=pool_dir, output_dir=artifact_dir, snapshot=pool
+            recipe, pool_dir=pool_dir, output_dir=artifact_dir, snapshot=pool, device=device
         )
     except Exception as exc:  # reconstruction is the first thing that can fail
         log.warning("reconstruction failed for %s: %s", candidate_id or recipe.digest(), exc)

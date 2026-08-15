@@ -402,6 +402,10 @@ class ValidatorNeuron:
             pool_dir=self.config.pool_dir,
             artifact_dir=f"{self.config.full_path}/artifacts/{candidate.hotkey[:12]}",
             candidate_id=candidate.hotkey,
+            # --neuron.device was declared and read by nothing, so every
+            # validator merged on the CPU whatever it configured. The trimming
+            # methods are ~30x slower there, paid once per candidate per window.
+            device=getattr(self.config, "device", "cpu"),
         )
 
     def _burn(self, block: int, *, reason: str) -> None:
