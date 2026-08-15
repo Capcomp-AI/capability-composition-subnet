@@ -1,15 +1,27 @@
-"""The thin validator neuron.
+"""The validator neuron, in either of its two modes.
 
-A validator on this subnet does not reconstruct, serve or score anything. It
-needs no GPU, no adapter pool and no model. Its job is small and specific: fetch
-the signed weight vector the evaluation engine published, satisfy itself that the
-vector is trustworthy and submittable, and set weights on-chain.
+``--neuron.evaluation`` decides where a validator's numbers come from, and the
+two modes ask for very different machines.
 
-Keeping validation thin is what makes a centralised evaluation engine workable at
-all — running a validator costs a small VPS instead of a GPU host. What keeps it
-honest is that the validator is not a relay: it verifies the operator signature
-against an allow-list it controls, checks the vector against the chain it can
-see, and burns rather than submitting anything it cannot verify.
+**own** — the default. The validator rebuilds every candidate on its own
+hardware, serves it through its own endpoint, and scores it against instances it
+regenerates from the pinned corpora. It needs a GPU, an adapter pool and
+`capability-subnet[merge]`; what it does *not* need is anyone to trust, which is
+the point. Validators are not required to agree on artifact bytes — an SVD is not
+bitwise reproducible across devices — so they are compared on outcomes instead.
+
+**delegated** — the thin mode. The validator reconstructs, serves and scores
+nothing, and runs on a small VPS: it fetches the signed weight vector an
+evaluation engine published, satisfies itself that the vector is trustworthy and
+submittable, and sets weights on-chain. What keeps it honest is that it is not a
+relay — it verifies the operator signature against an allow-list it controls,
+checks the vector against the chain it can see, and burns rather than submitting
+anything it cannot verify.
+
+The failure that motivated the start-up preflight below is the seam between them:
+the packaging describes the thin mode, the default is the other one, and a
+validator that inherited the difference scored every miner zero without ever
+saying it could not measure them.
 """
 
 from __future__ import annotations
@@ -17,6 +29,7 @@ from __future__ import annotations
 import logging
 import sys
 import time
+from pathlib import Path
 
 from capability_subnet import __spec_version__
 from capability_subnet.common import constants as C
@@ -88,6 +101,9 @@ class ValidatorNeuron:
             trusted_signers=trusted,
         )
 
+        if self.config.evaluation == "own":
+            self._preflight_own_evaluation()
+
         self.uid = self._resolve_uid()
         self.last_weight_block = 0
         self.should_exit = False
@@ -98,6 +114,62 @@ class ValidatorNeuron:
             self.config.netuid,
             self.config.backend_url,
         )
+
+    def _preflight_own_evaluation(self) -> None:
+        """Refuse to start if this host cannot actually measure a candidate.
+
+        In ``own`` mode every number this validator submits comes from work it
+        does itself, and each thing checked here fails *quietly* at the moment a
+        miner is scored rather than loudly at start-up.
+
+        The reconstruction stack is the sharp one. It is not in the base install
+        — the packaging describes a validator as needing no tensor library, which
+        was true when ``delegated`` was the only mode and is not true of this one
+        — so a validator installed from `capability-subnet` without extras cannot
+        import torch. It cannot then even *parse* a committed recipe, because
+        validating a Recipe resolves the merge method. And because
+        :func:`~capability_subnet.validator.evaluator.evaluate_candidate` treats
+        reconstruction failure as a scored outcome, the result is not a crash: it
+        is every miner on the subnet scored zero for this validator's own missing
+        dependency, logged once at WARNING, and written to the chain as weights.
+
+        A validator that cannot measure must not vote on who deserves emission.
+        """
+        problems: list[str] = []
+
+        if not self.config.serve_url:
+            problems.append(
+                "--neuron.serve_url is unset, so there is nowhere to serve a reconstructed "
+                "candidate. In 'own' mode this validator measures every candidate itself and "
+                "needs its own endpoint."
+            )
+
+        try:
+            # The same import the recipe parser and the reconstructor reach for.
+            from capability_subnet.merge_engine.engine import reconstruct  # noqa: F401
+        except ImportError as exc:
+            problems.append(
+                f"the reconstruction stack cannot be imported ({exc}). 'own' mode rebuilds "
+                "every candidate locally, and this is not part of the base install. Install "
+                "`capability-subnet[merge]`, or run --neuron.evaluation=delegated, which needs "
+                "no tensor library."
+            )
+
+        pool = Path(self.config.pool_dir)
+        if not pool.is_dir():
+            problems.append(
+                f"the certified adapter pool at {pool} does not exist, so no recipe could be "
+                "reconstructed. Materialise it with scripts/import_public_adapters.py."
+            )
+
+        if problems:
+            for problem in problems:
+                log.error("preflight: %s", problem)
+            raise SystemExit(
+                f"refusing to start: {len(problems)} problem(s) would stop this validator "
+                "measuring candidates. Every miner would be scored zero for a failure that "
+                "belongs to this host."
+            )
 
     def _resolve_uid(self) -> int:
         hotkey = self.wallet.hotkey.ss58_address

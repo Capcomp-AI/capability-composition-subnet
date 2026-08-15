@@ -22,11 +22,20 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
-# The base install is what a *validator* needs, and nothing more. A validator
+# The base install is what a *delegated* validator needs, and nothing more: it
 # reconstructs nothing, serves nothing and scores nothing — it fetches a signed
 # vector, verifies it, replays a closed window from published traces, and sets
-# weights. Declaring torch here made that install 1.7 GB of tensor library the
+# weights. Declaring torch here made that install 1.7 GB of tensor library that
 # validator never imports, against a documented 20 GB VPS.
+#
+# It is NOT enough for the default mode. `--neuron.evaluation` defaults to 'own',
+# where a validator rebuilds and measures every candidate on its own hardware and
+# therefore needs `capability-subnet[merge]`. Without it such a validator cannot
+# even parse a committed recipe — validating a Recipe resolves the merge method,
+# which imports torch — and because reconstruction failure is a scored outcome
+# rather than an error, the visible result is every miner scored zero for this
+# host's missing dependency. The validator now refuses to start instead; see
+# validator/neuron.py::_preflight_own_evaluation.
 #
 # The layering this reflects is real and enforced by tests/unit/test_layering.py:
 # common, workflows, scoring, miner, validator and audit import nothing heavy.
