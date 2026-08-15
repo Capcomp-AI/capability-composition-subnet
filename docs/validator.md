@@ -1,52 +1,131 @@
 # Validator guide
 
-Running a validator on this subnet costs a small VPS. No GPU, no model, no adapter pool, no reconstruction.
+A validator decides where emission goes. `--neuron.evaluation` decides where its numbers come from, and the two modes ask for very different machines.
 
-That does not make it a relay. Before it pays anyone, a validator **re-scores a closed window from the engine's own published traces** — regenerating the instances from their seeds and re-running the deterministic scorer over what the engine said happened. A score that does not follow from its own trace is caught by the party about to pay for it. Install size is under 50 MB: the base package excludes the tensor stack, which a validator never touches.
+| | `own` (default) | `delegated` |
+|---|---|---|
+| Measures candidates | Yes, on your hardware | No |
+| GPU | **48 GB** | None |
+| Adapter pool on disk | Yes, ~9 GB | No |
+| Install | `capability-subnet[merge]` | `capability-subnet` |
+| Trusts an operator | No | Yes, an allow-list you control |
 
-That is unusual, and it is worth understanding *why* before you run one — because the thing you are actually providing is not compute.
+Run `own` unless you have a specific reason not to. It is the mode in which the network has no operator to trust: every number you submit comes from work you did, against instances you regenerated yourself.
 
 ---
 
 ## What you are doing
 
-The evaluation engine reconstructs candidates, serves them, runs them against hidden workflow instances, compares them with the champion and the reference baselines, and publishes a **signed weight vector** together with the signed reports that justify it.
+**In `own` mode.** Each window, your validator reads the commitments on chain, fetches each miner's recipe from the URI it committed, checks the recipe against its digest, reconstructs the merged adapter locally, serves it through your own endpoint, and scores it against hidden instances it regenerates from seeds derived from a block hash. It then ranks what it measured and writes weights.
 
-Your validator fetches that vector and sets weights on-chain.
+Validators are not required to agree on artifact bytes. Six of the seven merge methods run an SVD, and an SVD is not bitwise reproducible across devices, so agreement is on **outcomes** rather than on hashes. The artifact digest is still recorded — a validator whose digest matches another's is stronger evidence — but it is evidence, not a gate.
+
+**In `delegated` mode.** Your validator fetches the signed weight vector an evaluation engine published, verifies it, and sets weights. It reconstructs nothing and needs no GPU.
 
 ## What you are not doing
 
-You are not a relay. Before anything touches the chain, your validator:
+You are not a relay. In either mode, before anything touches the chain your validator:
 
-1. **Verifies the operator signature** against an allow-list *you* configure. A vector you cannot attribute to a trusted operator is refused.
-2. **Checks the vector against the chain you can see.** Does the champion still hold that UID, or did it deregister and leave the slot to a stranger? Is every UID inside this subnet? Do the weights sum to one? Are there duplicate UIDs the chain would reject?
-3. **Checks freshness**, against the window length the engine reports rather than a compiled-in default — a deployment that tuned its window is judged by the window it actually runs. A vector many windows behind the head means the engine has stalled, and a stale champion collecting emission indefinitely is worse for the network than nobody collecting it.
+1. **Verifies signatures** against an allow-list *you* configure, when it takes numbers from an engine. A vector it cannot attribute to a trusted operator is refused.
+2. **Checks the vector against the chain it can see.** Does the champion still hold that UID, or did it deregister and leave the slot to a stranger? Is every UID inside this subnet? Do the weights sum to one? Are there duplicate UIDs the chain would reject?
+3. **Checks freshness**, against the window length the engine reports rather than a compiled-in default.
 4. **Burns rather than submitting anything it cannot verify.**
-
-The engine computes; validators decide. Each of you answers to your own stake, and every report a decision rests on is published and signed, so the weight vector can be re-derived independently by anyone who cares to.
 
 ---
 
-## Setup
+## Hardware
+
+`own` mode reconstructs and serves an 8B model with a rank-64 adapter applied.
+
+| | |
+|---|---|
+| GPU | **48 GB VRAM**, single card |
+| CPU | 8 cores |
+| RAM | 32 GB |
+| Disk | 120 GB — base model ~16 GB, adapter pool ~9 GB, artifacts and state |
+| Network | 100 Mbps |
+
+A candidate's measured peak memory is gated at 24 GiB, and vLLM reserves whatever fraction of the card you give it, so the fraction has to be set from the card's size. Peak tracks it closely:
+
+    peak ≈ gpu_memory_utilization × total_VRAM + 0.9 GiB
+
+On a 48 GB card, `0.45` lands peak at roughly 21–22.5 GiB, leaving ~4 GB of KV cache against the ~0.3 GB that 4096 context at one sequence actually needs.
+
+    serving_gpu_memory_utilization: 0.45
+    serving_max_model_len: 4096
+
+The model itself needs about 15.3 GiB of weights. Everything above that is reservation, so a larger card does not need a larger fraction — it needs a smaller one.
+
+`delegated` mode needs 2 cores, 4 GB RAM, 20 GB disk and no GPU.
+
+---
+
+## Setup for `own` mode
+
+The reconstruction stack is not in the base install, and the serving runtime is not installed by this package at all.
 
 ```bash
 git clone <repository-url> lora-merger && cd lora-merger
-pip install -e .
+pip install -e ".[merge]"
 ```
 
-Register your hotkey:
+vLLM pins torch tightly, so keep it in its own virtualenv and point the validator at that interpreter:
 
 ```bash
-btcli subnet register --netuid <netuid> --wallet.name <coldkey> --wallet.hotkey <hotkey>
+python -m venv .venv-vllm
+.venv-vllm/bin/pip install vllm ninja
 ```
 
-Run:
+vLLM JIT-compiles attention kernels on first start and needs a toolchain to do it. On a clean Ubuntu host:
 
 ```bash
+apt-get install -y build-essential python3-dev
+```
+
+The CUDA compiler and the CUDA runtime headers must be the same version, or the kernel build fails with either `Unsupported .version` from ptxas or `CUDA compiler and CUDA toolkit headers are incompatible`. Check them against each other:
+
+```bash
+nvcc --version                                    # compiler
+grep 'define CUDART_VERSION' $CUDA_HOME/include/cuda_runtime_api.h
+```
+
+The linker also needs the development symlinks that the pip CUDA packages omit — `libcudart.so` pointing at `libcudart.so.13`, and `lib64` beside `lib` — or the build ends in `cannot find -lcudart`.
+
+Materialise the pool and the base model before starting; evaluation runs with `HF_HUB_OFFLINE=1` and must never reach the network:
+
+```bash
+python scripts/import_public_adapters.py --out pool --write-registry
+huggingface-cli download Qwen/Qwen3-8B --revision <pinned> --local-dir base-model/Qwen3-8B
+```
+
+Register the hotkey and run:
+
+```bash
+btcli subnet register --netuid 103 --wallet.name <coldkey> --wallet.hotkey <hotkey>
+
 python neurons/validator.py \
-    --netuid <netuid> \
+    --netuid 103 \
     --wallet.name <coldkey> \
     --wallet.hotkey <hotkey> \
+    --neuron.evaluation own \
+    --neuron.serve_url http://127.0.0.1:8000 \
+    --neuron.pool_dir pool
+```
+
+The validator checks at start-up that it has a serving endpoint, an importable reconstruction stack and a pool on disk, reports every problem at once, and refuses to run otherwise. A validator that cannot measure must not vote on who deserves emission.
+
+Expect roughly 40 minutes of reconstruction per candidate that uses a trimming merge, and about twice that when the cross-worker digest check is on. Linear merges take seconds.
+
+## Setup for `delegated` mode
+
+```bash
+pip install -e .
+
+python neurons/validator.py \
+    --netuid 103 \
+    --wallet.name <coldkey> \
+    --wallet.hotkey <hotkey> \
+    --neuron.evaluation delegated \
     --backend.url https://<engine-host> \
     --backend.trusted_signers <operator-hotkey-ss58>
 ```
@@ -218,13 +297,7 @@ curl https://<engine-host>/health
 
 ## Requirements
 
-| | |
-|---|---|
-| CPU | 2 cores |
-| RAM | 4 GB |
-| Disk | 20 GB |
-| GPU | **None** |
-| Network | 100 Mbps |
+See [Hardware](#hardware) above: `own` mode needs a 48 GB card, `delegated` needs no GPU.
 
 See [min_compute.yml](../min_compute.yml).
 

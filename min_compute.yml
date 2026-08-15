@@ -42,25 +42,35 @@ miner:
       upload: 50
 
 validator:
-  # The validator fetches a signed weight vector, re-scores a closed window from
-  # the engine's published traces, and submits on-chain. It never loads a model
-  # and never reconstructs anything, and the base install excludes the tensor
-  # stack entirely — so a small always-on VPS is genuinely sufficient rather
-  # than nominally sufficient.
+  # Sized for `--neuron.evaluation=own`, the default, in which the validator
+  # rebuilds every candidate on its own hardware, serves it through its own
+  # endpoint and scores it against instances it regenerates. It loads an 8B model
+  # with a rank-64 adapter applied.
+  #
+  # 48 GB rather than the ~18 GB the model actually occupies: a candidate's peak
+  # is gated at 24 GiB, vLLM reserves a fraction of the whole card, and a card
+  # sized to the model leaves no room to set that fraction low enough to stay
+  # under the gate while holding cache blocks. Set
+  # serving_gpu_memory_utilization to 0.45 on a 48 GB card.
+  #
+  # `--neuron.evaluation=delegated` reconstructs nothing and needs no GPU:
+  # 2 cores, 4 GB RAM, 20 GB disk.
   cpu:
-    min_cores: 2
+    min_cores: 8
     min_speed: 2.5
-    recommended_cores: 4
+    recommended_cores: 16
   gpu:
-    required: false
-    min_vram: 0
+    required: true
+    min_vram: 48
+    recommended_vram: 48
   memory:
-    min_ram: 4
-    recommended_ram: 8
-    min_swap: 2
+    min_ram: 32
+    recommended_ram: 64
+    min_swap: 8
   storage:
-    min_space: 20
-    recommended_space: 50
+    # Base model ~16 GB, adapter pool ~9 GB, artifacts, state and kernel caches.
+    min_space: 120
+    recommended_space: 250
     type: SSD
     min_iops: 500
   os:

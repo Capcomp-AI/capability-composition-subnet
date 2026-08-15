@@ -11,7 +11,7 @@
 
 **Which combination of existing specialist adapters actually finishes a real business workflow — and can it beat every off-the-shelf alternative?**
 
-[Quick start](#quick-start) · [How it works](#how-it-works) · [Miner guide](docs/miner.md) · [Validator guide](docs/validator.md) · [Architecture](docs/architecture.md)
+[Quick start](#quick-start) · [How it works](#how-it-works) · [Miner guide](docs/miner.md) · [Validator guide](docs/validator.md) · [Owner guide](docs/owner.md) · [Architecture](docs/architecture.md)
 
 </div>
 
@@ -190,21 +190,25 @@ Then read the guide for your role:
 |---|---|---|
 | **Miner** | [docs/miner.md](docs/miner.md) | Any hardware. A GPU only if you want to evaluate locally. |
 | **Pool operator** | [`scripts/import_public_adapters.py`](scripts/import_public_adapters.py) | Materialises the certified pool from its pinned upstream sources. |
-| **Validator** | [docs/validator.md](docs/validator.md) | A small VPS. **No GPU.** |
-| **Subnet operator** | the engine repository (operator-only) | GPU hosts, Docker, PostgreSQL. |
+| **Validator** | [docs/validator.md](docs/validator.md) | A **48 GB GPU** to measure candidates yourself, or a small VPS to read a signed vector instead. |
+| **Subnet owner** | [docs/owner.md](docs/owner.md) | Publishes the pool. The engine and console are optional. |
 
-## Why validators need no GPU
+## How validators decide
 
-Validators do not reconstruct, serve or score anything. They fetch the signed weight vector the engine publishes, verify it, and set weights.
+`--neuron.evaluation` decides where a validator's numbers come from.
 
-This concentrates evaluation in one operator. A validator is not a relay — before touching the chain it:
+**`own`, the default.** The validator reads the commitments on chain, fetches each recipe, reconstructs the merged adapter on its own hardware, serves it through its own endpoint, and scores it against instances it regenerates from a seed derived from a block hash. It trusts nobody. It needs a 48 GB card.
+
+Validators are not required to agree on artifact bytes — six of the seven merge methods run an SVD, and an SVD is not bitwise reproducible across devices — so they are compared on outcomes rather than on hashes.
+
+**`delegated`.** The validator fetches the signed weight vector an evaluation engine publishes and sets weights, on a VPS with no GPU. It is not a relay: before touching the chain it
 
 1. verifies the operator signature against an allow-list it controls,
 2. checks the vector against the chain it can see — does the champion still hold that UID? is the engine stalled?
 3. **re-scores a closed window from the engine's own published traces**, and
 4. **burns rather than submitting anything it cannot verify.**
 
-Step 3 is what turns a signature into evidence. Instance generation is a pure function of the seed and the scorer is deterministic, so a validator regenerates the problems the candidates faced and re-runs the scoring over the published traces — on a VPS, with no GPU and no model. **An engine whose scores do not follow from its own traces does not get paid.**
+Step 3 is what turns a signature into evidence. Instance generation is a pure function of the seed and the scorer is deterministic, so a validator regenerates the problems the candidates faced and re-runs the scoring over the published traces — no GPU and no model needed for that step. **An engine whose scores do not follow from its own traces does not get paid.**
 
 Every validator does this automatically. Beyond that, anyone can check the record by hand, also without a GPU:
 

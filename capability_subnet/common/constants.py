@@ -198,21 +198,15 @@ RANDOM_SEED_MAX: Final[int] = 4_294_967_295
 #: of the reference baselines, not a candidate.
 MIN_SELECTED_ADAPTERS: Final[int] = 2
 
-#: The ceiling on how many adapters one recipe may draw from the pool.
+#: The ceiling on how many adapters one recipe may draw from the pool, set to the
+#: size of the certified pool so it never cuts through the search space. What a
+#: recipe may compose is bounded by what the registry carries, not by this number.
 #:
-#: Raised from 12, which was below the size of the certified pool and therefore
-#: binding in a way nothing intended: `capability-miner init` selects every
-#: capability adapter when none are named, so a miner's first command produced a
-#: recipe the schema then rejected. The pool has 23 capability adapters, so 50
-#: leaves the ceiling above the pool rather than cutting through it, and the
-#: composition being searched is bounded by what is certified rather than by this
-#: number.
-#:
-#: Consensus-relevant, which is why it lives here and not in a config file. It
-#: also caps the equal-weight references (see scoring/references.py), so raising
-#: it changes what the permanent bar is built from and therefore every published
-#: comparison. Changing it requires a spec version bump.
-MAX_SELECTED_ADAPTERS: Final[int] = 50
+#: Consensus-relevant. It also caps the equal-weight references
+#: (scoring/references.py), so it decides what the permanent bar is built from and
+#: therefore every published comparison against it. Changing it requires a spec
+#: version bump.
+MAX_SELECTED_ADAPTERS: Final[int] = 30
 
 # ---------------------------------------------------------------------------
 # Hard deployment gates
