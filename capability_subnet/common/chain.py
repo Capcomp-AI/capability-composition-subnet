@@ -332,3 +332,61 @@ def window_id_for_block(block: int, window_blocks: int) -> int:
     if window_blocks <= 0:
         raise ValueError("window_blocks must be positive")
     return block // window_blocks
+
+
+@dataclass(frozen=True, slots=True)
+class WindowPosition:
+    """Where a block sits inside its evaluation window.
+
+    Derived from the block height and the window length alone, so anyone holding
+    a chain connection can compute it — a miner deciding whether it is worth
+    committing now, a dashboard with no engine behind it, a validator reporting
+    what it is working on. Nothing here consults an engine, because in the
+    default arrangement each validator evaluates for itself and there is no
+    central engine to ask.
+
+    What it deliberately does not claim is a *phase*. Windows are continuous:
+    there is no submission cut-off after which the arena stops accepting
+    commitments and starts evaluating. A commitment is admitted when it is seen,
+    and where a window is in its own span is the only position that exists.
+    """
+
+    window_id: int
+    opened_block: int
+    closes_block: int
+    blocks_elapsed: int
+    blocks_remaining: int
+
+    @property
+    def progress(self) -> float:
+        """Fraction of the window elapsed, in ``[0, 1)``."""
+        span = self.closes_block - self.opened_block
+        return self.blocks_elapsed / span if span else 0.0
+
+    def seconds_remaining(self, block_seconds: float = 12.0) -> float:
+        """Wall-clock left in the window, at the chain's nominal block time."""
+        return self.blocks_remaining * block_seconds
+
+
+def window_position(block: int, window_blocks: int) -> WindowPosition:
+    """Locate ``block`` within its evaluation window.
+
+    Raises:
+        ValueError: if ``window_blocks`` is not positive, or ``block`` is
+            negative — both of which would otherwise produce a position that
+            looks meaningful and is not.
+    """
+    if window_blocks <= 0:
+        raise ValueError("window_blocks must be positive")
+    if block < 0:
+        raise ValueError("block must not be negative")
+
+    window_id = window_id_for_block(block, window_blocks)
+    opened = window_id * window_blocks
+    return WindowPosition(
+        window_id=window_id,
+        opened_block=opened,
+        closes_block=opened + window_blocks,
+        blocks_elapsed=block - opened,
+        blocks_remaining=opened + window_blocks - block,
+    )
