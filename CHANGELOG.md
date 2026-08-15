@@ -8,7 +8,7 @@ versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html), with
 the spec version derived from the release version and submitted alongside every
 weight vector.
 
-## [Unreleased]
+## [2.1.0] — 2026-08-15
 
 ### Added
 

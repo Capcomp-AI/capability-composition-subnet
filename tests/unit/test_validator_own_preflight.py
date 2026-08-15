@@ -22,7 +22,7 @@ from capability_subnet.validator.neuron import ValidatorNeuron
 
 
 def _config(**overrides):
-    base = dict(evaluation="own", serve_url="http://127.0.0.1:8000", pool_dir="pool")
+    base = dict(evaluation="own", serve_url="http://127.0.0.1:8000", pool_dir="pool", device="cuda")
     base.update(overrides)
     return SimpleNamespace(**base)
 
@@ -89,3 +89,26 @@ class TestOwnModeRefusesAHostThatCannotMeasure:
         # The caller only invokes the preflight for 'own'; assert the guard's
         # condition rather than the function, since that is what protects it.
         assert neuron.config.evaluation != "own"
+
+
+class TestOwnModeRequiresAGpu:
+    """Rebuilding every submission on a CPU is not a slower validator, it is one
+    that never finishes its queue."""
+
+    def test_a_cpu_device_is_refused(self, tmp_path):
+        (tmp_path / "pool").mkdir()
+        with pytest.raises(SystemExit) as caught:
+            _preflight(_config(device="cpu", pool_dir=str(tmp_path / "pool")))
+        assert "refusing to start" in str(caught.value)
+
+    def test_a_cuda_device_that_is_not_there_is_refused(self, tmp_path, monkeypatch):
+        (tmp_path / "pool").mkdir()
+        import torch
+
+        monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+        with pytest.raises(SystemExit):
+            _preflight(_config(device="cuda", pool_dir=str(tmp_path / "pool")))
+
+    def test_an_indexed_cuda_device_is_accepted(self, tmp_path):
+        (tmp_path / "pool").mkdir()
+        _preflight(_config(device="cuda:1", pool_dir=str(tmp_path / "pool")))

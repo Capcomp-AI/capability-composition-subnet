@@ -124,8 +124,14 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
         "--neuron.device",
         dest="device",
         type=str,
-        default=_env("CAPSUB_DEVICE", "cpu"),
-        help="Torch device for any local computation.",
+        default=_env("CAPSUB_DEVICE", "cuda"),
+        help=(
+            "Torch device the merge runs on. 'own' evaluation requires a CUDA "
+            "device and refuses to start without one: the trimming methods "
+            "decompose a materialised update per projection and are ~30x slower "
+            "on a CPU, which is the difference between measuring a queue and "
+            "never finishing one."
+        ),
     )
     parser.add_argument(
         "--logging.level",

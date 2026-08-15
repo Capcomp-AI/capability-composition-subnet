@@ -155,6 +155,28 @@ class ValidatorNeuron:
                 "no tensor library."
             )
 
+        device = str(getattr(self.config, "device", "cuda"))
+        if not device.startswith("cuda"):
+            problems.append(
+                f"--neuron.device is {device!r}. 'own' evaluation rebuilds every submission "
+                "locally, and the trimming methods run roughly thirty times slower on a CPU — "
+                "a queue that takes minutes per candidate on a GPU takes most of a day. Set a "
+                "CUDA device, or run --neuron.evaluation=delegated."
+            )
+        else:
+            try:
+                import torch
+
+                if not torch.cuda.is_available():
+                    problems.append(
+                        f"--neuron.device is {device!r} but torch reports no CUDA device on this "
+                        "host, so every reconstruction would fail once the window opened."
+                    )
+            except ImportError:
+                # The merge-stack check below already reports this, and saying it
+                # twice would read as two separate problems.
+                pass
+
         pool = Path(self.config.pool_dir)
         if not pool.is_dir():
             problems.append(
