@@ -38,16 +38,28 @@ def resolve_recipe(commitment, *, timeout: float = 30.0) -> Recipe:
             pointer, a digest mismatch, or bytes that are not a valid recipe.
             Every one of these is the miner's to fix, and the message says which.
     """
+    # Three shapes reach this function and they disagree about what `payload`
+    # means. A ChainCommitment read from the chain carries the *decoded* payload
+    # there and keeps the 128-byte string in `raw`; a caller holding only the
+    # string passes it as `payload`; a test may pass the two fields directly.
+    # Treating the decoded object as a string is how every real commitment used
+    # to raise AttributeError out of a function that documents ResolutionError.
     payload = getattr(commitment, "payload", None)
-    if payload is not None:
-        try:
-            decoded = decode_commitment(payload)
-        except CommitmentError as exc:
-            raise ResolutionError(f"unreadable commitment: {exc}") from exc
-        digest, uri = decoded.recipe_sha256, decoded.recipe_uri
+
+    if payload is not None and not isinstance(payload, str):
+        digest = getattr(payload, "recipe_sha256", "")
+        uri = getattr(payload, "recipe_uri", "")
     else:
-        digest = getattr(commitment, "recipe_sha256", "")
-        uri = getattr(commitment, "recipe_uri", "")
+        text = payload if isinstance(payload, str) else getattr(commitment, "raw", "")
+        if text:
+            try:
+                decoded = decode_commitment(text)
+            except CommitmentError as exc:
+                raise ResolutionError(f"unreadable commitment: {exc}") from exc
+            digest, uri = decoded.recipe_sha256, decoded.recipe_uri
+        else:
+            digest = getattr(commitment, "recipe_sha256", "")
+            uri = getattr(commitment, "recipe_uri", "")
 
     if not digest or not uri:
         raise ResolutionError("commitment carries no digest or no pointer")
