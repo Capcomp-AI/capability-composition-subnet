@@ -18,7 +18,6 @@ import logging
 from pathlib import Path
 
 from capability_subnet.common import constants as C
-from capability_subnet.common.hashing import canonical_json_str
 from capability_subnet.common.schemas import CompressionSpec, MergeSpec, OutputSpec, Recipe
 from capability_subnet.registry.snapshot import PoolSnapshot, load_snapshot
 
@@ -102,11 +101,22 @@ def load_recipe(path: str | Path) -> Recipe:
 
 
 def write_recipe(recipe: Recipe, path: str | Path) -> str:
-    """Write a recipe in canonical form and return its digest."""
+    """Write a recipe as the exact bytes its digest is taken over.
+
+    The bytes on disk are the content address, not a rendering of it. A miner
+    publishes this file and commits ``digest`` on chain, and a validator fetching
+    it hashes what it received — raw, without parsing — and compares. Writing a
+    prettier document with the same meaning produces a file whose bytes hash to
+    something else, so the commitment points at a recipe that can never be
+    resolved, and the miner learns this only after spending their one evaluation.
+
+    Readability is not lost by this: `capability-miner validate` renders the
+    recipe in full, and the pool and contract commands print indented JSON. Only
+    the artifact that has to hash to a committed value is compact.
+    """
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    document = recipe.model_dump(mode="json", exclude_none=True)
-    target.write_text(canonical_json_str(document), encoding="utf-8")
+    target.write_bytes(recipe.canonical_bytes())
 
     digest = recipe.digest()
     log.info("wrote %s (%s)", target, digest[:19])

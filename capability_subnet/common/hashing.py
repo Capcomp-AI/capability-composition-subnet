@@ -44,11 +44,16 @@ def canonical_json_bytes(obj: Any) -> bytes:
 
 
 def canonical_json_str(obj: Any) -> str:
-    """Human-facing canonical form: sorted keys, two-space indent, trailing newline.
+    """Human-facing rendering: sorted keys, two-space indent, trailing newline.
 
-    This is what a miner should write to disk. Hashing always runs over
-    :func:`canonical_json_bytes` of the *parsed* document, so pretty-printing on
-    disk never changes the digest.
+    For documents that are read rather than hashed — a pool listing, a workflow
+    contract, a snapshot description.
+
+    Not for anything whose digest is committed. A recipe is fetched and hashed as
+    the bytes it arrived as, without being parsed first, so an artifact written
+    this way hashes to something other than its own digest and cannot be
+    resolved from a commitment. :func:`canonical_json_bytes` is the form that
+    carries a digest.
     """
     return json.dumps(obj, sort_keys=True, indent=2, ensure_ascii=False, allow_nan=False) + "\n"
 
