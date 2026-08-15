@@ -243,3 +243,115 @@ class TestTheMergeRunsOnEitherDevice:
             on_gpu = random_drop_rescale(cpu_delta.cuda(), 0.5, seed_parts=(1, "a", "site"))
             # Same mask, same survivors, same rescaling — only the device differs.
             assert torch.equal(on_cpu, on_gpu.cpu())
+
+
+class TestImportDeterminism:
+    """Materialising the pool is reconstruction's twin, and was not held to it.
+
+    Every digest in the registry comes from this path, and every later
+    reconstruction is checked against those digests. It re-factorises with the
+    same float32 decomposition the merge engine uses, but ran outside the
+    determinism controls entirely — so the artifact, and therefore the recorded
+    ``artifact_sha256``, followed the importing host's core count. Two operators
+    importing the same upstream adapter at the same pinned revision got different
+    pools, each perfectly reproducible on its own machine.
+    """
+
+    @staticmethod
+    def _upstream(manifest, rank):
+        """Upstream-shaped LoRA factors for every canonical projection."""
+        from capability_subnet.registry.importer import _source_key
+
+        attention = set(manifest.raw["attention_modules"])
+        template = manifest.layer_module_template
+        generator = torch.Generator().manual_seed(11)
+
+        source = {}
+        for layer in range(manifest.num_hidden_layers):
+            for module in C.CANONICAL_TARGET_MODULES:
+                block = "self_attn" if module in attention else "mlp"
+                shape = manifest.shape_of(module)
+                source[_source_key(template, layer, block, module, "lora_A")] = torch.randn(
+                    rank, shape.in_features, generator=generator
+                )
+                source[_source_key(template, layer, block, module, "lora_B")] = torch.randn(
+                    shape.out_features, rank, generator=generator
+                )
+        return source
+
+    def test_the_decomposition_runs_under_pinned_numerics(self, tiny_manifest, monkeypatch):
+        """Asserted at the decomposition itself rather than by comparing digests.
+
+        Comparing digests across thread counts is the property that matters, but
+        it cannot be demonstrated on a 16-wide fixture: BLAS does not parallelise
+        a matrix that small, so the divergence this guards against does not
+        reproduce at test scale and such a test would pass whether or not the
+        controls were in place. What *is* checkable here, and what fails the
+        moment the context is removed again, is that the arithmetic runs
+        single-threaded — which is the property the real divergence came from.
+        """
+        # By module, not `from ... import factorize`: the package exports a
+        # function of that name, so the attribute is the function rather than the
+        # module the importer resolves its symbol from.
+        from importlib import import_module
+
+        from capability_subnet.registry.importer import SourceSpec, normalise_tensors
+
+        factorize = import_module("capability_subnet.merge_engine.factorize")
+        observed: list[int] = []
+        real = factorize.factorize_product
+
+        def recording(*args, **kwargs):
+            observed.append(torch.get_num_threads())
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(factorize, "factorize_product", recording)
+
+        source = self._upstream(tiny_manifest, C.CANONICAL_RANK)
+        spec = SourceSpec(
+            adapter_id="thread-probe",
+            repo="upstream/probe",
+            revision="0" * 40,
+            rank=C.CANONICAL_RANK,
+            lora_alpha=C.CANONICAL_RANK,
+            base_repo=tiny_manifest.model_repo,
+        )
+
+        previous = torch.get_num_threads()
+        try:
+            torch.set_num_threads(max(2, previous))
+            normalise_tensors(source, spec=spec, manifest=tiny_manifest)
+        finally:
+            torch.set_num_threads(previous)
+
+        assert observed, "the decomposition never ran"
+        assert set(observed) == {1}, (
+            f"the decomposition ran with {sorted(set(observed))} threads; float32 "
+            "reduction order would then follow the host's core count"
+        )
+        # And the caller's setting is put back, so importing does not silently
+        # reconfigure the process that did it.
+        assert torch.get_num_threads() == previous
+
+    def test_repeated_import_is_identical(self, tiny_manifest):
+        from capability_subnet.registry.importer import SourceSpec, normalise_tensors
+
+        source = self._upstream(tiny_manifest, C.CANONICAL_RANK)
+        spec = SourceSpec(
+            adapter_id="repeat-probe",
+            repo="upstream/probe",
+            revision="0" * 40,
+            rank=C.CANONICAL_RANK,
+            lora_alpha=C.CANONICAL_RANK,
+            base_repo=tiny_manifest.model_repo,
+        )
+
+        digests = set()
+        for _ in range(3):
+            # Consume global RNG state between runs; a seeded context must not
+            # inherit whatever the process happened to be doing beforehand.
+            torch.rand(1000)
+            tensors, _ = normalise_tensors(source, spec=spec, manifest=tiny_manifest)
+            digests.add(artifact_digest_of_tensors(tensors))
+
+        assert len(digests) == 1

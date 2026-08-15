@@ -139,6 +139,20 @@ def normalise_tensors(
 ) -> tuple[dict, dict[str, float]]:
     """Re-factorise every projection to the canonical rank.
 
+    Runs under :func:`deterministic_context`, without which the artifact this
+    writes depends on the machine that wrote it. The decomposition is a
+    float32 reduction, and reduction order in a multi-threaded sum is not fixed,
+    so torch's default thread count — which follows the host's core count — chose
+    the low bits of every tensor. Importing the same upstream adapter at the same
+    pinned revision produced a different ``artifact_sha256`` on a 32-core host
+    than on an 8-core one, reproducibly on each.
+
+    That is the one thing this pipeline may not do. The digest written back into
+    the registry is what every later reconstruction is checked against, and the
+    engine cross-checks reconstruction digests between workers precisely to catch
+    disagreement. Importing outside the controls the merge engine already defines
+    meant the pool's own provenance was the least reproducible step in it.
+
     Returns:
         ``(tensors, stats)`` — the canonical tensor map keyed by the manifest's
         own template, and per-adapter conversion diagnostics. ``retained_energy``
@@ -147,7 +161,11 @@ def normalise_tensors(
     """
     import torch
 
-    from capability_subnet.merge_engine.determinism import OUTPUT_DTYPE, WORK_DTYPE
+    from capability_subnet.merge_engine.determinism import (
+        OUTPUT_DTYPE,
+        WORK_DTYPE,
+        deterministic_context,
+    )
     from capability_subnet.merge_engine.factorize import factorize_product
 
     scaling = spec.lora_alpha / spec.rank
@@ -157,53 +175,58 @@ def normalise_tensors(
     attention = set(manifest.raw["attention_modules"])
     template = manifest.layer_module_template
 
-    for layer in range(manifest.num_hidden_layers):
-        for module in C.CANONICAL_TARGET_MODULES:
-            block = "self_attn" if module in attention else "mlp"
-            key_a = _source_key(template, layer, block, module, "lora_A")
-            key_b = _source_key(template, layer, block, module, "lora_B")
+    # Entered once around the whole decomposition rather than per projection:
+    # the context also seeds the global RNGs and restores thread settings on
+    # exit, and doing that 252 times per adapter would be 252 resets for one
+    # adapter's worth of arithmetic.
+    with deterministic_context(0, threads=1):
+        for layer in range(manifest.num_hidden_layers):
+            for module in C.CANONICAL_TARGET_MODULES:
+                block = "self_attn" if module in attention else "mlp"
+                key_a = _source_key(template, layer, block, module, "lora_A")
+                key_b = _source_key(template, layer, block, module, "lora_B")
 
-            if key_a not in source or key_b not in source:
-                raise ImportError_(
-                    f"{spec.adapter_id}: upstream weights are missing {key_a!r} or {key_b!r}. "
-                    "The adapter does not cover every canonical projection."
+                if key_a not in source or key_b not in source:
+                    raise ImportError_(
+                        f"{spec.adapter_id}: upstream weights are missing {key_a!r} or {key_b!r}. "
+                        "The adapter does not cover every canonical projection."
+                    )
+
+                lora_a = source[key_a].to(WORK_DTYPE)
+                lora_b = source[key_b].to(WORK_DTYPE)
+
+                shape = manifest.shape_of(module)
+                if lora_a.shape != (spec.rank, shape.in_features):
+                    raise ImportError_(
+                        f"{spec.adapter_id}: {key_a} has shape {tuple(lora_a.shape)}, "
+                        f"expected {(spec.rank, shape.in_features)}"
+                    )
+                if lora_b.shape != (shape.out_features, spec.rank):
+                    raise ImportError_(
+                        f"{spec.adapter_id}: {key_b} has shape {tuple(lora_b.shape)}, "
+                        f"expected {(shape.out_features, spec.rank)}"
+                    )
+
+                # The effective update is `scaling · lora_b @ lora_a`, but it is
+                # never materialised: it has rank at most `spec.rank`, so the
+                # factored path decomposes it exactly from the factors themselves.
+                # Forming the product first would mean a dense decomposition of a
+                # 12288 × 4096 matrix, 252 times per adapter.
+                #
+                # The emitted pair carries alpha == rank, so its own scaling is 1
+                # and `lora_B @ lora_A` *is* this delta — no hidden multiplier
+                # travels with the artifact.
+                factored = factorize_product(
+                    lora_b, lora_a, C.CANONICAL_RANK, clamp_quantile=1.0, scale=scaling
                 )
+                energies.append(factored.retained_energy)
 
-            lora_a = source[key_a].to(WORK_DTYPE)
-            lora_b = source[key_b].to(WORK_DTYPE)
-
-            shape = manifest.shape_of(module)
-            if lora_a.shape != (spec.rank, shape.in_features):
-                raise ImportError_(
-                    f"{spec.adapter_id}: {key_a} has shape {tuple(lora_a.shape)}, "
-                    f"expected {(spec.rank, shape.in_features)}"
-                )
-            if lora_b.shape != (shape.out_features, spec.rank):
-                raise ImportError_(
-                    f"{spec.adapter_id}: {key_b} has shape {tuple(lora_b.shape)}, "
-                    f"expected {(shape.out_features, spec.rank)}"
-                )
-
-            # The effective update is `scaling · lora_b @ lora_a`, but it is
-            # never materialised: it has rank at most `spec.rank`, so the
-            # factored path decomposes it exactly from the factors themselves.
-            # Forming the product first would mean a dense decomposition of a
-            # 12288 × 4096 matrix, 252 times per adapter.
-            #
-            # The emitted pair carries alpha == rank, so its own scaling is 1
-            # and `lora_B @ lora_A` *is* this delta — no hidden multiplier
-            # travels with the artifact.
-            factored = factorize_product(
-                lora_b, lora_a, C.CANONICAL_RANK, clamp_quantile=1.0, scale=scaling
-            )
-            energies.append(factored.retained_energy)
-
-            tensors[manifest.tensor_key(layer, module, "lora_A")] = factored.lora_a.to(
-                OUTPUT_DTYPE
-            ).contiguous()
-            tensors[manifest.tensor_key(layer, module, "lora_B")] = factored.lora_b.to(
-                OUTPUT_DTYPE
-            ).contiguous()
+                tensors[manifest.tensor_key(layer, module, "lora_A")] = factored.lora_a.to(
+                    OUTPUT_DTYPE
+                ).contiguous()
+                tensors[manifest.tensor_key(layer, module, "lora_B")] = factored.lora_b.to(
+                    OUTPUT_DTYPE
+                ).contiguous()
 
     mean_energy = sum(energies) / len(energies) if energies else 0.0
     return tensors, {"mean_retained_energy": mean_energy, "sites": float(len(energies))}
