@@ -52,6 +52,13 @@ weight vector.
 
 ### Changed — consensus
 
+- `MAX_SELECTED_ADAPTERS` raised from 12 to 50. Twelve sat below the size of the
+  certified pool, so the ceiling cut through the search space rather than
+  bounding it: `capability-miner init` selects every capability adapter when none
+  are named, which is 23, so a miner's first command produced a recipe the schema
+  immediately rejected. Consensus-relevant because the same constant caps the
+  equal-weight reference, which now composes 23 adapters instead of 12 — the
+  permanent bar moves, and with it every published comparison against it.
 - Default workflow is `lora_merger_logic_v1`. Both shipped workflows remain
   registered and selectable.
 - `require_beat_reference` defaults to False: the highest score on the board is
