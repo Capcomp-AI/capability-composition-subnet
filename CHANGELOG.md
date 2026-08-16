@@ -8,6 +8,23 @@ versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html), with
 the spec version derived from the release version and submitted alongside every
 weight vector.
 
+## [2.2.0] — 2026-08-15
+
+### Changed — consensus
+
+- The champion takes 0.95 of the payable emission, up from 0.55, and the graded
+  pool is split across at most ten runners-up rather than thirty-two. The throne
+  is the prize; what the runners-up receive is a signal of how close they came,
+  not an income.
+- The queue tail is 0.0, down from 0.20. Emission now follows measured results
+  only. Note what the tail was for: Bittensor prunes by emission, lowest first,
+  so a miner waiting for its single evaluation now sits at exactly zero and is
+  the first candidate for eviction. On a queue that takes days to reach a given
+  submission, the network can lose submissions before it judges them.
+- With an empty throne the champion share burns, so a subnet with no crowned
+  champion now burns 0.95 of its emission rather than 0.55. A launch starts in
+  that state by definition.
+
 ## [2.1.0] — 2026-08-15
 
 ### Added

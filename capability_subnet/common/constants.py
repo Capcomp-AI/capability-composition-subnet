@@ -400,8 +400,12 @@ ALLOWED_INCENTIVE_MODES: Final[tuple[str, ...]] = (
     MODE_GRADED_CONTRIBUTION,
 )
 
-#: Share the champion keeps under the graded mode, before the queue tail.
-CHAMPION_BASE_SHARE: Final[float] = 0.55
+#: Share of the payable emission the champion keeps under the graded mode.
+#:
+#: The throne is the prize and it is meant to be worth taking. At 0.95 the
+#: runners-up split what is left as information about how close they came, not
+#: as a living: a miner who wants emission has to win, not place.
+CHAMPION_BASE_SHARE: Final[float] = 0.95
 
 #: How a non-champion's grade is composed. Quality dominates: a package that
 #: does not finish workflows is not made valuable by being cheap, or by being
@@ -419,8 +423,11 @@ CONTRIBUTION_WEIGHT_COST: Final[float] = 0.10
 #: would make the reward depend on the accident of when the engine got to it.
 CONTRIBUTION_MEMORY_WINDOWS: Final[int] = 7
 
-#: Most graded contributors paid in one window.
-MAX_GRADED_CONTRIBUTORS: Final[int] = 32
+#: Most graded contributors paid in one window, sharing what the champion does
+#: not take. Ten rather than thirty-two: a 0.05 pool split thirty-two ways is
+#: below the noise floor of the chain's own weight quantisation, so it would be
+#: bookkeeping rather than payment.
+MAX_GRADED_CONTRIBUTORS: Final[int] = 10
 
 #: Emission split used when the graded mode is enabled. Unfilled shares are
 #: burned rather than redistributed to unqualified miners.
@@ -435,7 +442,7 @@ GRADED_TOP3_SHARES: Final[tuple[float, float, float]] = (0.60, 0.25, 0.15)
 #: is ever evaluated. The engine evaluates roughly one challenger per window, so
 #: that wait is long enough to matter, and a queue that empties itself is a
 #: subnet with one participant.
-DEFAULT_TAIL_SHARE: Final[float] = 0.20
+DEFAULT_TAIL_SHARE: Final[float] = 0.0
 
 #: Most miners the tail is split across.
 MAX_TAIL_ENTRIES: Final[int] = 16
