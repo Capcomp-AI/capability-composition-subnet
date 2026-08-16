@@ -8,6 +8,18 @@ versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html), with
 the spec version derived from the release version and submitted alongside every
 weight vector.
 
+## [2.3.0] — 2026-08-15
+
+### Changed — consensus
+
+- A window with no champion burns half its emission and pays the rest out: the
+  best measured package leads what remains on the same terms a champion leads
+  the whole, taking 0.475, and the next nine share 0.025. Previously the whole
+  leader's share burned, so every window before the first crown paid almost
+  nothing — the state a launch begins in.
+- A leaderless window still pays its best miner about half what a crowned window
+  pays its champion, so the throne remains the thing worth taking.
+
 ## [2.2.0] — 2026-08-15
 
 ### Changed — consensus

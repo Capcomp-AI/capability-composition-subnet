@@ -229,6 +229,7 @@ def graded_contribution(
     workflow_id: str = C.DEFAULT_WORKFLOW_ID,
     tail: list[tuple[int, str]] | None = None,
     tail_share: float = C.DEFAULT_TAIL_SHARE,
+    no_champion_burn_share: float = C.NO_CHAMPION_BURN_SHARE,
 ) -> WeightVector:
     """Pay the champion a fixed share and split the rest by graded contribution.
 
@@ -278,17 +279,27 @@ def graded_contribution(
     graded.sort(key=lambda item: (-item[2], item[0]))
     graded = graded[: C.MAX_GRADED_CONTRIBUTORS]
 
-    # The leader's share is set aside whether or not anyone holds the throne. An
-    # empty throne means nobody earned it, so it burns — handing it to the
-    # runners-up would pay *more* in exactly the windows where the field was
-    # weakest, which is the incentive pointing backwards. Measured before the
-    # fix: with no champion the single contributor took 0.80 of the window
-    # instead of 0.36.
-    champion_share = payable_pool * champion_base_share
-    graded_pool = payable_pool - champion_share
-
-    if not payable:
-        burned += champion_share
+    # The leader's share is set aside whether or not anyone holds the throne.
+    #
+    # With a champion it goes to them. Without one, half the window burns and the
+    # best measured package leads what remains, on the same terms a champion
+    # leads the whole. So a leaderless window pays its best miner roughly half
+    # what a crowned window pays its champion: the field is still ranked and
+    # still paid, and the throne is still the thing worth taking.
+    #
+    # The share is never handed to the runners-up intact. Doing that would pay
+    # *more* in exactly the windows where the field was weakest — measured
+    # before that was fixed, a single contributor took 0.80 of a leaderless
+    # window against 0.36 of a contested one, which is the incentive pointing
+    # backwards.
+    if payable:
+        champion_share = payable_pool * champion_base_share
+        graded_pool = payable_pool - champion_share
+    else:
+        burned += payable_pool * no_champion_burn_share
+        leaderless_pool = payable_pool * (1.0 - no_champion_burn_share)
+        champion_share = leaderless_pool * champion_base_share
+        graded_pool = leaderless_pool - champion_share
 
     if payable:
         assert champion is not None and champion.uid is not None  # narrowed above
@@ -299,6 +310,23 @@ def graded_contribution(
                 hotkey=champion.hotkey or "",
                 weight=champion_share,
                 role="champion",
+            )
+        )
+
+    leader: tuple[int, str, float] | None = None
+    if not payable and graded:
+        # `graded` is already sorted by grade, so the head is the best measured
+        # package in the window. It leads in the throne's absence.
+        leader, graded = graded[0], graded[1:]
+        entries.append(
+            WeightEntry(
+                uid=leader[0],
+                hotkey=leader[1],
+                # Not role="champion": nothing was crowned, and a vector that
+                # claimed otherwise would disagree with the champion record an
+                # auditor replays it against.
+                weight=champion_share,
+                role="contributor",
             )
         )
 
@@ -314,8 +342,8 @@ def graded_contribution(
                 )
             )
     else:
-        # Nobody qualified. Burn the graded pool rather than promoting the
-        # champion into it: an uncontested window is not an achievement.
+        # Nobody left to share it. Burn rather than promoting the leader into it:
+        # a window with one qualified package is not a bigger achievement.
         burned += graded_pool
 
     if burned > 0.0:

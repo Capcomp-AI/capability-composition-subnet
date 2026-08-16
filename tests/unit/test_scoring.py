@@ -293,14 +293,28 @@ class TestSampler:
 
 
 class TestAnEmptyThroneDoesNotPayTheRunnersUp:
-    """The leader's share is set aside whether or not anyone holds the throne.
+    """A leaderless window pays less than a crowned one, and pays something.
 
-    Redistributing it when nobody was crowned pays *more* in exactly the windows
-    where the field was weakest. Observed on the testnet arena: with no champion
-    a single contributor took 0.80 of the window instead of 0.36, and nothing
-    burned — while the published contract says the share is burned rather than
-    redistributed.
+    Half of it burns, and the best measured package leads what remains on the
+    same terms a champion leads the whole — so its best miner takes roughly half
+    what a champion would. Two failures are being held apart here.
+
+    Handing the leader's share to the runners-up intact pays *more* in exactly
+    the windows where the field was weakest. Observed on the testnet arena: with
+    no champion a single contributor took 0.80 of the window instead of 0.36.
+
+    Burning all of it pays nothing in every window before the first crown, which
+    is the state a launch begins in and can hold for as long as the queue takes
+    to work through.
     """
+
+    @staticmethod
+    def _champion():
+        from capability_subnet.common.schemas import ChampionRecord
+
+        return ChampionRecord(
+            candidate_id="5Champ", hotkey="5Champ", uid=7, recipe_sha256="sha256:" + "0" * 64
+        )
 
     @staticmethod
     def _vector(champion):
@@ -316,11 +330,45 @@ class TestAnEmptyThroneDoesNotPayTheRunnersUp:
             tail=[],
         )
 
-    def test_with_no_champion_the_leader_share_burns(self):
+    def test_with_no_champion_half_burns_and_the_leader_takes_the_rest(self):
         vector = self._vector(None)
         by_role = {e.role: e.weight for e in vector.entries}
-        assert by_role.get("burn", 0) == pytest.approx(C.CHAMPION_BASE_SHARE, abs=1e-6)
-        assert by_role.get("contributor", 0) == pytest.approx(1.0 - C.CHAMPION_BASE_SHARE, abs=1e-6)
+
+        leaderless = 1.0 - C.NO_CHAMPION_BURN_SHARE
+        leader = leaderless * C.CHAMPION_BASE_SHARE
+        # One contributor, so there is nobody to share the runner-up pool with
+        # and it burns alongside the half.
+        assert by_role.get("contributor", 0) == pytest.approx(leader, abs=1e-6)
+        assert by_role.get("burn", 0) == pytest.approx(1.0 - leader, abs=1e-6)
+
+    def test_a_leaderless_window_pays_its_best_miner_less_than_a_crown(self):
+        """The throne has to stay worth taking."""
+        leaderless = {e.role: e.weight for e in self._vector(None).entries}
+        crowned = {e.role: e.weight for e in self._vector(self._champion()).entries}
+        assert leaderless.get("contributor", 0) < crowned.get("champion", 0)
+
+    def test_the_runners_up_share_what_the_leader_does_not_take(self):
+        from capability_subnet.scoring.weight_vector import graded_contribution
+
+        vector = graded_contribution(
+            workflow_id="w",
+            window_id=1,
+            block=10,
+            spec_version=1,
+            champion=None,
+            contributors=[(1, "5A", 1.0), (2, "5B", 0.5), (3, "5C", 0.25)],
+            tail=[],
+        )
+        weights = sorted(
+            (e.weight for e in vector.entries if e.role == "contributor"), reverse=True
+        )
+        assert len(weights) == 3
+        leaderless = 1.0 - C.NO_CHAMPION_BURN_SHARE
+        assert weights[0] == pytest.approx(leaderless * C.CHAMPION_BASE_SHARE, abs=1e-6)
+        assert sum(weights[1:]) == pytest.approx(
+            leaderless * (1.0 - C.CHAMPION_BASE_SHARE), abs=1e-6
+        )
+        assert sum(e.weight for e in vector.entries) == pytest.approx(1.0, abs=1e-9)
 
     def test_a_real_champion_is_still_paid_its_share(self):
         from capability_subnet.common.schemas import ChampionRecord

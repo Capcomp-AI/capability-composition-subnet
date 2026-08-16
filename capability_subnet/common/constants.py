@@ -423,6 +423,19 @@ CONTRIBUTION_WEIGHT_COST: Final[float] = 0.10
 #: would make the reward depend on the accident of when the engine got to it.
 CONTRIBUTION_MEMORY_WINDOWS: Final[int] = 7
 
+#: Fraction of a leaderless window's emission that burns.
+#:
+#: With no champion there is nobody who has beaten the field, so the window pays
+#: less than a crowned one — but it still pays. Burning the whole leader's share
+#: would mean a subnet that has never crowned anyone burns almost everything,
+#: which is the state every launch starts in and can sit in for weeks while the
+#: queue is worked through.
+#:
+#: Half. The best measured package leads the remainder on the same terms a
+#: champion leads the whole, so a leaderless window pays its best miner about
+#: half what a crowned window pays its champion. The throne stays worth taking.
+NO_CHAMPION_BURN_SHARE: Final[float] = 0.50
+
 #: Most graded contributors paid in one window, sharing what the champion does
 #: not take. Ten rather than thirty-two: a 0.05 pool split thirty-two ways is
 #: below the noise floor of the chain's own weight quantisation, so it would be
