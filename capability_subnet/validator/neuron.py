@@ -28,6 +28,7 @@ rights to be useful.
 
 from __future__ import annotations
 
+import json
 import logging
 import queue
 import sys
@@ -343,7 +344,92 @@ class ValidatorNeuron:
             len(candidates),
             len(outcome.assignment),
         )
+        self._report(outcome, candidates, window_id)
         self._submit(outcome.weights, block)
+
+    def _report(self, outcome, candidates: list, window_id: int) -> None:
+        """Record what each candidate scored, and why.
+
+        The weight vector says what a miner was paid; on its own it never says
+        what it was paid *for*. These are the numbers the decision was made from,
+        and without them a miner asking why it earned nothing — and an operator
+        asking whether this host is measuring sanely — both have only the answer
+        to look at. They are computed either way; the cost here is writing them
+        down before they are thrown away.
+        """
+        uid_of = {c.hotkey: c.uid for c in candidates}
+        rows = []
+        for evaluation in outcome.evaluations:
+            scores = evaluation.scores
+            rows.append(
+                {
+                    "uid": uid_of.get(evaluation.candidate_id),
+                    "hotkey": evaluation.candidate_id,
+                    "recipe_sha256": evaluation.recipe_sha256,
+                    "artifact_sha256": evaluation.artifact_sha256,
+                    "usable": bool(evaluation.usable),
+                    "error": evaluation.error or "",
+                    "qualified_score": round(scores.qualified_score, 6),
+                    "end_to_end": round(scores.end_to_end, 6),
+                    "stage_balance": round(scores.stage_balance, 6),
+                    "ood": round(scores.ood, 6),
+                    "retention": round(scores.retention, 6),
+                    "latency": round(scores.latency, 6),
+                    "token_efficiency": round(scores.token_efficiency, 6),
+                    "artifact_efficiency": round(scores.artifact_efficiency, 6),
+                    "valid_samples": scores.valid_samples,
+                    "total_samples": scores.total_samples,
+                }
+            )
+
+        for row in sorted(rows, key=lambda r: -r["qualified_score"]):
+            if row["usable"]:
+                log.info(
+                    "  uid %-3s score %.4f  e2e %.3f ood %.3f ret %.3f lat %.3f tok %.3f  "
+                    "(%s/%s instances)",
+                    row["uid"],
+                    row["qualified_score"],
+                    row["end_to_end"],
+                    row["ood"],
+                    row["retention"],
+                    row["latency"],
+                    row["token_efficiency"],
+                    row["valid_samples"],
+                    row["total_samples"],
+                )
+            else:
+                log.info("  uid %-3s NOT MEASURED: %s", row["uid"], row["error"][:160])
+
+        if outcome.weights is not None:
+            paid = {e.uid: e.weight for e in outcome.weights.entries}
+            log.info(
+                "  weights: %s",
+                ", ".join(f"uid {u}={w:.4f}" for u, w in sorted(paid.items(), key=lambda x: -x[1])),
+            )
+
+        # Written as well as logged: a log rotates, and this is the evidence a
+        # miner would ask for weeks later.
+        try:
+            directory = Path(self.config.full_path) / "windows"
+            directory.mkdir(parents=True, exist_ok=True)
+            payload = {
+                "window_id": window_id,
+                "netuid": self.config.netuid,
+                "validator_hotkey": self.wallet.hotkey.ss58_address,
+                "instances": len(outcome.assignment),
+                "candidates": rows,
+                "weights": (
+                    [
+                        {"uid": e.uid, "weight": e.weight, "role": e.role}
+                        for e in outcome.weights.entries
+                    ]
+                    if outcome.weights is not None
+                    else []
+                ),
+            }
+            (directory / f"window-{window_id}.json").write_text(json.dumps(payload, indent=2))
+        except Exception:  # noqa: BLE001 - reporting must never stop the window
+            log.warning("could not write the window report", exc_info=True)
 
     def _uid_of(self, hotkey: str) -> int | None:
         try:
