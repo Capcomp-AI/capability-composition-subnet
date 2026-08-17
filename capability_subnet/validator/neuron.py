@@ -33,7 +33,6 @@ import sys
 import time
 from pathlib import Path
 
-from capability_subnet import __spec_version__
 from capability_subnet.common import constants as C
 from capability_subnet.common.chain import (
     MetagraphView,
@@ -265,7 +264,6 @@ class ValidatorNeuron:
             hotkey=self.wallet.hotkey.ss58_address,
             block=block,
             measure=self._measure,
-            spec_version=__spec_version__,
             burn_percentage=self.config.burn_percentage,
             burn_uid=self.burn_uid(),
         )
@@ -360,7 +358,6 @@ class ValidatorNeuron:
             workflow_id=self.config.workflow_id,
             window_id=window_id_for_block(block, C.DEFAULT_WINDOW_BLOCKS),
             computed_at_block=block,
-            spec_version=__spec_version__,
             entries=[WeightEntry(uid=burn_uid, hotkey="", weight=1.0, role="burn")],
         )
         log.warning("burning this window's share to uid %d: %s", burn_uid, reason)
@@ -383,7 +380,11 @@ class ValidatorNeuron:
             self.config.netuid,
             uids,
             weights,
-            version_key=__spec_version__,
+            # Bittensor compares this against the subnet's WeightsVersionKey and
+            # rejects anything below it. netuid 103 sets 0, so 0 is accepted; the
+            # cost of passing it is that there is no longer a lever to force
+            # validators onto a new ruleset, which has to be coordinated instead.
+            version_key=0,
         )
 
         if success:

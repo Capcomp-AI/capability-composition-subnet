@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from capability_subnet import __spec_version__
 from capability_subnet.common import constants as C
 from capability_subnet.workflows.industrial_maintenance_de_v1.final_schema import (
     FINAL_PAYLOAD_SCHEMA,
@@ -75,7 +74,6 @@ def build_contract(snapshot=None, seed_root_commitment: str = "") -> dict[str, A
 
     return {
         "contract_version": 1,
-        "spec_version": __spec_version__,
         "workflow_id": WORKFLOW_ID,
         "title": WORKFLOW_TITLE,
         "description": DESCRIPTION,

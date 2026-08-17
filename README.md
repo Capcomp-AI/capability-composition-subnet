@@ -227,7 +227,6 @@ A published score that does not follow from its published trace is caught.
 | [Miner guide](docs/miner.md) | Building, evaluating and committing a recipe, and the full recipe reference |
 | [Validator guide](docs/validator.md) | Running a validator, verification, failure modes, and deployment |
 | [Arena reference](docs/arena.md) | Both workflows: corpora, scoring and limits |
-| [Changelog](CHANGELOG.md) | Release history |
 
 ## Project layout
 

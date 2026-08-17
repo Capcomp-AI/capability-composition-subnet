@@ -451,7 +451,6 @@ class EvaluationReport(StrictModel):
     base_revision: str
     source_snapshot_sha256: str
     evaluator_image_digest: str
-    spec_version: int
 
     hard_gates: list[GateVerdict] = Field(default_factory=list)
     scores: CandidateScores = Field(default_factory=CandidateScores)
@@ -522,7 +521,6 @@ class WeightVector(StrictModel):
     workflow_id: str = C.DEFAULT_WORKFLOW_ID
     window_id: int
     computed_at_block: int
-    spec_version: int
     mode: Literal["winner_take_all", "graded_top3", "graded_contribution"] = (
         C.MODE_GRADED_CONTRIBUTION
     )
@@ -600,7 +598,6 @@ class WindowDisclosure(StrictModel):
     workflow_id: str
     window_id: int
     closed_at_block: int
-    spec_version: int
 
     #: Blocks per window at the time this window ran. Recorded because the window
     #: id is the block divided by it and the beacon is the hash of the block the

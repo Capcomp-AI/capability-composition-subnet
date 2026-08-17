@@ -191,7 +191,7 @@ class TestNothingIsKeyedByWhicheverWorkflowIsDefault:
         from capability_subnet.common.schemas import WindowDisclosure
 
         with pytest.raises(Exception):  # noqa: B017 - pydantic's own validation error
-            WindowDisclosure(window_id=1, closed_at_block=1, spec_version=1000)
+            WindowDisclosure(window_id=1, closed_at_block=1)
 
     def test_every_workflow_publishes_the_protocol_facts_a_miner_needs(self):
         """A contract without the base model or the pool is not one a miner can
@@ -200,7 +200,6 @@ class TestNothingIsKeyedByWhicheverWorkflowIsDefault:
 
         required = {
             "workflow_id",
-            "spec_version",
             "base_model",
             "source_pool",
             "recipe",

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from capability_subnet import __spec_version__
 from capability_subnet.common import constants as C
 from capability_subnet.workflows.lora_merger_logic_v1 import sources as S
 from capability_subnet.workflows.lora_merger_logic_v1.runner import MAX_OUTPUT_TOKENS
@@ -34,7 +33,6 @@ def build_contract(snapshot=None, seed_root_commitment: str = "") -> dict[str, A
 
     return {
         "contract_version": 1,
-        "spec_version": __spec_version__,
         "workflow_id": "lora_merger_logic_v1",
         "base_model": base_model_contract(snapshot),
         "source_pool": source_pool_contract(snapshot),

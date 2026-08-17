@@ -53,7 +53,6 @@ def disclosure_for(instance, trace, result, **overrides) -> WindowDisclosure:
         "workflow_id": MAINTENANCE_WORKFLOW_ID,
         "window_id": 7,
         "closed_at_block": 50_400,
-        "spec_version": 1000,
         "hidden_seeds": [instance.seed],
         "ood_seeds": [],
         "instances": [entry],

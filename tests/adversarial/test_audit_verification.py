@@ -52,7 +52,6 @@ def scores(**overrides) -> CandidateScores:
             base_revision="",
             source_snapshot_sha256="",
             evaluator_image_digest="",
-            spec_version=0,
             scores=payload,
         )
     )
@@ -114,7 +113,6 @@ def report(**overrides) -> EvaluationReport:
         "base_revision": "rev-pinned",
         "source_snapshot_sha256": "sha256:" + "a" * 64,
         "evaluator_image_digest": "sha256:" + "b" * 64,
-        "spec_version": 1000,
         "hard_gates": [
             GateVerdict(name="artifact_size", passed=True),
             GateVerdict(name="peak_vram", passed=True),
@@ -289,7 +287,6 @@ class TestWeightVectors:
         values = {
             "window_id": 12,
             "computed_at_block": 90_000,
-            "spec_version": 1000,
             "entries": [WeightEntry(uid=7, hotkey="5Challenger", weight=1.0)],
             "champion_hotkey": "5Challenger",
         }
@@ -383,7 +380,6 @@ class TestGradedContributionVectors:
             workflow_id=C.DEFAULT_WORKFLOW_ID,
             window_id=1,
             computed_at_block=100,
-            spec_version=1,
             mode=C.MODE_GRADED_CONTRIBUTION,
         )
         defaults.update(kwargs)

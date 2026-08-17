@@ -29,7 +29,6 @@ def disclosure(window_id: int, *, root: int = ROOT, beacon: str = "0xblock") -> 
         workflow_id="lora_merger_logic_v1",
         window_id=window_id,
         closed_at_block=window_id * 100,
-        spec_version=2000,
         hidden_seeds=list(sample.hidden_seeds),
         ood_seeds=list(sample.ood_seeds),
         beacon=sample.beacon,
