@@ -8,7 +8,7 @@ permanent reference baselines. Validators are thin: they fetch the signed weight
 vector the engine publishes and set it on-chain.
 """
 
-__version__ = "2.5.0"
+__version__ = "2.6.0"
 
 _version_split = __version__.split(".")
 #: Integer spec version submitted alongside weights. Bump on any change that

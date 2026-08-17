@@ -205,8 +205,7 @@ class Recipe(StrictModel):
         if len(value) < C.MIN_SELECTED_ADAPTERS:
             raise ValueError(
                 f"a recipe must select at least {C.MIN_SELECTED_ADAPTERS} adapters; "
-                "one is a reference baseline and two is a blend, and what this "
-                "subnet measures is a composition"
+                "a single adapter is a reference baseline, not a candidate"
             )
         if len(value) > C.MAX_SELECTED_ADAPTERS:
             raise ValueError(f"at most {C.MAX_SELECTED_ADAPTERS} adapters may be selected")

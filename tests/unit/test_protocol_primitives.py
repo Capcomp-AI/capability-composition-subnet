@@ -122,9 +122,6 @@ class TestRecipeContract:
         payload = {
             "base_revision": "rev-1",
             "source_snapshot_sha256": sha256_bytes(b"snapshot"),
-            # Three, because a composition starts at three: MIN_SELECTED_ADAPTERS
-            # rejects fewer, and these cases are about everything *except* the
-            # selection bounds.
             "selected_adapters": ["a-one", "b-two", "c-three"],
             "merge": MergeSpec(combination_type=C.MERGE_LINEAR),
             "compression": CompressionSpec(output_rank=64),
