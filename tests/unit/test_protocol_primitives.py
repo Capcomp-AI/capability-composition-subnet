@@ -122,7 +122,10 @@ class TestRecipeContract:
         payload = {
             "base_revision": "rev-1",
             "source_snapshot_sha256": sha256_bytes(b"snapshot"),
-            "selected_adapters": ["a-one", "b-two"],
+            # Three, because a composition starts at three: MIN_SELECTED_ADAPTERS
+            # rejects fewer, and these cases are about everything *except* the
+            # selection bounds.
+            "selected_adapters": ["a-one", "b-two", "c-three"],
             "merge": MergeSpec(combination_type=C.MERGE_LINEAR),
             "compression": CompressionSpec(output_rank=64),
         }
@@ -207,7 +210,7 @@ class TestRecipeContract:
 
     def test_effective_weight_resolution_order(self):
         recipe = self._minimal(
-            selected_adapters=["a-one", "b-two"],
+            selected_adapters=["a-one", "b-two", "c-three"],
             global_weights={"a-one": 1.3},
             layer_group_overrides={"group_2": {"a-one": 0.7}},
         )

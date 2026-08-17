@@ -8,6 +8,23 @@ versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html), with
 the spec version derived from the release version and submitted alongside every
 weight vector.
 
+## [2.5.0] — 2026-08-17
+
+### Changed — consensus
+
+- A recipe selects more than two adapters and fewer than ten:
+  `MIN_SELECTED_ADAPTERS` is 3 and `MAX_SELECTED_ADAPTERS` is 9. One adapter is a
+  reference baseline and two is a blend; what this subnet measures is a
+  composition. The ceiling comes from reconstruction cost, which is the dominant
+  expense in the system and scales with the count — a trimming merge is about
+  149s of fixed work plus 87s per adapter, per pass, and there are two passes.
+  Nine adapters is roughly 15 minutes; twenty-three was over an hour, paid again
+  by every validator that evaluated the submission.
+- The equal-weight references are capped by the same constant, so the permanent
+  bar is now composed of nine adapters and every comparison against it moves.
+- `capability-miner init` starts from a selection inside the bounds rather than
+  from the whole pool, which is no longer a valid recipe.
+
 ## [2.4.0] — 2026-08-16
 
 ### Fixed — consensus

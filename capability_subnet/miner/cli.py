@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from capability_subnet.common import constants as C
 from capability_subnet.common.hashing import canonical_json_str
 from capability_subnet.common.logging import setup_logging
 from capability_subnet.miner.recipe import (
@@ -47,6 +48,21 @@ def _cmd_pool(args: argparse.Namespace) -> int:
     return 0
 
 
+def _starting_selection(snapshot) -> list[str]:
+    """Adapters `init` starts from when none are named.
+
+    The whole pool is not a valid recipe — a selection is bounded above, and the
+    bound is well below the number of certified adapters. Taking every one of
+    them produced a recipe the schema then rejected, which made a miner's first
+    command fail for a reason that looked like the pool's fault.
+
+    The first few in sorted order, deliberately: this is a starting point to
+    edit, not a suggestion about which adapters compose well. Choosing that is
+    the miner's whole job.
+    """
+    return sorted(snapshot.registry.capability_adapters())[: C.MAX_SELECTED_ADAPTERS]
+
+
 def _cmd_init(args: argparse.Namespace) -> int:
     snapshot = load_snapshot()
 
@@ -57,7 +73,7 @@ def _cmd_init(args: argparse.Namespace) -> int:
             recipe = random_recipe(seed=args.seed, snapshot=snapshot)
         else:
             recipe = new_recipe(
-                args.adapters or list(snapshot.registry.capability_adapters()),
+                args.adapters or _starting_selection(snapshot),
                 combination_type=args.method,
                 density=args.density,
                 majority_sign_method=args.sign_method,

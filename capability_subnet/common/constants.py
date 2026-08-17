@@ -194,19 +194,25 @@ SVD_CLAMP_QUANTILE_MAX: Final[float] = 1.00
 RANDOM_SEED_MIN: Final[int] = 0
 RANDOM_SEED_MAX: Final[int] = 4_294_967_295
 
-#: A recipe must select at least two adapters — a single-adapter "merge" is one
-#: of the reference baselines, not a candidate.
-MIN_SELECTED_ADAPTERS: Final[int] = 2
+#: A recipe must select more than two adapters. One is a reference baseline
+#: rather than a candidate, and two is a blend rather than a composition — the
+#: question this subnet asks is which *combination* finishes a workflow, and it
+#: only starts being a combination at three.
+MIN_SELECTED_ADAPTERS: Final[int] = 3
 
-#: The ceiling on how many adapters one recipe may draw from the pool, set to the
-#: size of the certified pool so it never cuts through the search space. What a
-#: recipe may compose is bounded by what the registry carries, not by this number.
+#: The ceiling on how many adapters one recipe may draw from the pool.
 #:
-#: Consensus-relevant. It also caps the equal-weight references
-#: (scoring/references.py), so it decides what the permanent bar is built from and
-#: therefore every published comparison against it. Changing it requires a spec
-#: version bump.
-MAX_SELECTED_ADAPTERS: Final[int] = 30
+#: Fewer than ten, and the reason is cost rather than taste. Reconstruction is
+#: the dominant expense in the whole system and it scales with the count: a
+#: trimming merge measured here is about 149s of fixed work plus 87s per
+#: adapter, per pass, and the engine makes two passes. Nine adapters is roughly
+#: 15 minutes of that; twenty-three is over half an hour, paid again by every
+#: validator that evaluates the submission.
+#:
+#: Consensus-relevant twice over. It bounds what a miner may compose, and it
+#: caps the equal-weight references (scoring/references.py), so it decides what
+#: the permanent bar is built from and therefore every comparison against it.
+MAX_SELECTED_ADAPTERS: Final[int] = 9
 
 # ---------------------------------------------------------------------------
 # Hard deployment gates

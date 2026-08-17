@@ -79,32 +79,48 @@ class TestAVerifiedAdapterIsNotReImported:
         assert detail == ""
 
 
-class TestTheSelectionCeilingClearsThePool:
-    """The ceiling must bound the search, not cut through it.
+class TestTheSelectionBoundsAreUsable:
+    """The bounds have to leave a miner able to build something.
 
-    `capability-miner init` selects every capability adapter when none are named.
-    With the ceiling below the pool that produced a recipe the schema rejected,
-    so a miner's first command failed — and the same constant caps the
-    equal-weight reference, so the bar was built from fewer adapters than the
-    pool offered for no stated reason.
+    They are set from reconstruction cost rather than from the pool's size, so
+    the ceiling now sits well below the number of certified adapters. That is
+    deliberate — but it means `capability-miner init`, which selects for a miner
+    who has not named anything, has to choose a selection inside them. Taking the
+    whole pool produced a recipe the schema rejected, so a miner's first command
+    failed for what looked like the pool's fault.
     """
 
-    def test_a_miner_selecting_the_whole_pool_is_a_valid_recipe(self):
+    def test_the_bounds_admit_a_selection_at_all(self):
+        from capability_subnet.common import constants as C
+
+        assert 0 < C.MIN_SELECTED_ADAPTERS <= C.MAX_SELECTED_ADAPTERS
+
+    def test_the_pool_can_supply_a_full_selection(self):
         from capability_subnet.common import constants as C
         from capability_subnet.registry.snapshot import load_snapshot
 
         pool = len(load_snapshot().registry.capability_adapters())
-        assert pool >= C.MIN_SELECTED_ADAPTERS
-        assert pool <= C.MAX_SELECTED_ADAPTERS, (
-            f"the shipped pool has {pool} capability adapters but at most "
-            f"{C.MAX_SELECTED_ADAPTERS} may be selected, so selecting the pool is invalid"
+        assert pool >= C.MAX_SELECTED_ADAPTERS, (
+            f"the pool offers {pool} capability adapters but a recipe may select "
+            f"{C.MAX_SELECTED_ADAPTERS}, so the ceiling can never be reached"
         )
 
-    def test_the_reference_is_built_from_the_whole_pool(self):
-        """The permanent bar should be every adapter available, not a prefix of
-        them chosen by a ceiling that happened to be lower."""
+    def test_the_starting_selection_is_admissible(self):
+        """What `init` writes when the miner names nothing."""
+        from capability_subnet.common import constants as C
+        from capability_subnet.miner.cli import _starting_selection
+        from capability_subnet.miner.recipe import check_recipe, new_recipe
+        from capability_subnet.registry.snapshot import load_snapshot
+
+        snapshot = load_snapshot()
+        picks = _starting_selection(snapshot)
+        assert C.MIN_SELECTED_ADAPTERS <= len(picks) <= C.MAX_SELECTED_ADAPTERS
+        assert not check_recipe(new_recipe(picks, snapshot=snapshot))
+
+    def test_the_reference_is_built_within_the_same_bounds(self):
+        """The bar a miner clears is composed of no more than a miner may use."""
         from capability_subnet.common import constants as C
         from capability_subnet.registry.snapshot import load_snapshot
 
         adapters = sorted(load_snapshot().registry.capability_adapters())
-        assert adapters[: C.MAX_SELECTED_ADAPTERS] == adapters
+        assert len(adapters[: C.MAX_SELECTED_ADAPTERS]) == C.MAX_SELECTED_ADAPTERS
