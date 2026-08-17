@@ -212,6 +212,26 @@ MAX_SELECTED_ADAPTERS: Final[int] = 30
 # Hard deployment gates
 # ---------------------------------------------------------------------------
 
+#: Absolute GPU memory a candidate's runtime may reserve, in GiB.
+#:
+#: Pinned rather than left to each host because ``peak_vram`` is a *gate*, and a
+#: gate has to mean the same thing everywhere. vLLM reserves a fraction of the
+#: whole card, so the same candidate measures 25.4 GiB on a validator running
+#: 0.78 of a 32 GB card and 22.9 GiB on one running 0.70 — one refuses it, the
+#: other passes it, for a reason that has nothing to do with the miner. Fixing
+#: the absolute reservation and deriving the fraction from the card makes the
+#: measurement a property of the package again.
+#:
+#: 22 GiB: about 15.3 GiB of weights, the KV cache for one sequence at the
+#: canonical context, and the ~0.9 GiB a runtime carries on top — landing under
+#: MAX_PEAK_VRAM_GB with room that does not depend on the card it ran on.
+SERVING_RESERVED_GIB: Final[float] = 22.0
+
+#: Context length every candidate is served at. Part of the measurement: a
+#: package judged at a longer context is answering an easier question about its
+#: own memory use.
+SERVING_MAX_MODEL_LEN: Final[int] = 4096
+
 MAX_ARTIFACT_BYTES: Final[int] = 500 * 1024 * 1024  # 500 MB
 MAX_PEAK_VRAM_GB: Final[float] = 24.0
 #: p95 wall-clock for one instance, end to end. Lowered from 30s: latency is a

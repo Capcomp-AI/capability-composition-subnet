@@ -8,6 +8,29 @@ versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html), with
 the spec version derived from the release version and submitted alongside every
 weight vector.
 
+## [2.4.0] — 2026-08-16
+
+### Fixed — consensus
+
+- A validator in `own` mode now serves the candidate it reconstructed. It
+  previously scored every submission against whatever its configured endpoint
+  already held, so two different recipes were measured as the same model and the
+  ranking had nothing to rank. Each candidate gets its own runtime, started with
+  the artifact applied and stopped afterwards.
+
+### Changed — consensus
+
+- The memory a candidate's runtime may reserve is pinned at
+  `SERVING_RESERVED_GIB`, and the fraction of the card is derived from it.
+  `peak_vram` is a hard gate, and a fraction of the card made it a statement
+  about the validator: the same candidate measured 25.4 GiB on one host and
+  22.9 GiB on another, so one refused what the other passed for a reason that
+  was not the miner's.
+- Context length is pinned at `SERVING_MAX_MODEL_LEN`. A package judged at a
+  longer context is answering an easier question about its own memory use.
+- The base model is served under its own name rather than the candidate's, so a
+  request naming the candidate cannot resolve to the bare base model.
+
 ## [2.3.0] — 2026-08-15
 
 ### Changed — consensus

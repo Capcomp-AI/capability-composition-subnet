@@ -254,6 +254,26 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     parser.add_argument(
+        "--neuron.base_model_path",
+        dest="base_model_path",
+        default=_env("CAPSUB_BASE_MODEL_PATH", "base-model/Qwen3-8B"),
+        help=(
+            "Local copy of the pinned base model. Required by "
+            "--neuron.evaluation=own: a candidate is the base model with its "
+            "merged adapter applied, and evaluation runs offline."
+        ),
+    )
+    parser.add_argument(
+        "--neuron.serving_python",
+        dest="serving_python",
+        default=_env("CAPSUB_SERVING_PYTHON", ""),
+        help=(
+            "Interpreter the serving runtime is started under. Empty uses this "
+            "one; set it when vLLM has its own virtualenv, which is usual "
+            "because it pins torch tightly."
+        ),
+    )
+    parser.add_argument(
         "--neuron.pool_dir",
         dest="pool_dir",
         default=_env("CAPSUB_POOL_DIR", "pool"),

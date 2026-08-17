@@ -408,8 +408,12 @@ class ValidatorNeuron:
 
     def _measure(self, candidate, assignment):
         """Reconstruct, serve and score one candidate on this host."""
+        from contextlib import contextmanager
+        from urllib.parse import urlsplit
+
         from capability_subnet.sandbox.model_client import OpenAICompatibleClient
         from capability_subnet.validator.evaluator import evaluate_candidate
+        from capability_subnet.validator.serving import CANDIDATE_MODEL, serve_candidate
 
         if not self.config.serve_url:
             raise RuntimeError(
@@ -417,9 +421,30 @@ class ValidatorNeuron:
                 "measures candidates itself and has nowhere to serve them"
             )
 
+        bind = urlsplit(self.config.serve_url)
+
+        @contextmanager
+        def serve(artifact_dir: str):
+            """Start a runtime holding *this* candidate, and stop it afterwards.
+
+            Handing the scorer a long-lived endpoint instead would measure
+            whatever that endpoint already holds, identically for every
+            submission.
+            """
+            with serve_candidate(
+                artifact_dir,
+                base_model_path=self.config.base_model_path,
+                device=getattr(self.config, "device", "cuda"),
+                python_executable=getattr(self.config, "serving_python", ""),
+                host=bind.hostname or "127.0.0.1",
+                port=bind.port or 8000,
+            ) as base_url:
+                yield OpenAICompatibleClient(base_url, CANDIDATE_MODEL)
+
         return evaluate_candidate(
             candidate.recipe,
-            OpenAICompatibleClient(self.config.serve_url, "candidate"),
+            OpenAICompatibleClient(self.config.serve_url, CANDIDATE_MODEL),
+            serve=serve,
             assignment=assignment,
             pool_dir=self.config.pool_dir,
             artifact_dir=f"{self.config.full_path}/artifacts/{candidate.hotkey[:12]}",

@@ -23,6 +23,8 @@ than a gate.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
+from contextlib import AbstractContextManager, ExitStack
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -83,6 +85,7 @@ def evaluate_candidate(
     probe_seed: int | None = None,
     base_probe: ProbeOutcome | None = None,
     device: str = "cpu",
+    serve: Callable[[str], AbstractContextManager[ModelClient]] | None = None,
 ) -> CandidateEvaluation:
     """Reconstruct a candidate and score it on this validator's assignment.
 
@@ -116,58 +119,69 @@ def evaluate_candidate(
             error=f"reconstruction failed: {exc}",
         )
 
-    seeds = assignment.seeds
-    hidden = [flow.generate_instance(seed, split="hidden") for seed in seeds]
-    ood = [flow.generate_instance(seed, split="ood") for seed in ood_seeds]
+    # The package that was just built is the package that gets measured. Without
+    # this the scorer talks to whatever endpoint it was handed, which is the same
+    # endpoint for every candidate — two different recipes then produce the same
+    # numbers and the ranking has nothing to rank.
+    #
+    # The runtime lives exactly as long as the scoring below, and is stopped on
+    # the way out whether or not that scoring succeeded.
+    with ExitStack() as serving:
+        if serve is not None:
+            client = serving.enter_context(serve(str(artifact_dir)))
 
-    hidden_outcomes = run_batch(hidden, client, config=config, runner=flow.run_instance)
-    hidden_results = [o.result for o in hidden_outcomes]
-    ood_results = (
-        [o.result for o in run_batch(ood, client, config=config, runner=flow.run_instance)]
-        if ood
-        else []
-    )
+        seeds = assignment.seeds
+        hidden = [flow.generate_instance(seed, split="hidden") for seed in seeds]
+        ood = [flow.generate_instance(seed, split="ood") for seed in ood_seeds]
 
-    per_instance = {
-        seed: bool(getattr(result, "end_to_end_success", False))
-        for seed, result in zip(seeds, hidden_results, strict=False)
-    }
+        hidden_outcomes = run_batch(hidden, client, config=config, runner=flow.run_instance)
+        hidden_results = [o.result for o in hidden_outcomes]
+        ood_results = (
+            [o.result for o in run_batch(ood, client, config=config, runner=flow.run_instance)]
+            if ood
+            else []
+        )
 
-    # A default SandboxConfig leaves this unset, and measure_resources wants a
-    # number. 0.0 reads as "not measured here" rather than "measured as zero":
-    # peak VRAM is a property of the host that served the package, so a
-    # validator that did not measure it has no business asserting one, and the
-    # deployment gate that cares must treat an unmeasured value as unproven.
-    peak_vram = float(config.peak_vram_gb or 0.0)
+        per_instance = {
+            seed: bool(getattr(result, "end_to_end_success", False))
+            for seed, result in zip(seeds, hidden_results, strict=False)
+        }
 
-    resources = measure_resources(
-        hidden_results, artifact_bytes=artifact_bytes, peak_vram_gb=peak_vram
-    )
-    probe = run_probe(client, build_probe(probe_seed if probe_seed is not None else 0))
-    retention = relative_retention(probe, base_probe) if base_probe is not None else 1.0
+        # A default SandboxConfig leaves this unset, and measure_resources wants a
+        # number. 0.0 reads as "not measured here" rather than "measured as zero":
+        # peak VRAM is a property of the host that served the package, so a
+        # validator that did not measure it has no business asserting one, and the
+        # deployment gate that cares must treat an unmeasured value as unproven.
+        peak_vram = float(config.peak_vram_gb or 0.0)
 
-    scores = aggregate_scores(
-        hidden_results,
-        ood_results,
-        flow.critical_axes,
-        retention=retention,
-        efficiency=EfficiencyInputs(
+        resources = measure_resources(
+            hidden_results, artifact_bytes=artifact_bytes, peak_vram_gb=peak_vram
+        )
+        probe = run_probe(client, build_probe(probe_seed if probe_seed is not None else 0))
+        retention = relative_retention(probe, base_probe) if base_probe is not None else 1.0
+
+        scores = aggregate_scores(
+            hidden_results,
+            ood_results,
+            flow.critical_axes,
+            retention=retention,
+            efficiency=EfficiencyInputs(
+                artifact_bytes=artifact_bytes,
+                peak_vram_gb=peak_vram,
+                reference_seconds=resources.mean_workflow_seconds,
+            ),
+        )
+
+        return CandidateEvaluation(
+            candidate_id=candidate_id,
+            recipe_sha256=recipe.digest(),
+            artifact_sha256=artifact_sha256,
             artifact_bytes=artifact_bytes,
-            peak_vram_gb=peak_vram,
-            reference_seconds=resources.mean_workflow_seconds,
-        ),
-    )
-
-    return CandidateEvaluation(
-        candidate_id=candidate_id,
-        recipe_sha256=recipe.digest(),
-        artifact_sha256=artifact_sha256,
-        artifact_bytes=artifact_bytes,
-        scores=scores,
-        per_instance=per_instance,
-        hidden_results=hidden_results,
-        ood_results=ood_results,
-    )
+            scores=scores,
+            per_instance=per_instance,
+            hidden_results=hidden_results,
+            ood_results=ood_results,
+        )
 
 
 def core_results(evaluation: CandidateEvaluation, assignment: Assignment) -> dict[int, bool]:
