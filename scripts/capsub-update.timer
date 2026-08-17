@@ -1,0 +1,21 @@
+[Unit]
+Description=Check for a new capability subnet revision
+Requires=capsub-update.service
+
+[Timer]
+# Every fifteen minutes, with the first check a minute after boot so a node that
+# was off during a release does not wait a full interval to catch up.
+OnBootSec=1min
+OnUnitActiveSec=15min
+
+# Spread across the fleet. Without this every node fetches on the same tick and
+# restarts in the same minute, so a bad revision takes the whole network down at
+# once instead of the first node that tries it — and a good one still produces a
+# thundering herd against the remote.
+RandomizedDelaySec=5min
+
+# Run a missed check on wake rather than waiting for the next tick.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

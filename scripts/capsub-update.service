@@ -1,0 +1,47 @@
+[Unit]
+# Keeps this node on the current protocol revision. See scripts/auto_update.sh
+# for what it refuses to do — the short version is fast-forward only, from a
+# pinned remote, and nothing restarts until the new revision has passed its own
+# fast suite here.
+#
+# Copy this and the timer to /etc/systemd/system/, edit the Environment lines,
+# then: systemctl enable --now capsub-update.timer
+Description=Update the capability subnet node and restart what was running
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+
+# Where the repository is checked out.
+Environment=CAPSUB_REPO=/opt/capability-composition-subnet
+
+# The only remote this node will take code from. Checked before fetching, so a
+# repointed origin stops the update instead of feeding it somebody else's tree.
+Environment=CAPSUB_UPDATE_REMOTE=https://github.com/Capcomp-AI/capability-composition-subnet.git
+Environment=CAPSUB_UPDATE_BRANCH=main
+
+# The units to restart, space separated. Leave empty on a miner: it submits and
+# exits, so there is nothing to restart and the next run picks the change up.
+# Only units that are *already running* are touched.
+#
+# Quoted, and it has to be: systemd splits an unquoted Environment= on
+# whitespace and treats each word as its own assignment, so a list written bare
+# sets the first unit, logs "Invalid environment assignment" for the rest, and
+# starts anyway — leaving an updater that silently restarts one of three.
+Environment="CAPSUB_UPDATE_UNITS=capsub-validator"
+
+
+# The interpreter the node actually runs under. `pip` on PATH is usually the
+# wrong one on a host with a virtualenv, and installing into the wrong
+# environment updates the repository while leaving the running code untouched —
+# which looks like a successful update and is not one.
+Environment=CAPSUB_PIP=/opt/capability-composition-subnet/venv/bin/pip
+Environment=CAPSUB_INSTALL_EXTRAS=[merge]
+
+ExecStart=/opt/capability-composition-subnet/scripts/auto_update.sh
+
+# A failed update is not a failed unit: it rolled back and said why, and the
+# timer will offer the same revision again. Restarting the updater itself would
+# only repeat a check that already reached a verdict.
+Restart=no
