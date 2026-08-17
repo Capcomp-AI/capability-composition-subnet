@@ -252,9 +252,7 @@ class TestWeightVector:
         assert vector.champion_hotkey is None
 
     def test_the_burn_valve_splits_the_share(self):
-        vector = winner_take_all(
-            self._champion(), window_id=1, block=100, burn_percentage=0.25
-        )
+        vector = winner_take_all(self._champion(), window_id=1, block=100, burn_percentage=0.25)
         by_uid = {entry.uid: entry.weight for entry in vector.entries}
         assert by_uid[7] == pytest.approx(0.75)
         assert by_uid[C.BURN_UID] == pytest.approx(0.25)
@@ -272,9 +270,7 @@ class TestWeightVector:
         assert sum(entry.weight for entry in vector.entries) == pytest.approx(1.0)
 
     def test_graded_mode_uses_the_published_split(self):
-        vector = graded_top3(
-            [(1, "5A"), (2, "5B"), (3, "5C")], window_id=1, block=100
-        )
+        vector = graded_top3([(1, "5A"), (2, "5B"), (3, "5C")], window_id=1, block=100)
         by_uid = {entry.uid: entry.weight for entry in vector.entries}
         assert by_uid[1] == pytest.approx(0.60)
         assert by_uid[2] == pytest.approx(0.25)
@@ -296,9 +292,7 @@ class TestWeightVector:
         for vector in (
             winner_take_all(self._champion(), window_id=1, block=1),
             winner_take_all(None, window_id=1, block=1),
-            winner_take_all(
-                self._champion(), window_id=1, block=1, burn_percentage=0.37
-            ),
+            winner_take_all(self._champion(), window_id=1, block=1, burn_percentage=0.37),
             graded_top3([(1, "a"), (2, "b")], window_id=1, block=1),
         ):
             assert sum(entry.weight for entry in vector.entries) == pytest.approx(1.0)
@@ -317,9 +311,7 @@ class TestWeightVector:
         assert apply_validator_burn(published, 0.0, C.BURN_UID) is published
 
     def test_uid_and_weight_lists_stay_aligned(self):
-        vector = graded_top3(
-            [(4, "5A"), (9, "5B")], window_id=1, block=1, burn_percentage=0.1
-        )
+        vector = graded_top3([(4, "5A"), (9, "5B")], window_id=1, block=1, burn_percentage=0.1)
         uids, weights = vector.as_uid_weight_lists()
         assert len(uids) == len(weights)
         assert sum(weights) == pytest.approx(1.0)
