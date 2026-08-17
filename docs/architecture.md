@@ -203,11 +203,10 @@ So the network keeps a set of references on the board permanently:
 | Equal-weight linear merge | The obvious merge |
 | Equal-weight TIES merge | The obvious interference-aware merge |
 | Equal-weight DARE-TIES merge | The obvious stochastic variant |
-| Owner reference recipe | The operator's own published attempt |
 
 They are measured through **exactly the same code path** as candidates — if baselines were measured differently, "the challenger beat the strongest reference" would be a statement about two harnesses rather than two packages.
 
-The base model, the three standard merges and the owner recipe are re-measured every window. The per-adapter single-adapter references are **rotated**, a few per window on a schedule derived from the window id. Measuring all of them every window is correct and costs most of a window's GPU budget before any challenger is looked at — and a window that cannot finish never evaluates anybody. Rotation keeps the "beat the best specialist" bar honest over time while leaving room to actually run the queue.
+The base model and the three standard merges are re-measured every window. The per-adapter single-adapter references are **rotated**, a few per window on a schedule derived from the window id. Measuring all of them every window is correct and costs most of a window's GPU budget before any challenger is looked at — and a window that cannot finish never evaluates anybody. Rotation keeps the "beat the best specialist" bar honest over time while leaving room to actually run the queue.
 
 The **incumbent is not one of them**. It is re-measured every window and reported alongside them, but it does not set the absolute bar; see the dethrone rule above for why.
 

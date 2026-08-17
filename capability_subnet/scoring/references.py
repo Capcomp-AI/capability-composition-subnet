@@ -37,7 +37,6 @@ BEST_SINGLE = "reference:best_single_adapter"
 EQUAL_LINEAR = "reference:equal_linear_merge"
 EQUAL_TIES = "reference:equal_ties_svd_merge"
 EQUAL_DARE_TIES = "reference:equal_dare_ties_svd_merge"
-OWNER_RECIPE = "reference:owner_reference_recipe"
 INCUMBENT = "incumbent"
 
 #: Fixed seed for the stochastic reference merge. The reference must be the same
@@ -104,82 +103,6 @@ def _equal_weight_recipe(
     )
 
 
-def owner_reference_recipe(snapshot: PoolSnapshot) -> Recipe:
-    """The operator's own published attempt.
-
-    Unlike the equal-weight merges this one is tuned, and it is published in full
-    so miners can read it, reproduce it and try to beat it. Its purpose is to set
-    an honest bar: the operator has to demonstrate that composition helps before
-    asking anyone to compete at it.
-    """
-    # Capped at what a miner may select, and by the same fixed rule the
-    # equal-weight references use. A bar built from more of the pool than any
-    # submission may use is not a bar a submission can clear, and on a pool
-    # larger than the cap it is not a valid recipe at all.
-    selected = sorted(snapshot.registry.capability_adapters())[: C.MAX_SELECTED_ADAPTERS]
-    present = set(selected)
-
-    # The hypothesis, stated as coefficients: the stages that decide end-to-end
-    # success are the ones that produce structure — a schema-valid report and a
-    # well-formed tool call — so those adapters carry slightly more weight, and
-    # the retention anchor carries slightly less so it does not dilute them.
-    #
-    # Every coefficient is filtered against the pool actually in force. Naming an
-    # adapter that a repinned pool no longer contains would make this recipe
-    # unbuildable, and the reference set would vanish exactly when the network
-    # most needs a bar to clear.
-    # Stated as capabilities rather than adapter ids, and resolved against the
-    # pool actually in force. Naming ids directly meant a repinned pool left this
-    # recipe weighting adapters that no longer existed — every coefficient
-    # filtered away, the reference silently degrading to an equal-weight merge,
-    # and the bar quietly dropping at exactly the moment the network most needs
-    # one.
-    by_capability = {
-        "structured_output": 1.15,
-        "tool_calling": 1.10,
-        "resource_decision": 1.10,
-        "technical_domain_language": 1.05,
-        "general_reasoning_retention": 0.90,
-    }
-    emphasis: dict[str, float] = {}
-    for capability, weight in by_capability.items():
-        for adapter_id in snapshot.registry.adapters_with_capability(capability):
-            if adapter_id in present:
-                emphasis[adapter_id] = weight
-
-    # Reading and interpreting the source material is an early-layer behaviour…
-    depth_emphasis: dict[str, dict[str, float]] = {"group_0": {}, "group_3": {}}
-    for adapter_id in snapshot.registry.adapters_with_capability("technical_domain_language"):
-        if adapter_id in present:
-            depth_emphasis["group_0"][adapter_id] = 1.20
-    # …while generating code and structured output is a late-layer one.
-    for capability in ("python_code_generation", "structured_output"):
-        for adapter_id in snapshot.registry.adapters_with_capability(capability):
-            if adapter_id in present:
-                depth_emphasis["group_3"][adapter_id] = 1.15
-
-    overrides = {group: weights for group, weights in depth_emphasis.items() if weights}
-
-    return Recipe(
-        workflow_id=snapshot.registry.workflow_id,
-        base_revision=snapshot.manifest.revision,
-        source_snapshot_sha256=snapshot.sha256,
-        selected_adapters=selected,
-        merge=MergeSpec(
-            combination_type=C.MERGE_TIES_SVD,
-            density=0.45,
-            majority_sign_method="total",
-            random_seed=REFERENCE_SEED,
-        ),
-        global_weights=emphasis,
-        layer_group_overrides=overrides,
-        compression=CompressionSpec(
-            output_rank=snapshot.registry.canonical_rank, svd_clamp_quantile=0.995
-        ),
-        output=OutputSpec(adapter_name="owner_reference"),
-    )
-
-
 def build_references(snapshot: PoolSnapshot) -> list[ReferencePackage]:
     """Every permanent reference for this pool."""
     capability_adapters = list(snapshot.registry.capability_adapters())
@@ -230,15 +153,6 @@ def build_references(snapshot: PoolSnapshot) -> list[ReferencePackage]:
             ),
         )
     )
-    references.append(
-        ReferencePackage(
-            reference_id=OWNER_RECIPE,
-            kind="recipe",
-            description="The operator's published tuned recipe.",
-            recipe=owner_reference_recipe(snapshot),
-        )
-    )
-
     return references
 
 

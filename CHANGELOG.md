@@ -8,6 +8,30 @@ versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html), with
 the spec version derived from the release version and submitted alongside every
 weight vector.
 
+## [2.7.0] — 2026-08-17
+
+### Removed — consensus
+
+- **The owner reference recipe.** The operator's tuned attempt is no longer one
+  of the permanent references, and the recipe is no longer published. Miners see
+  the contract, the pool and `examples/quickstart_miner.py`; which composition
+  wins is theirs to find.
+
+  It was there to set an honest bar — the operator demonstrating that composition
+  helps before asking anyone to compete at it. Measured over eight windows it set
+  the bar in one, and that was the weakest window on record, where it took first
+  at 0.0975 against a base model at 0.0775. In the other seven it placed below
+  the base model, below a single adapter, or below the equal-weight TIES merge.
+  A bar the trivial baseline clears is not a bar.
+
+  The reference set keeps the questions that were being answered: does
+  composition beat doing nothing, beat picking one specialist, beat merging
+  naively. The one it drops — does the operator's own hypothesis hold — had been
+  answered, and the answer was no.
+
+  Removing it also returns 7.2 GPU-hours per window, one of seven reference
+  packages, to evaluating challengers.
+
 ## [2.6.0] — 2026-08-17
 
 ### Changed — consensus

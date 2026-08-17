@@ -33,7 +33,6 @@ from capability_subnet.scoring.references import (
     build_references,
     collapse_single_adapters,
     is_reference,
-    owner_reference_recipe,
     single_adapter_references,
 )
 from capability_subnet.scoring.sampler import WindowSample, build_instances, draw_window
@@ -65,7 +64,6 @@ __all__ = [
     "graded_top3",
     "is_reference",
     "minimum_detectable_effect",
-    "owner_reference_recipe",
     "paired_bootstrap",
     "rank",
     "single_adapter_references",
