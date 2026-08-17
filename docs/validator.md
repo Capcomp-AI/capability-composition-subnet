@@ -9,9 +9,9 @@ A validator decides where emission goes, and it earns that by measuring. There i
 | Install | `capability-subnet[merge]` |
 | An operator to trust | None |
 
-There used to be a thin mode that fetched a signed weight vector from an operator's engine and verified it by replaying published traces. It ran on a small VPS with no GPU, and it was genuinely not a relay. It is gone: "verify what one party measured" is a weaker claim than "measure it", and offering both let the network describe itself with the stronger one while running on the weaker.
+A validator that cannot measure a candidate refuses to start rather than score every miner zero for a dependency it is missing. There is no lighter configuration to fall back to: taking numbers from somebody else is a weaker claim than measuring, and a network that offers both ends up described by the stronger one while running on the weaker.
 
-If you want to check this network without a GPU, you still can — see [Verifying an evaluation yourself](#verifying-an-evaluation-yourself). That path never needed weight-setting rights to be useful.
+Checking this network needs no GPU and no validator registration. `capability-audit` replays any published window from its seeds and traces, and is worth running whether or not you set weights.
 
 ---
 
@@ -126,9 +126,12 @@ Expect roughly 40 minutes of reconstruction per candidate that uses a trimming m
 | `--neuron.weight_interval` | `300` | Minimum blocks between submissions |
 | `--neuron.poll_interval` | `60` | Seconds between polls |
 | `--neuron.burn_percentage` | `0.0` | Additional fraction *you* route to burn |
-| `--neuron.no_spot_check` | off | Stop re-scoring the last closed window before paying |
-| `--neuron.max_stale_windows` | `3` | Refuse a vector this far behind the head |
 | `--neuron.disable_set_weights` | off | Compute and log without submitting |
+| `--neuron.device` | `cuda` | Device the merge runs on. A non-CUDA value is refused at start-up. |
+| `--neuron.serve_url` | *empty* | Address the validator binds each candidate's runtime to. **Required.** |
+| `--neuron.pool_dir` | `pool` | The certified adapter pool on disk |
+| `--neuron.base_model_path` | *empty* | Local copy of the pinned base model. **Required.** |
+| `--neuron.serving_python` | *empty* | Interpreter that starts each candidate's runtime |
 
 ### Your own burn
 

@@ -215,66 +215,29 @@ None of them can be terminated and **none of them earn emission**. Under the str
 
 ---
 
-## What a centralised engine is and is not trusted for
+## What the network trusts
 
-Evaluation runs in one place. That is a concentration of trust, and this is what it does and does not buy an operator.
+Nothing, in the sense that matters: no participant takes a number from another participant.
 
-The operator **is** trusted to choose the hidden instances (from a secret root), to run the sandbox, and to publish honestly and promptly.
+Each validator reads the commitments on chain, fetches each recipe, reconstructs the merged adapter on its own hardware, serves it, and scores it against instances it regenerates itself. Its weights come from work it did. A validator that cannot do that work refuses to start rather than vote on measurements it does not have.
 
-The operator is **not** trusted to be believed. Every score is published with the trace it came from, every window's seeds are disclosed once it closes, and instance generation is a pure function of the seed — so the claim "this candidate scored 0.62" is checkable by anyone who can run a deterministic scorer, which is anyone with a laptop. Validators do this on every pass before paying, and burn when the record contradicts itself.
+Validators are not required to agree on artifact bytes. Six of the seven merge methods run an SVD, which is not bitwise reproducible across devices, so two honest validators on different cards build different weights from the same recipe. They are compared on **outcomes** over a shared core of instances every validator measures, with a band wide enough for device divergence and narrow enough to catch a validator that did no work. A validator inconsistent with most of its peers is reported; one that disagrees with a single peer is not, because a two-way split names the wrong party as readily as the right one.
 
-What that leaves genuinely unaddressed: an operator who *withholds* disclosures entirely, or who is slow. Validators tolerate a missing disclosure rather than treating it as fraud — the opposite policy would make an outage indistinguishable from dishonesty — so a determined operator can degrade verification by simply not publishing. The counterweight is that validators refuse a vector more than `max_stale_windows` behind the chain head, so withholding cannot be sustained without also stopping emission.
+The subnet owner runs an evaluation engine, and it sits outside this path. It publishes signed reports and a weight vector, and nothing consumes them: no validator reads them, and no emission depends on them. They exist as a reference set to compare validators against, and as a disclosure feed anyone can replay. An engine that stopped, lied, or was never started would not change what any miner is paid.
 
 ---
 
 ## Who chooses the problems
 
-Hidden instances are drawn per window from a secret root the operator holds.
-Refreshing per window stops a *miner* tuning to a fixed set. On its own it does
-nothing about the operator, and the difference matters.
+Nobody. Each window's instances derive from the hash of the block the window opened at.
 
-Seeds derive deterministically from the root and the window id. An operator free
-to try roots until the draw suited a candidate they had already evaluated would
-pass every check in this document: the seeds would be real, the instances would
-match them, and the scores would follow from the traces. What was chosen was the
-draw.
+That block is public, it is not any participant's to pick, and it does not exist until the window begins — so the draw cannot be selected after seeing a candidate, and every validator computes byte-identical seeds from material anyone can fetch. Instance generation is a pure function of the seed, so an auditor with a laptop can regenerate the exact problems a window asked, years later, from a block hash and a revision pin.
 
-Two things close it, and both are needed.
+Deriving from the window's own opening block — `window_id × window_blocks` — rather than from the moment a process happened to start is what makes it checkable and idempotent: a validator restarted mid-window re-derives the seeds it was already using instead of quietly evaluating a different test.
 
-**The root is committed.** `seed_root_commitment` is a hash of the root, published
-in the contract and in every closed window's disclosure. It reveals nothing and
-binds the operator to one root: the same value has to appear in every window, so a
-commitment that moves is the draw being re-rolled where anyone can see it.
-`commitments_agree()` checks a run of disclosures for exactly that.
+What stops a miner tuning to the instances is not concealment but ordering. The commitment being evaluated is the one standing at the opening block, and one recipe per hotkey is final; learning the instances a moment later is worth nothing, because the recipe is already fixed.
 
-**The draw is bound to a value the operator does not choose.** Each window mixes
-in the hash of its own first block — `window_id x window_blocks`, not whatever
-block the engine happened to open at. That is public, it is not the operator's to
-pick, and it does not exist until the window begins, so a draw cannot be selected
-after seeing a candidate.
-
-Deriving it from the window rather than from the moment of opening is what makes
-it checkable at all: an auditor knows which block a window started at and can
-fetch the same hash, where a block only the operator knew would prove nothing.
-It also makes re-opening a window idempotent — an engine restarted mid-window
-re-derives the seeds it already published instead of quietly evaluating a
-different test.
-
-**What this does and does not buy.** The beacon is the part with teeth: a
-validator compares it against the real block hash, and a fabricated one fails.
-The commitment is weaker — nothing reveals the root, so a constant fabricated
-value passes. What it forces is that the operator pick one root and keep it, which
-means picking it before any candidate exists; `check_draw_was_not_re_rolled()`
-catches a value that moves across recent windows.
-
-So the honest summary is: **re-rolling the draw between windows is caught, and a
-draw not bound to its block is caught. A single root chosen dishonestly at genesis
-is not** — closing that needs an eventual reveal of the root, which this protocol
-does not yet do.
-
-Where the beacon is absent — a local run, or an endpoint that was down — the
-disclosure says so and the auditor raises `unbound_draw` rather than implying a
-guarantee that is not there.
+The draw holds no secret and commits to nothing, so there is nothing to reveal and nothing to grind. An empty beacon is refused outright rather than falling back to a fixed draw, because a fallback would silently give every window of every deployment the same instances.
 
 ---
 
@@ -549,14 +512,15 @@ Beyond the signature, the validator checks the vector against the chain: weights
 
 ### Operator-side threats
 
+The operator is not in the path that decides emission, which removes most of this class rather than defending it. What remains is what an operator could make *look* true.
+
 | Threat | What stops it |
 |---|---|
-| Publishing scores the traces do not support | Validators re-score every closed window and burn on disagreement |
-| Binding a draw to a block it did not open at | `verify_beacon_against_chain()` compares the beacon with the real block hash |
-| Re-rolling the draw between windows | `check_draw_was_not_re_rolled()` compares the seed-root commitment across recent windows |
-| Choosing one root dishonestly at genesis | **Not defended.** The root is never revealed, so a constant fake commitment passes |
+| Publishing scores the traces do not support | Anyone can regenerate the instances from their seeds and re-run the scorer; a score that does not follow from its own trace is demonstrable without the operator's cooperation |
+| Choosing which problems a window asks | Not possible. The draw is the hash of the window's opening block, which no participant picks and which validators derive independently |
 | Quietly not re-measuring references | Every window's reference scores are published in its report |
-| Withholding disclosures | Validators refuse a vector more than `max_stale_windows` behind the chain head |
+| Withholding disclosures entirely | Nothing stops it, and nothing depends on it. Disclosures are evidence about the engine's own numbers, which no validator consumes |
+| Influencing what a miner is paid | Not possible. Validators set weights from measurements they took |
 
 ## What is deliberately not defended
 

@@ -190,14 +190,12 @@ Then read the guide for your role:
 |---|---|---|
 | **Miner** | [docs/miner.md](docs/miner.md) | Any hardware. A GPU only if you want to evaluate locally. |
 | **Pool operator** | [`scripts/import_public_adapters.py`](scripts/import_public_adapters.py) | Materialises the certified pool from its pinned upstream sources. |
-| **Validator** | [docs/validator.md](docs/validator.md) | A **48 GB GPU** to measure candidates yourself, or a small VPS to read a signed vector instead. |
+| **Validator** | [docs/validator.md](docs/validator.md) | A **48 GB GPU**. Validators measure every candidate themselves. |
 | **Subnet owner** | [docs/owner.md](docs/owner.md) | Publishes the pool. The engine and console are optional. |
 
 ## How validators decide
 
-`--neuron.evaluation` decides where a validator's numbers come from.
-
-**`own`, the default.** The validator reads the commitments on chain, fetches each recipe, reconstructs the merged adapter on its own hardware, serves it through its own endpoint, and scores it against instances it regenerates from a seed derived from a block hash. It trusts nobody. It needs a 48 GB card.
+Every number a validator submits comes from work it did. It reads the commitments on chain, fetches each recipe, reconstructs the merged adapter on its own hardware, serves it through its own endpoint, and scores it against instances it regenerates from a seed derived from a block hash. It trusts nobody. It needs a 48 GB card.
 
 Validators are not required to agree on artifact bytes — six of the seven merge methods run an SVD, and an SVD is not bitwise reproducible across devices — so they are compared on outcomes rather than on hashes.
 

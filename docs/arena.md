@@ -141,21 +141,17 @@ Everything an auditor needs is in the published record. A seed regenerates the
 exact instance, including its test cases; every revision is pinned, so the items
 cannot change underneath.
 
-Every validator does this automatically: each round, `spot_check_window` pulls
-the previous window's disclosure and re-scores it from the published traces,
-reporting any disagreement with the operator's numbers. Because this workflow is
-`publicly_verifiable`, that check is meaningful here — an operator cannot publish
-a score the traces do not support.
+Because this workflow is `publicly_verifiable`, that record is enough to settle
+a disagreement: a score the traces do not support can be shown not to hold, by
+anyone, without a GPU and without the operator's cooperation.
 
-To do it by hand:
-
-```python
-from capability_subnet.validator.client import BackendClient, spot_check_window
-
-passed, detail = spot_check_window(BackendClient(...), window_id)
+```bash
+capability-audit window --backend-url https://<engine-host> --window <id>
 ```
 
-See [docs/validator.md](validator.md).
+It regenerates each instance from its seed, re-runs the deterministic scorer over
+the published trace, and reports any row whose score does not follow from its own
+evidence.
 
 ---
 
