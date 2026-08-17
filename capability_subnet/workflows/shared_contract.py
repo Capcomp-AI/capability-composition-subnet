@@ -159,10 +159,22 @@ def windows_contract(root_commitment: str = "") -> dict[str, Any]:
 
 
 def incentive_contract() -> dict[str, Any]:
+    burn_share = C.NO_CHAMPION_BURN_SHARE
+    miner_pool = 1.0 - burn_share
+    # Rounded because these are published figures a miner reads and compares
+    # against its own arithmetic, and binary floating point renders an exact
+    # fifth as 0.19999999999999996.
     return {
         "default_mode": C.MODE_GRADED_CONTRIBUTION,
-        "graded_shares": list(C.GRADED_TOP3_SHARES),
         "burn_uid": C.BURN_UID,
+        "burn_share": round(burn_share, 6),
+        "miner_pool_share": round(miner_pool, 6),
+        "leader_share_of_pool": round(C.CHAMPION_BASE_SHARE, 6),
+        "graded_share_of_pool": round(1.0 - C.CHAMPION_BASE_SHARE, 6),
+        "leader_share_of_window": round(miner_pool * C.CHAMPION_BASE_SHARE, 6),
+        "graded_share_of_window": round(miner_pool * (1.0 - C.CHAMPION_BASE_SHARE), 6),
+        "max_graded_contributors": C.MAX_GRADED_CONTRIBUTORS,
+        "graded_top3_shares": list(C.GRADED_TOP3_SHARES),
         "contribution_weights": {
             "quality": C.CONTRIBUTION_WEIGHT_QUALITY,
             "improvement": C.CONTRIBUTION_WEIGHT_IMPROVEMENT,
@@ -170,11 +182,14 @@ def incentive_contract() -> dict[str, Any]:
             "cost": C.CONTRIBUTION_WEIGHT_COST,
         },
         "note": (
-            "The leader holds most of the workflow weight and everything below it is "
-            "graded on quality, improvement, proximity and cost, so a submission "
-            "that moved the state of the art without leading is still paid for what "
-            "it contributed. Only candidates clearing every hard gate are graded. If "
-            "nothing qualifies, the share is burned rather than redistributed."
+            "Four fifths of a window burns to the subnet owner's UID. The best "
+            "measured package takes 95% of the remaining fifth and the graded "
+            "runners-up split the other 5%, so a submission that moved the state of "
+            "the art without leading is still paid for what it contributed. At most "
+            "ten miners are paid: the leader and nine graded runners-up. Grading is "
+            "on quality, improvement, proximity and cost, and only candidates "
+            "clearing every hard gate are graded. If nothing qualifies, the share is "
+            "burned rather than redistributed."
         ),
     }
 

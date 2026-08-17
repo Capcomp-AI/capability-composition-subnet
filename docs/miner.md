@@ -34,6 +34,25 @@ can rely on. See [examples/README.md](../examples/README.md).
 
 ---
 
+## What a window pays
+
+Four fifths of every window burns to the subnet owner's UID. The remaining fifth
+is the miner pool, and the best measured package takes 95% of it.
+
+| Recipient | Share of the miner pool | Share of the window |
+|---|---|---|
+| Burn (subnet owner's UID) | — | 80% |
+| Best measured package | 95% | 19% |
+| Graded runners-up, ranks 2–10 | 5% | 1% |
+
+Ten miners are paid at most: the leader and nine graded runners-up. Ranking is by
+graded contribution — quality 50%, improvement over the strongest reference 25%,
+proximity to the champion 15%, running cost 10% — over the packages that cleared
+every hard gate. Anything nobody earned burns rather than being promoted into the
+leader's share.
+
+---
+
 ## 1. Install
 
 ```bash
@@ -259,7 +278,8 @@ See [min_compute.yml](../min_compute.yml) for detail.
 hard gates is graded on quality, improvement over the strongest reference,
 proximity to the champion, and running cost — and earns a share of emission for
 several windows whether or not it dethroned anything. Getting close is worth
-something; producing something undeployable is not.
+something; producing something undeployable is not. See
+[what a window pays](#what-a-window-pays) for the split.
 
 **Ignoring token spend.** It is now a scored component, and it is measured per
 *completed* instance rather than per attempted one — so giving up early makes it

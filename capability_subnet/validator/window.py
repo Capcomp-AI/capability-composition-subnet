@@ -20,9 +20,10 @@ from dataclasses import dataclass, field
 from capability_subnet.common import constants as C
 from capability_subnet.common.schemas import CandidateScores, Recipe, WeightVector
 from capability_subnet.scoring.comparator import minimum_detectable_effect
+from capability_subnet.scoring.contribution import ContributionInputs, contribution_score
 from capability_subnet.scoring.ranking import Submission, rank
 from capability_subnet.scoring.sampler import WindowSample, draw_window_open
-from capability_subnet.scoring.weight_vector import graded_top3
+from capability_subnet.scoring.weight_vector import graded_contribution, graded_top3
 from capability_subnet.validator.agreement import outlier_validators
 from capability_subnet.validator.assignment import Assignment, assign
 from capability_subnet.validator.evaluator import CandidateEvaluation, core_results
@@ -83,11 +84,21 @@ def run_window(
     workflow_id: str = C.DEFAULT_WORKFLOW_ID,
     burn_percentage: float = 0.0,
     burn_uid: int = C.BURN_UID,
+    incentive_mode: str = C.MODE_GRADED_TOP3,
+    reference_e2e: float = 0.0,
     peer_core_results: dict[str, dict[int, bool]] | None = None,
 ) -> WindowOutcome:
     """Evaluate a window and produce this validator's own weight vector.
 
     Args:
+        incentive_mode: how the measured field is turned into weights. See
+            :func:`_weights_from`.
+        reference_e2e: end-to-end completion of the strongest permanent
+            reference, used by the graded mode's improvement term. This loop
+            measures committed candidates only and never a reference, so there
+            is no honest value to derive here — it is a parameter rather than a
+            default so a caller that *does* measure references can supply one,
+            and a caller that does not is visibly claiming zero.
         peer_core_results: other validators' core results for one shared
             candidate, when this validator has them. Used only to report
             inconsistency — a miner is not paid less because another validator
@@ -128,6 +139,8 @@ def run_window(
         workflow_id=workflow_id,
         burn_percentage=burn_percentage,
         burn_uid=burn_uid,
+        incentive_mode=incentive_mode,
+        reference_e2e=reference_e2e,
     )
     return outcome
 
@@ -165,6 +178,8 @@ def _weights_from(
     workflow_id: str,
     burn_percentage: float,
     burn_uid: int,
+    incentive_mode: str = C.MODE_GRADED_TOP3,
+    reference_e2e: float = 0.0,
 ) -> WeightVector:
     """Rank what was measured and turn it into weights.
 
@@ -194,9 +209,86 @@ def _weights_from(
         if e.candidate_id in by_hotkey
     ]
 
-    ordered = [(s.uid, s.hotkey) for s in rank(submissions)]
+    ranked = rank(submissions)
+    ordered = [(s.uid, s.hotkey) for s in ranked]
+
+    if incentive_mode == C.MODE_GRADED_CONTRIBUTION:
+        return _graded_contribution_weights(
+            outcome,
+            ranked=ranked,
+            window_id=window_id,
+            block=block,
+            workflow_id=workflow_id,
+            burn_percentage=burn_percentage,
+            burn_uid=burn_uid,
+            reference_e2e=reference_e2e,
+        )
+
     return graded_top3(
         ordered,
+        window_id=window_id,
+        block=block,
+        workflow_id=workflow_id,
+        burn_percentage=burn_percentage,
+        burn_uid=burn_uid,
+    )
+
+
+def _graded_contribution_weights(
+    outcome: WindowOutcome,
+    *,
+    ranked: list[Submission],
+    window_id: int,
+    block: int,
+    workflow_id: str,
+    burn_percentage: float,
+    burn_uid: int,
+    reference_e2e: float,
+) -> WeightVector:
+    """Grade the measured field and let the graded split decide the payout.
+
+    ``champion`` is deliberately ``None``. The throne is held by whoever last
+    *dethroned* the incumbent, and that is a fact about the subnet's history
+    rather than about this window — nothing in the ownerless loop carries a
+    ChampionRecord between windows, so this validator has not seen anyone take
+    it. Synthesising one from the window's own leader would crown a package for
+    winning a field of one, skip the leaderless burn entirely, and pay the full
+    champion share every window regardless of whether anything was dethroned.
+
+    So the leaderless branch is the honest one, and it is also the arrangement
+    the contract describes for it: half the window burns, the best measured
+    package leads what remains on the champion's terms, and the rest of the
+    graded field splits what is left of that. Because the function pops the
+    leader out of the graded list *after* capping it, the miners sharing the
+    remainder are exactly ranks two through ten.
+
+    Grades come from the four terms the published contract already defines, over
+    scores this window produced. A candidate graded zero does not appear at all,
+    and the share nobody earned burns rather than inflating the leader's.
+    """
+    scores_by_hotkey = {e.candidate_id: e.scores for e in outcome.usable}
+
+    contributors: list[tuple[int, str, float]] = []
+    for submission in ranked:
+        scores = scores_by_hotkey.get(submission.hotkey)
+        if scores is None:
+            continue
+        grade = contribution_score(
+            ContributionInputs(
+                scores=scores,
+                reference_e2e=reference_e2e,
+                # No throne, so proximity has no incumbent to measure against
+                # and scores one for everybody. That is the correct reading:
+                # nobody was close to a champion, because there was no champion.
+                champion_e2e=None,
+            )
+        )
+        if grade > 0.0:
+            contributors.append((submission.uid, submission.hotkey, grade))
+
+    return graded_contribution(
+        None,
+        contributors,
         window_id=window_id,
         block=block,
         workflow_id=workflow_id,

@@ -122,7 +122,11 @@ strict_pareto: false          # true requires dominance on every axis
 # ---------------------------------------------------------------------------
 # Incentive
 # ---------------------------------------------------------------------------
-incentive_mode: winner_take_all   # or graded_top3
+# winner_take_all      the throne takes the whole payable share
+# graded_top3          60/25/15 across the top three
+# graded_contribution  80% burns; the best package takes 95% of the remaining
+#                      fifth and ranks 2-10 split the other 5%
+incentive_mode: graded_contribution
 burn_percentage: 0.0              # operational safety valve; 0.0 in normal operation
 burn_uid: 0
 

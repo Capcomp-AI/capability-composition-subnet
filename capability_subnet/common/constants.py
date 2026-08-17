@@ -451,14 +451,16 @@ CONTRIBUTION_MEMORY_WINDOWS: Final[int] = 7
 #:
 #: With no champion there is nobody who has beaten the field, so the window pays
 #: less than a crowned one — but it still pays. Burning the whole leader's share
-#: would mean a subnet that has never crowned anyone burns almost everything,
-#: which is the state every launch starts in and can sit in for weeks while the
-#: queue is worked through.
+#: would mean a subnet that has never crowned anyone burns everything, which is
+#: the state every launch starts in and can sit in for weeks while the queue is
+#: worked through.
 #:
-#: Half. The best measured package leads the remainder on the same terms a
-#: champion leads the whole, so a leaderless window pays its best miner about
-#: half what a crowned window pays its champion. The throne stays worth taking.
-NO_CHAMPION_BURN_SHARE: Final[float] = 0.50
+#: Four fifths. The remaining fifth is the miner pool, and the best measured
+#: package leads it on the same terms a champion leads a crowned window: it
+#: takes CHAMPION_BASE_SHARE of the pool and the graded field splits the rest.
+#: Against the whole window that is 19% to the leader and 1% across the graded
+#: runners-up. The throne stays worth taking.
+NO_CHAMPION_BURN_SHARE: Final[float] = 0.80
 
 #: Most graded contributors paid in one window, sharing what the champion does
 #: not take. Ten rather than thirty-two: a 0.05 pool split thirty-two ways is

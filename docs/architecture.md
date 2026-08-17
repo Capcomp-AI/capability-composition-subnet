@@ -302,6 +302,16 @@ So the top slot is winner-takes-most and everything below it is graded:
 
 Only candidates that cleared **every hard gate** are graded — this is not a consolation prize for producing something undeployable. If nobody qualifies, the graded pool burns rather than folding into the champion's share, because holding an uncontested throne is not an achievement. Each grade is published broken into its four terms, so a miner can act on it.
 
+The terms decide how the miner pool is divided; the pool itself is a fifth of the window:
+
+| Recipient | Share of the window |
+|---|---|
+| Burn (subnet owner's UID) | 80% |
+| Best measured package | 19% |
+| Graded runners-up, ranks 2–10 | 1% |
+
+Ten miners are paid at most. The burn goes to the subnet owner's UID resolved from the metagraph rather than to UID 0, which belongs to whichever neuron registered into the first slot.
+
 Proximity is not a gate. Rewarding closeness alone would pay for copying the leader, so it is one term of four and the anti-copy check runs *before* evaluation.
 
 **Stage balance** is a geometric mean of the per-stage means, and the choice of mean is doing real work: a package scoring 1.0 on all but one axis and 0.1 on the last lands far below one scoring 0.8 everywhere, even though their arithmetic means are close. A workflow needs every axis it declares — seven for the maintenance chain, twelve for the arena — so a package that abandoned one has not solved it.

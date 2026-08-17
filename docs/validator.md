@@ -132,6 +132,34 @@ Expect roughly 40 minutes of reconstruction per candidate that uses a trimming m
 | `--neuron.pool_dir` | `pool` | The certified adapter pool on disk |
 | `--neuron.base_model_path` | *empty* | Local copy of the pinned base model. **Required.** |
 | `--neuron.serving_python` | *empty* | Interpreter that starts each candidate's runtime |
+| `--incentive_mode` | `graded_contribution` | How the measured field becomes weights |
+
+### Incentive mode
+
+| Mode | Split |
+|---|---|
+| `winner_take_all` | The throne takes the whole payable share |
+| `graded_top3` | 60/25/15 across the top three |
+| `graded_contribution` | 80% burns; the best measured package takes 95% of the remaining fifth and ranks 2–10 split the other 5% |
+
+Under `graded_contribution` a window pays at most ten miners — the leader and
+nine graded runners-up — and burns anything nobody earned rather than promoting
+it into the leader's share:
+
+| Recipient | Share of the window |
+|---|---|
+| Burn (subnet owner's UID) | 80% |
+| Best measured package | 19% |
+| Graded runners-up, ranks 2–10 | 1% |
+
+Grades come from the four terms in the published contract: quality 50%,
+improvement 25%, proximity 15%, cost 10%. A candidate that failed a hard gate is
+not graded at all.
+
+`--neuron.burn_percentage` compounds with this rather than replacing it. It is
+applied first, and the mode's own split then divides what is left, so a value of
+`0.5` under `graded_contribution` leaves miners a tenth of the window rather
+than a fifth.
 
 ### Your own burn
 

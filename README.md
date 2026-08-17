@@ -104,6 +104,23 @@ Only packages that cleared **every hard gate** are graded. If nobody qualifies t
 
 Miners still waiting in the queue earn a small tapered share, so an unevaluated challenger is not the first thing the chain prunes.
 
+### How a window's emission splits
+
+Under `graded_contribution`, four fifths of every window burns to the subnet
+owner's UID and the remaining fifth is the miner pool. The best measured package
+takes 95% of that pool; the graded runners-up split the other 5%.
+
+| Recipient | Share of the miner pool | Share of the window |
+|---|---|---|
+| Burn (subnet owner's UID) | — | 80% |
+| Best measured package | 95% | 19% |
+| Graded runners-up, ranks 2–10 | 5% | 1% |
+
+At most ten miners are paid in one window: the leader and nine graded runners-up.
+A share nobody earned burns rather than being promoted into the leader's — a
+window with one qualified package is not a bigger achievement than a contested
+one.
+
 ## Two arenas
 
 A package is judged by a **workflow**, and the engine does not hardcode one. Workflows register through the `capability_subnet.workflows` entry-point group and `workflow_id` in `backend.yaml` selects which runs.

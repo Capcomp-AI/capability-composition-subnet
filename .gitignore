@@ -69,6 +69,12 @@ backend.local.yaml
 pool/
 .hf-cache/
 
+# The pinned base model and the serving runtime's own virtualenv. The validator
+# setup tells an operator to create both at these paths inside the checkout —
+# ~16 GB of weights and a torch install that is pinned to the host's CUDA.
+base-model/
+.venv-vllm/
+
 # The filled-in copy of backend.example.yaml. It carries a deployment's own GPU
 # UUIDs, paths and block numbers, and .env alone was ignored — so the file an
 # operator is told to create was the one file left committable.

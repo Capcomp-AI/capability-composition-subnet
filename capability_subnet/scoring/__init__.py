@@ -38,6 +38,7 @@ from capability_subnet.scoring.references import (
 from capability_subnet.scoring.sampler import WindowSample, build_instances, draw_window
 from capability_subnet.scoring.weight_vector import (
     apply_validator_burn,
+    graded_contribution,
     graded_top3,
     winner_take_all,
 )
@@ -61,6 +62,7 @@ __all__ = [
     "decisive_loss",
     "draw_window",
     "explain",
+    "graded_contribution",
     "graded_top3",
     "is_reference",
     "minimum_detectable_effect",

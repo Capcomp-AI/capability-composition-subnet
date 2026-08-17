@@ -266,6 +266,7 @@ class ValidatorNeuron:
             measure=self._measure,
             burn_percentage=self.config.burn_percentage,
             burn_uid=self.burn_uid(),
+            incentive_mode=getattr(self.config, "incentive_mode", C.MODE_GRADED_TOP3),
         )
         for who, why in outcome.flagged_peers.items():
             log.warning("peer %s looks inconsistent: %s", who, why)
