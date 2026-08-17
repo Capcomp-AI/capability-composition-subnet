@@ -226,10 +226,19 @@ MAX_SELECTED_ADAPTERS: Final[int] = 10
 #: the absolute reservation and deriving the fraction from the card makes the
 #: measurement a property of the package again.
 #:
-#: 22 GiB: about 15.3 GiB of weights, the KV cache for one sequence at the
+#: 20 GiB: about 15.3 GiB of weights, the KV cache for one sequence at the
 #: canonical context, and the ~0.9 GiB a runtime carries on top — landing under
 #: MAX_PEAK_VRAM_GB with room that does not depend on the card it ran on.
-SERVING_RESERVED_GIB: Final[float] = 22.0
+#:
+#: It also has to fit on a card somebody owns. A 24 GB card exposes about 22.0
+#: GiB and roughly 21.7 GiB of that is free once the driver context is resident,
+#: so a 22 GiB reservation is refused by the runtime at start-up — measured, not
+#: predicted: vLLM answers "free memory (21.65/22.04 GiB) is less than desired
+#: utilization (0.9984, 22.0 GiB)" and exits. Every candidate then records a
+#: serving failure, which scores every miner zero for the validator's hardware.
+#: At 20 GiB the same card serves at 0.907 utilization and peaks near 20.9 GiB,
+#: still under the gate.
+SERVING_RESERVED_GIB: Final[float] = 20.0
 
 #: Context length every candidate is served at. Part of the measurement: a
 #: package judged at a longer context is answering an easier question about its

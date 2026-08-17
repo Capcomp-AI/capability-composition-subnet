@@ -230,6 +230,29 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
         help="Certified adapter pool on disk, for reconstructing candidates.",
     )
     parser.add_argument(
+        "--neuron.devices",
+        dest="devices",
+        default=_env("CAPSUB_DEVICES", ""),
+        help=(
+            "Comma-separated CUDA devices to measure on, e.g. "
+            "'cuda:0,cuda:1,cuda:2,cuda:3'. One candidate is measured per device "
+            "at a time, because a served package reserves almost the whole card. "
+            "Empty uses --neuron.device alone."
+        ),
+    )
+    parser.add_argument(
+        "--neuron.max_candidates_per_window",
+        dest="max_candidates_per_window",
+        type=int,
+        default=_env_int("CAPSUB_MAX_CANDIDATES_PER_WINDOW", 0),
+        help=(
+            "Stop after this many candidates in one window, taken in commit "
+            "order. 0 measures everything eligible. A window that cannot finish "
+            "sets no weights at all, so a host slower than its queue should "
+            "bound this rather than fall behind silently."
+        ),
+    )
+    parser.add_argument(
         "--incentive_mode",
         dest="incentive_mode",
         type=str,

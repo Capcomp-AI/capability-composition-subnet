@@ -152,7 +152,7 @@ This distinction matters more than any other rule in the engine:
 - **Miner failures fail closed.** An invalid submission scores zero.
 - **Infrastructure failures fail open.** The queue *holds* rather than terminating a candidate on flaky hardware.
 
-A one-shot-per-hotkey rule is only defensible if the engine never spends that shot on its own bad night.
+Charging a miner for a window is only defensible if the engine never charges it for the engine's own bad night.
 
 ---
 
@@ -186,7 +186,7 @@ An axis with too few paired samples counts as **worse**, not as a tie. Absence o
 
 A loss is *decisive* — and terminates the hotkey — only when the challenger was genuinely measured. An axis with no paired samples at all means the engine failed to gather evidence, and terminating on that would punish a miner for an evaluation the engine did not complete.
 
-The same principle governs the hard gates, which are split into two sets. A candidate that used 40 GB genuinely failed the memory limit; a candidate on a host whose memory counter was unreadable has not been shown to fail anything. The second kind holds the candidate for a later window and leaves its single shot intact. A one-shot-per-hotkey rule is only defensible if the engine never charges a candidate for its own bad night.
+The same principle governs the hard gates, which are split into two sets. A candidate that used 40 GB genuinely failed the memory limit; a candidate on a host whose memory counter was unreadable has not been shown to fail anything. The second kind is not scored against the candidate at all. Charging a miner for a window is only defensible if the engine never charges it for the engine's own bad night.
 
 ---
 
@@ -245,7 +245,7 @@ The draw holds no secret and commits to nothing, so there is nothing to reveal a
 Recipes are public — they have to be, or nobody could verify an evaluation. So the protocol makes copying *worthless* rather than impossible:
 
 - **Earliest commit wins**, checked on the recipe digest at admission and again on the reconstructed artifact digest. Two differently-worded recipes that build the same bytes are the same package.
-- **One shot per hotkey.** Copying costs a registration and buys nothing.
+- **One measurement per commitment.** Copying costs a window per attempt and buys nothing.
 - **Defender advantage.** A copy has to be *measurably* better, not merely higher. Under the strict contract that is the dethrone margin; under the default it is the tie rule — scores closer than the window can resolve are ranked equal and ties resolve to the earliest commitment, so a later copy cannot displace what it copied on sampling noise.
 
 The third point is what makes the first two sufficient. Even a copy nobody detected cannot win.
@@ -289,7 +289,7 @@ Quality carries 85%, efficiency 15% — a cheap package that does not finish the
 
 ## Who gets paid
 
-Ranking decides who leads — the dethrone rule under the strict contract, the tie-aware leaderboard by default. Either way it is far too blunt to also decide who gets *paid*, because almost every submission that is ever evaluated will fail to lead — and a recipe is *one shot*, so a miner cannot iterate on it the way a code-submitting miner can. Paying a miner who moved completion from 0.41 to 0.58 exactly what it pays one that submitted a soup of distractors leaves the second attempt no better informed than the first, in a network whose entire purpose is to learn which adapters compose.
+Ranking decides who leads — the dethrone rule under the strict contract, the tie-aware leaderboard by default. Either way it is far too blunt to also decide who gets *paid*, because almost every submission that is ever evaluated will fail to lead — and a commitment buys one measurement a window apart, so a miner cannot iterate on it the way a code-submitting miner can. Paying a miner who moved completion from 0.41 to 0.58 exactly what it pays one that submitted a soup of distractors leaves the second attempt no better informed than the first, in a network whose entire purpose is to learn which adapters compose.
 
 So the top slot is winner-takes-most and everything below it is graded:
 
@@ -432,7 +432,7 @@ The pointer itself is not trusted, so a mutable host is fine for integrity. It i
 Three mechanisms, and the third is what makes the first two sufficient:
 
 1. **Earliest commit wins**, checked on the recipe digest at admission and again on the reconstructed **artifact** digest. Two differently-worded recipes that build the same bytes are the same package.
-2. **One shot per hotkey.** Copying costs a registration.
+2. **One measurement per commitment.** Copying costs a window per attempt.
 3. **Defender advantage.** Dethroning requires a genuine margin, so a copy that exactly reproduces the champion's scores loses by construction.
 
 Even a copy nobody detected cannot win. That is the point.

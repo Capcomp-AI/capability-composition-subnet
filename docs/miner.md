@@ -6,16 +6,24 @@ Your entire on-chain footprint is a single commitment. You never serve inference
 
 ---
 
-## Before anything else: one recipe per hotkey is final
+## Before anything else: a commitment is measured once
 
-A hotkey gets **one evaluation**. When your submission reaches the head of the queue it is evaluated against the champion and the reference baselines, and:
+Your commitment is evaluated in the window **after** the one you made it in, and
+it earns from that measurement alone. It is not re-measured and it does not keep
+earning afterwards. To earn again, commit again.
 
-- if it wins, it takes the throne,
-- if it loses decisively, that hotkey is **terminated permanently**.
+That gives you one evaluated attempt per window — a floor of one window between
+attempts, because a commitment made after a window opened is not measured in it.
+Nothing is terminated: a package that loses costs you that window, not the
+hotkey.
 
-There is no resubmission, no second attempt, no "I'll fix it next window." A new package needs a new hotkey, which costs a registration. That is deliberate — it is what makes copying a published recipe worthless.
+The floor is what keeps copying expensive. Reading a published recipe, tweaking
+it and resubmitting costs a full window per attempt, against an anti-copy check
+that compares you to every commitment already admitted and a champion whose
+margin you still have to clear.
 
-So: validate locally, evaluate locally, and only then commit.
+So: validate locally, evaluate locally, and only then commit — a wasted
+commitment costs you a window.
 
 **Start from the worked example.** [`examples/quickstart_miner.py`](../examples/quickstart_miner.py)
 does the whole loop in one file — builds valid recipes, rejects the inadmissible
@@ -30,7 +38,7 @@ weakest search there is and the part you are meant to replace; everything around
 it — validation, digests, commitment encoding, local scoring — is the part you
 can rely on. See [examples/README.md](../examples/README.md).
 
-> An *infrastructure* failure never costs you your shot. If the engine cannot serve your package or the sandbox falls over, your submission returns to the queue untouched. Only a measured loss terminates you.
+> An *infrastructure* failure costs you nothing beyond the window. If a validator cannot serve your package or the sandbox falls over, you are not scored down for it — you are simply not measured, exactly as if you had not committed.
 
 ---
 
@@ -286,7 +294,7 @@ something; producing something undeployable is not. See
 worse, not better. Two packages that finish the same fraction of workflows are
 not equally valuable if one costs twice as much to run.
 
-**Committing before evaluating.** One shot per hotkey. There is no reason to spend it on a package you have not measured.
+**Committing before evaluating.** A commitment is measured once and the next attempt is a window away. There is no reason to spend one on a package you have not measured.
 
 **Assuming a loss is the end.** It is, if you were genuinely measured and genuinely lost. It is not when the engine could not evaluate you — an unreadable memory counter or too few scored instances holds your submission for a later window rather than terminating it. While it waits it earns a small share of emission, which is what keeps it from being deregistered before its turn comes.
 
@@ -496,10 +504,10 @@ Any failure zeroes the candidate.
 | Defender's margin | Exceeds the incumbent by its remaining, decaying margin |
 | Statistics | Paired lower confidence bound above zero |
 
-Two of these fail *without* ending your run, because they say the engine could
-not measure you rather than that you fell short: an unreadable GPU memory
-counter, and too few instances scored to compare on. Those hold your submission
-for a later window with its single shot intact.
+Two of these say the validator could not measure you rather than that you fell
+short: an unreadable GPU memory counter, and too few instances scored to compare
+on. Neither is scored against you — the window simply does not pay you, and the
+next commitment is measured on its own terms.
 
 ---
 
@@ -547,15 +555,21 @@ python -m capability_subnet.miner.cli canonicalise --recipe recipe.json
 
 Building and validating recipes: any machine. Reconstructing an artifact: ~32 GB RAM; a GPU is optional but roughly thirty times faster on the trimming methods, which have to decompose a full update per projection. Evaluating locally: a GPU that fits the base model in bfloat16. Searching seriously: as much as you want to spend — that is where the competition is.
 
-### Can I really only submit once?
+### How often can I submit?
 
-Once per hotkey. A decisive loss terminates that hotkey permanently; a new package needs a new registration.
+Once per window, in effect. A commitment is measured in the window after the one
+it was made in, so committing again immediately does not buy you a second
+measurement in the same window — it replaces what will be measured in the next
+one. Nothing is terminated, and a loss costs you that window rather than the
+hotkey.
 
-That is what makes copying worthless. It is also why the tooling makes it easy to check everything locally first, and why an *infrastructure* failure never costs you your shot.
+### Doesn't that make copying cheap?
 
-### Why can't I resubmit after fixing a mistake?
-
-Because then copying would cost nothing: read the champion's published recipe, tweak it, resubmit until something sticks. One shot plus the margin requirement makes that strategy strictly worse than doing the work.
+It makes it slow, which is the part that matters. Reading a published recipe and
+tweaking it costs a window per attempt, and each attempt still has to clear the
+anti-copy check against every commitment already admitted and beat the champion
+by its margin. Iterating toward a win that way is strictly more expensive than
+searching properly, and it is visible the whole time.
 
 ### How do I know my recipe is valid before committing?
 

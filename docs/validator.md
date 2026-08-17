@@ -4,7 +4,7 @@ A validator decides where emission goes, and it earns that by measuring. There i
 
 | What you need | |
 |---|---|
-| GPU | **48 GB** |
+| GPU | **4 × 24 GB**, one candidate per card |
 | Adapter pool on disk | ~9 GB |
 | Install | `capability-subnet[merge]` |
 | An operator to trust | None |
@@ -38,22 +38,70 @@ You are not a relay. Before anything touches the chain your validator:
 
 | | |
 |---|---|
-| GPU | **48 GB VRAM**, single card |
+| GPU | **4 × 24 GB**, one candidate per card |
 | CPU | 8 cores |
 | RAM | 32 GB |
 | Disk | 120 GB — base model ~16 GB, adapter pool ~9 GB, artifacts and state |
 | Network | 100 Mbps |
 
-A candidate's measured peak memory is gated at 24 GiB, and vLLM reserves whatever fraction of the card you give it, so the fraction has to be set from the card's size. Peak tracks it closely:
+A candidate reserves a fixed **20 GiB** while it is served, so a card needs more
+than that free to hold one. A 24 GB card exposes about 22.0 GiB and serves at
+0.907 utilization; anything smaller is refused at start-up rather than measuring
+a package it cannot fit. The reservation is absolute and the fraction is derived
+from whatever card you have, which is what keeps peak memory a property of the
+package rather than of your hardware — the same candidate peaks near 20.9 GiB on
+a 24 GB card, a 48 GB card and an 80 GB card alike. A larger card therefore does
+not run more candidates; it runs the same one with a smaller fraction.
 
-    peak ≈ gpu_memory_utilization × total_VRAM + 0.9 GiB
+Cards are the unit of parallelism. Each one measures a whole candidate at a
+time, so four cards measure four candidates at once and the window's throughput
+scales with the count. Two candidates sharing a card would contend for memory
+and each would measure the other's footprint as its own.
 
-On a 48 GB card, `0.45` lands peak at roughly 21–22.5 GiB, leaving ~4 GB of KV cache against the ~0.3 GB that 4096 context at one sequence actually needs.
+| Cards | Candidates in flight | Roughly per 72 h window |
+|---|---|---|
+| 1 | 1 | ~23 |
+| 2 | 2 | ~47 |
+| 4 | 4 | ~94 |
 
-    serving_gpu_memory_utilization: 0.45
-    serving_max_model_len: 4096
+One card still works and is still honest; it measures fewer candidates per
+window. A validator that cannot finish its queue should bound it with
+`--neuron.max_candidates_per_window` rather than fall behind silently.
 
-The model itself needs about 15.3 GiB of weights. Everything above that is reservation, so a larger card does not need a larger fraction — it needs a smaller one.
+Point the validator at the cards with `--neuron.devices`:
+
+```bash
+--neuron.devices cuda:0,cuda:1,cuda:2,cuda:3
+```
+
+Each device gets a port of its own, counting up from the one in
+`--neuron.serve_url`, because the runtimes are alive at the same time.
+
+### What one candidate costs
+
+Measured on a 24 GB card, for the default window:
+
+| Stage | Cost |
+|---|---|
+| Reconstruction, trimming merge (`ties_svd`, rank 64) | **~15 min** |
+| Reconstruction, `linear` | seconds |
+| Runtime start-up | ~1 min |
+| Evaluation, 540 instances at ~19 s each | **~2.8 h** |
+| **Total** | **~3 h** |
+
+Evaluation dominates and is bounded by the latency gate rather than by the
+hardware: a package whose p95 exceeds 25 s per instance fails that gate, so
+anything still in the running costs at most 540 × 25 s. Reconstruction is a
+twelfth of the total, which is why there is no artifact cache — it would buy
+about 8%.
+
+The 540 is this validator's own slice: the shared core plus the tail drawn for
+its hotkey, out of the window's 1350 instances.
+
+> A 24 GB card measures p95 at roughly 24 s against a 25 s gate. That is real
+> but thin headroom, and it is the package's gate that fails when a host is
+> slower — so a card materially slower than this one fails candidates for a
+> reason that has nothing to do with them.
 
 ---
 
@@ -72,6 +120,48 @@ vLLM pins torch tightly, so keep it in its own virtualenv and point the validato
 python -m venv .venv-vllm
 .venv-vllm/bin/pip install vllm ninja
 ```
+
+**Match the wheel to your driver.** vLLM's compiled extensions link a specific
+CUDA runtime, and a wheel built against a newer one than your driver supports
+fails at import with `libcudart.so.<N>: cannot open shared object file` no
+matter which torch is installed. Check what your driver offers with
+`nvidia-smi`, then pick a vLLM release built against it and install the matching
+torch from the index for that CUDA version:
+
+```bash
+# example: a driver offering CUDA 12.8
+.venv-vllm/bin/pip install "vllm==0.18.0" ninja
+.venv-vllm/bin/pip install --index-url https://download.pytorch.org/whl/cu128 \
+    --force-reinstall --no-deps torch==2.10.0+cu128 torchvision==0.25.0+cu128 torchaudio==2.10.0+cu128
+```
+
+vLLM patches `torch._inductor.standalone_compile.FakeTensorMode` when it builds
+its compile cache. Some torch versions rebind that name from the submodule to
+the function they export, and the patch then fails with *"does not have the
+attribute 'FakeTensorMode'"* and the engine core dies before serving anything.
+If you hit it, give the function the attribute — it stays callable, which is
+what the rest of torch uses it as:
+
+```bash
+cat > .venv-vllm/lib/python3.*/site-packages/_capsub_vllm_shim.py <<'PY'
+try:
+    import torch._inductor
+    from torch._subclasses.fake_tensor import FakeTensorMode
+    _sc = getattr(torch._inductor, "standalone_compile", None)
+    if callable(_sc) and not hasattr(_sc, "FakeTensorMode"):
+        _sc.FakeTensorMode = FakeTensorMode
+except Exception:
+    pass
+PY
+echo 'import _capsub_vllm_shim' > .venv-vllm/lib/python3.*/site-packages/zz_capsub_vllm_shim.pth
+```
+
+A `.pth` rather than `sitecustomize.py`: only one `sitecustomize` is imported
+per interpreter and the system one usually wins, while every `.pth` runs.
+
+Do not reach for `--enforce-eager` to get past this. It starts, but it runs slow
+enough to put packages over the p95 latency gate — turning your environment into
+their failed gate.
 
 vLLM JIT-compiles attention kernels on first start and needs a toolchain to do it. On a clean Ubuntu host:
 
@@ -117,7 +207,7 @@ You do not set a memory fraction. A candidate's peak memory is gated, and a frac
 
 The validator checks at start-up that it has a serving endpoint, a CUDA device, an importable reconstruction stack and a pool on disk, reports every problem at once, and refuses to run otherwise. A validator that cannot measure must not vote on who deserves emission.
 
-Expect roughly 40 minutes of reconstruction per candidate that uses a trimming merge, and about twice that when the cross-worker digest check is on. Linear merges take seconds.
+Expect roughly 15 minutes of reconstruction per candidate that uses a trimming merge, and about twice that when the cross-worker digest check is on. Linear merges take seconds.
 
 ## Configuration
 
@@ -132,6 +222,8 @@ Expect roughly 40 minutes of reconstruction per candidate that uses a trimming m
 | `--neuron.pool_dir` | `pool` | The certified adapter pool on disk |
 | `--neuron.base_model_path` | *empty* | Local copy of the pinned base model. **Required.** |
 | `--neuron.serving_python` | *empty* | Interpreter that starts each candidate's runtime |
+| `--neuron.devices` | *empty* | Cards to measure on, comma-separated. Empty uses `--neuron.device` alone |
+| `--neuron.max_candidates_per_window` | `0` | Stop after this many candidates, in commit order. `0` measures everything eligible |
 | `--incentive_mode` | `graded_contribution` | How the measured field becomes weights |
 
 ### Incentive mode

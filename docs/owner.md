@@ -145,7 +145,7 @@ capsub1|lmlg|<base64url digest>|hf:<owner>/<repo>/final.json
 
 Format is `capsub1|<workflow code>|<recipe digest>|<uri>`. Validators read the commitment from chain, fetch the URI, and check the bytes against the committed digest — so the recipe cannot be swapped after commitment, and the URI only has to stay reachable.
 
-A hotkey gets one evaluation. Publishing the file is not the commitment; the on-chain payload is.
+A commitment gets one evaluation. Publishing the file is not the commitment; the on-chain payload is.
 
 ---
 

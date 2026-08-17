@@ -334,6 +334,33 @@ def window_id_for_block(block: int, window_blocks: int) -> int:
     return block // window_blocks
 
 
+def measured_in_window(commitment_block: int, window_id: int, window_blocks: int) -> bool:
+    """Whether a commitment is the business of this window.
+
+    A commitment is measured once, in the window after the one it was made in.
+    Two things follow, and both matter more than they look:
+
+    * a miner earns from one measurement and commits again to earn again, so the
+      floor between attempts is a whole window — long enough that iterating on a
+      copied recipe costs more than searching properly;
+    * a window measures its new arrivals rather than every commitment ever made,
+      which is the difference between work that grows with the churn and work
+      that grows with the size of the subnet.
+
+    It is derived entirely from the commitment block, which every validator
+    reads from the same chain. A validator that restarts, or one that registered
+    this morning, selects exactly the same candidates as one that has been
+    running for months — no local record of whose turn it has been, and nothing
+    to disagree about.
+
+    Raises:
+        ValueError: if ``window_blocks`` is not positive.
+    """
+    if window_blocks <= 0:
+        raise ValueError("window_blocks must be positive")
+    return commitment_block // window_blocks == window_id - 1
+
+
 @dataclass(frozen=True, slots=True)
 class WindowPosition:
     """Where a block sits inside its evaluation window.

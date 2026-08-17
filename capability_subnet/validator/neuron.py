@@ -29,15 +29,20 @@ rights to be useful.
 from __future__ import annotations
 
 import logging
+import queue
 import sys
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from capability_subnet.common import constants as C
 from capability_subnet.common.chain import (
     MetagraphView,
     current_block,
     fetch_metagraph,
+    measured_in_window,
     submit_weights,
     window_id_for_block,
 )
@@ -80,6 +85,7 @@ class ValidatorNeuron:
         self.uid = self._resolve_uid()
         self.last_weight_block = 0
         self.should_exit = False
+        self._slots = self._build_slots()
 
         log.info(
             "validator ready: uid %s on netuid %s, measuring on %s",
@@ -164,6 +170,44 @@ class ValidatorNeuron:
                 "belongs to this host."
             )
 
+    def _build_slots(self) -> queue.Queue[tuple[str, int]]:
+        """One measuring slot per device: a CUDA device and a port of its own.
+
+        A served candidate reserves almost the whole card, so a slot is a whole
+        device rather than a share of one — two packages on one card would
+        contend for memory and each would measure the other's footprint as its
+        own, which is precisely what the peak-VRAM gate must not depend on.
+
+        Each slot also gets its own port, because the runtimes run at the same
+        time and a shared port would have the second one fail to bind and the
+        first one answer its requests.
+        """
+        bind = urlsplit(self.config.serve_url or "http://127.0.0.1:8000")
+        base_port = bind.port or 8000
+        configured = str(getattr(self.config, "devices", "") or "").strip()
+        devices = [d.strip() for d in configured.split(",") if d.strip()] or [
+            str(getattr(self.config, "device", "cuda"))
+        ]
+
+        slots: queue.Queue[tuple[str, int]] = queue.Queue()
+        for index, device in enumerate(devices):
+            slots.put((device, base_port + index))
+        log.info(
+            "measuring on %d device(s): %s",
+            len(devices),
+            ", ".join(f"{d}@{base_port + i}" for i, d in enumerate(devices)),
+        )
+        return slots
+
+    @contextmanager
+    def _slot(self) -> Iterator[tuple[str, int]]:
+        """Hold one device for the length of one candidate's measurement."""
+        device, port = self._slots.get()
+        try:
+            yield device, port
+        finally:
+            self._slots.put((device, port))
+
     def _resolve_uid(self) -> int:
         hotkey = self.wallet.hotkey.ss58_address
         if hotkey not in self.metagraph.hotkeys:
@@ -235,13 +279,33 @@ class ValidatorNeuron:
             self._burn(block, reason=f"no beacon for block {opened_at}: {exc}")
             return
 
-        candidates: list[Candidate] = []
+        eligible = []
         for commitment in read_commitments(self.subtensor, self.config.netuid):
             # Only what stood at the moment the window opened. A commitment made
             # after the beacon existed was made by someone who could already see
             # the instances.
             if commitment.block > opened_at:
                 continue
+            # And only what was committed in the window that just closed.
+            if not measured_in_window(commitment.block, window_id, window_blocks):
+                continue
+            eligible.append(commitment)
+
+        limit = int(getattr(self.config, "max_candidates_per_window", 0) or 0)
+        if 0 < limit < len(eligible):
+            # read_commitments returns commit order, so this keeps the earliest
+            # and says so. A silent truncation reads as "measured everything".
+            log.warning(
+                "%d candidates eligible, measuring the first %d by commit order; "
+                "%d will not be measured or paid this window",
+                len(eligible),
+                limit,
+                len(eligible) - limit,
+            )
+            eligible = eligible[:limit]
+
+        candidates: list[Candidate] = []
+        for commitment in eligible:
             recipe = self._resolve(commitment)
             if recipe is None:
                 continue
@@ -267,6 +331,7 @@ class ValidatorNeuron:
             burn_percentage=self.config.burn_percentage,
             burn_uid=self.burn_uid(),
             incentive_mode=getattr(self.config, "incentive_mode", C.MODE_GRADED_TOP3),
+            workers=self._slots.qsize(),
         )
         for who, why in outcome.flagged_peers.items():
             log.warning("peer %s looks inconsistent: %s", who, why)
@@ -298,9 +363,6 @@ class ValidatorNeuron:
 
     def _measure(self, candidate, assignment):
         """Reconstruct, serve and score one candidate on this host."""
-        from contextlib import contextmanager
-        from urllib.parse import urlsplit
-
         from capability_subnet.sandbox.model_client import OpenAICompatibleClient
         from capability_subnet.validator.evaluator import evaluate_candidate
         from capability_subnet.validator.serving import CANDIDATE_MODEL, serve_candidate
@@ -313,37 +375,40 @@ class ValidatorNeuron:
 
         bind = urlsplit(self.config.serve_url)
 
-        @contextmanager
-        def serve(artifact_dir: str):
-            """Start a runtime holding *this* candidate, and stop it afterwards.
+        with self._slot() as (device, port):
 
-            Handing the scorer a long-lived endpoint instead would measure
-            whatever that endpoint already holds, identically for every
-            submission.
-            """
-            with serve_candidate(
-                artifact_dir,
-                base_model_path=self.config.base_model_path,
-                device=getattr(self.config, "device", "cuda"),
-                python_executable=getattr(self.config, "serving_python", ""),
-                host=bind.hostname or "127.0.0.1",
-                port=bind.port or 8000,
-            ) as base_url:
-                yield OpenAICompatibleClient(base_url, CANDIDATE_MODEL)
+            @contextmanager
+            def serve(artifact_dir: str):
+                """Start a runtime holding *this* candidate, and stop it afterwards.
 
-        return evaluate_candidate(
-            candidate.recipe,
-            OpenAICompatibleClient(self.config.serve_url, CANDIDATE_MODEL),
-            serve=serve,
-            assignment=assignment,
-            pool_dir=self.config.pool_dir,
-            artifact_dir=f"{self.config.full_path}/artifacts/{candidate.hotkey[:12]}",
-            candidate_id=candidate.hotkey,
-            # --neuron.device was declared and read by nothing, so every
-            # validator merged on the CPU whatever it configured. The trimming
-            # methods are ~30x slower there, paid once per candidate per window.
-            device=getattr(self.config, "device", "cpu"),
-        )
+                Handing the scorer a long-lived endpoint instead would measure
+                whatever that endpoint already holds, identically for every
+                submission.
+                """
+                with serve_candidate(
+                    artifact_dir,
+                    base_model_path=self.config.base_model_path,
+                    device=device,
+                    python_executable=getattr(self.config, "serving_python", ""),
+                    host=bind.hostname or "127.0.0.1",
+                    port=port,
+                ) as base_url:
+                    yield OpenAICompatibleClient(base_url, CANDIDATE_MODEL)
+
+            host = bind.hostname or "127.0.0.1"
+            return evaluate_candidate(
+                candidate.recipe,
+                OpenAICompatibleClient(f"{bind.scheme or 'http'}://{host}:{port}", CANDIDATE_MODEL),
+                serve=serve,
+                assignment=assignment,
+                pool_dir=self.config.pool_dir,
+                artifact_dir=f"{self.config.full_path}/artifacts/{candidate.hotkey[:12]}",
+                candidate_id=candidate.hotkey,
+                # --neuron.device was declared and read by nothing, so every
+                # validator merged on the CPU whatever it configured. The trimming
+                # methods are ~30x slower there, paid once per candidate per window.
+                device=device,
+            )
 
     def _burn(self, block: int, *, reason: str) -> None:
         """Route the whole share to the subnet owner's UID."""

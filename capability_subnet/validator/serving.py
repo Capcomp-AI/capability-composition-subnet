@@ -43,6 +43,12 @@ STARTUP_TIMEOUT_S = 900.0
 CANDIDATE_MODEL = "candidate"
 BASE_MODEL = "base"
 
+#: Device memory that is gone before a runtime asks for any — the CUDA context
+#: and the driver's own allocations. Measured at roughly 0.39 GiB on a 24 GB
+#: card; carried at 1.0 GiB so the check refuses a card that would only just
+#: fail, rather than one that fails by a margin too small to see.
+DRIVER_CONTEXT_GIB = 1.0
+
 
 class ServingError(RuntimeError):
     """The candidate's runtime could not be started."""
@@ -102,11 +108,19 @@ def utilization_for(total_gib: float, reserved_gib: float = C.SERVING_RESERVED_G
         raise ValueError("total_gib must be positive")
     if reserved_gib <= 0.0:
         raise ValueError("reserved_gib must be positive")
-    if reserved_gib >= total_gib:
+    # Against *usable* memory, not total. A device never offers all of it: the
+    # driver context is resident before anything is loaded, so a card whose
+    # total merely exceeds the reservation can still be unable to hold it. The
+    # runtime discovers that at start-up and refuses, once per candidate, and
+    # the window records it as a reconstruction failure — which reads as every
+    # miner scoring zero for a fault that belongs to this host.
+    usable_gib = total_gib - DRIVER_CONTEXT_GIB
+    if reserved_gib >= usable_gib:
         raise ServingError(
-            f"a candidate needs {reserved_gib:.1f} GiB but this device has only "
-            f"{total_gib:.1f} GiB. Evaluation on this host would measure the card "
-            "rather than the package."
+            f"a candidate needs {reserved_gib:.1f} GiB and this device has "
+            f"{total_gib:.1f} GiB, of which about {usable_gib:.1f} GiB is free once "
+            f"the driver context is resident. Evaluation on this host would measure "
+            "the card rather than the package."
         )
     return reserved_gib / total_gib
 

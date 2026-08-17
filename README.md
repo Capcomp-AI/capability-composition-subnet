@@ -87,11 +87,11 @@ The third bar is **off by default** (`require_beat_reference`): the highest scor
 
 The incumbent is not one of the permanent references. It gets its own smaller margin, which decays to zero over roughly thirty days.
 
-**One shot per hotkey.** A decisive loss terminates the challenger permanently. Failures that indict the engine — an unreadable memory counter, too few scored instances — hold the candidate for a later window instead of ending it.
+**One measurement per commitment.** A commitment is evaluated in the window after the one it was made in and earns from that measurement alone; to earn again, commit again. Nothing is terminated, and a failure that indicts the validator — an unreadable memory counter, too few scored instances — is not scored against the miner at all.
 
 ### Losing well is worth something
 
-Almost every submission will fail to take the top slot, and a recipe is one shot. So the top slot is winner-takes-most and everything below it is **graded**:
+Almost every submission will fail to take the top slot, and a commitment buys one measurement. So the top slot is winner-takes-most and everything below it is **graded**:
 
 | Term | Weight | What it rewards |
 |---|---|---|

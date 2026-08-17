@@ -179,3 +179,56 @@ class TestSuspicionNeverCostsAMiner:
             peer_core_results={"5PEER": {"5SOMEONE-ELSE": {1: True}}},
         )
         assert out.flagged_peers == {}
+
+
+class TestMeasuringCandidatesInParallel:
+    """Concurrency may change when a candidate is measured, never what it is worth."""
+
+    def test_results_follow_commit_order_not_completion_order(self, recipe_factory):
+        """A slow candidate must not lose its place to a fast one.
+
+        Ordering is the tie-break, and the tie-break is what stops a copy taking
+        a slot from the package it copied. Threading it onto whichever GPU
+        happened to free up first would decide that on the hardware.
+        """
+        import time
+
+        r = recipe_factory()
+        delays = {"5HOT1": 0.20, "5HOT2": 0.05, "5HOT3": 0.10}
+
+        def measure(candidate: Candidate, assignment):
+            time.sleep(delays[candidate.hotkey])
+            return _measurement(candidate.hotkey, 0.5, seeds=assignment.seeds)
+
+        candidates = [_candidate(1, r), _candidate(2, r), _candidate(3, r)]
+        out = _run(candidates, measure, workers=3)
+
+        assert [e.candidate_id for e in out.evaluations] == ["5HOT1", "5HOT2", "5HOT3"]
+
+    def test_workers_do_not_change_the_weight_vector(self, recipe_factory):
+        r = recipe_factory()
+        scores = {"5HOT1": 0.40, "5HOT2": 0.25, "5HOT3": 0.10}
+        candidates = [_candidate(1, r), _candidate(2, r), _candidate(3, r)]
+
+        serial = _run(candidates, _scorer(scores), workers=1)
+        parallel = _run(candidates, _scorer(scores), workers=4)
+
+        assert serial.weights is not None and parallel.weights is not None
+        assert {e.uid: round(e.weight, 12) for e in serial.weights.entries} == {
+            e.uid: round(e.weight, 12) for e in parallel.weights.entries
+        }
+
+    def test_one_candidate_failing_does_not_stop_the_others(self, recipe_factory):
+        r = recipe_factory()
+
+        def measure(candidate: Candidate, assignment):
+            if candidate.hotkey == "5HOT2":
+                raise RuntimeError("this host could not serve it")
+            return _measurement(candidate.hotkey, 0.5, seeds=assignment.seeds)
+
+        out = _run([_candidate(1, r), _candidate(2, r), _candidate(3, r)], measure, workers=3)
+
+        assert [e.candidate_id for e in out.evaluations] == ["5HOT1", "5HOT2", "5HOT3"]
+        assert {e.candidate_id for e in out.usable} == {"5HOT1", "5HOT3"}
+        failed = next(e for e in out.evaluations if e.candidate_id == "5HOT2")
+        assert "could not serve it" in (failed.error or "")

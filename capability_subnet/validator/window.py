@@ -86,11 +86,16 @@ def run_window(
     burn_uid: int = C.BURN_UID,
     incentive_mode: str = C.MODE_GRADED_TOP3,
     reference_e2e: float = 0.0,
+    workers: int = 1,
     peer_core_results: dict[str, dict[int, bool]] | None = None,
 ) -> WindowOutcome:
     """Evaluate a window and produce this validator's own weight vector.
 
     Args:
+        workers: how many candidates to measure at once. One per GPU: a
+            candidate reserves almost the whole card while it is served, so
+            concurrency above the device count would make the packages contend
+            for memory and measure each other rather than themselves.
         incentive_mode: how the measured field is turned into weights. See
             :func:`_weights_from`.
         reference_e2e: end-to-end completion of the strongest permanent
@@ -112,21 +117,7 @@ def run_window(
         window_id=window_id, beacon=beacon, sample=sample, assignment=assignment
     )
 
-    for candidate in candidates:
-        try:
-            outcome.evaluations.append(measure(candidate, assignment))
-        except Exception as exc:  # one bad candidate must not stop the window
-            log.warning("uid %s could not be measured: %s", candidate.uid, exc)
-            outcome.evaluations.append(
-                CandidateEvaluation(
-                    candidate_id=candidate.hotkey,
-                    recipe_sha256=candidate.recipe.digest(),
-                    artifact_sha256="",
-                    artifact_bytes=0,
-                    scores=CandidateScores(),
-                    error=str(exc),
-                )
-            )
+    outcome.evaluations.extend(_measure_all(candidates, assignment, measure, workers))
 
     if peer_core_results:
         outcome.flagged_peers = _flag_peers(outcome, hotkey, peer_core_results)
@@ -143,6 +134,67 @@ def run_window(
         reference_e2e=reference_e2e,
     )
     return outcome
+
+
+def _failed(candidate: Candidate, exc: Exception) -> CandidateEvaluation:
+    """A candidate this host could not measure.
+
+    Recorded rather than dropped so the window still reports how many candidates
+    it saw, and so a reader can tell "measured and scored zero" from "never
+    measured" — which are the same number and very different claims.
+    """
+    return CandidateEvaluation(
+        candidate_id=candidate.hotkey,
+        recipe_sha256=candidate.recipe.digest(),
+        artifact_sha256="",
+        artifact_bytes=0,
+        scores=CandidateScores(),
+        error=str(exc),
+    )
+
+
+def _measure_all(
+    candidates: list[Candidate],
+    assignment: Assignment,
+    measure: Measure,
+    workers: int,
+) -> list[CandidateEvaluation]:
+    """Measure every candidate, in commit order, ``workers`` at a time.
+
+    Results are returned in the order the candidates were given rather than the
+    order the measurements finished. Nothing downstream may depend on which
+    device happened to be free first: two validators running different numbers
+    of GPUs have to agree about a candidate, and a result list that reordered
+    itself under concurrency would put the tie-break — and the peer comparison's
+    choice of subject — on the hardware instead of on the chain.
+    """
+    if workers <= 1 or len(candidates) <= 1:
+        results = []
+        for candidate in candidates:
+            try:
+                results.append(measure(candidate, assignment))
+            except Exception as exc:  # one bad candidate must not stop the window
+                log.warning("uid %s could not be measured: %s", candidate.uid, exc)
+                results.append(_failed(candidate, exc))
+        return results
+
+    from concurrent.futures import ThreadPoolExecutor
+
+    ordered: list[CandidateEvaluation | None] = [None] * len(candidates)
+
+    def run(index: int) -> None:
+        candidate = candidates[index]
+        try:
+            ordered[index] = measure(candidate, assignment)
+        except Exception as exc:  # one bad candidate must not stop the window
+            log.warning("uid %s could not be measured: %s", candidate.uid, exc)
+            ordered[index] = _failed(candidate, exc)
+
+    log.info("measuring %d candidates, %d at a time", len(candidates), workers)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        list(pool.map(run, range(len(candidates))))
+
+    return [e for e in ordered if e is not None]
 
 
 def _flag_peers(
