@@ -108,11 +108,18 @@ python neurons/validator.py \
     --wallet.name <coldkey> \
     --wallet.hotkey <hotkey> \
     --neuron.evaluation own \
+    --neuron.device cuda \
     --neuron.serve_url http://127.0.0.1:8000 \
-    --neuron.pool_dir pool
+    --neuron.pool_dir pool \
+    --neuron.base_model_path base-model/Qwen3-8B \
+    --neuron.serving_python .venv-vllm/bin/python
 ```
 
-The validator checks at start-up that it has a serving endpoint, an importable reconstruction stack and a pool on disk, reports every problem at once, and refuses to run otherwise. A validator that cannot measure must not vote on who deserves emission.
+`--neuron.serve_url` is the address the validator **binds its own runtime to**, not an endpoint you stand up beforehand. Each candidate gets a runtime started with that candidate's adapter applied, and stopped afterwards, so nothing carries from one submission to the next.
+
+You do not set a memory fraction. A candidate's peak memory is gated, and a fraction of the card would make that gate a statement about your hardware rather than about the package: the same candidate measures 25.4 GiB at 0.78 of a 32 GB card and 22.9 GiB at 0.70. The reservation is fixed by the protocol and the fraction is derived from whatever card you have.
+
+The validator checks at start-up that it has a serving endpoint, a CUDA device, an importable reconstruction stack and a pool on disk, reports every problem at once, and refuses to run otherwise. A validator that cannot measure must not vote on who deserves emission.
 
 Expect roughly 40 minutes of reconstruction per candidate that uses a trimming merge, and about twice that when the cross-worker digest check is on. Linear merges take seconds.
 
