@@ -31,14 +31,14 @@ One JSON document. Not a model, not weights, not code.
 
 ```jsonc
 {
-  "workflow_id": "industrial_maintenance_de_v1",
-  "base_revision": "<pinned commit>",
-  "source_snapshot_sha256": "sha256:...",
-  "selected_adapters": ["embedded-engineering-v1", "industrial-ifc-v1", "..."],
-  "merge": { "combination_type": "dare_ties_svd", "density": 0.35,
-             "majority_sign_method": "total", "random_seed": 937152 },
-  "global_weights": { "industrial-ifc-v1": 1.20, "constrained-selection-v1": 1.15 },
-  "layer_group_overrides": { "group_2": { "industrial-ifc-v1": 1.30 } },
+  "workflow_id": "lora_merger_logic_v1",
+  "base_revision": "<from: capability-miner pool>",
+  "source_snapshot_sha256": "<from: capability-miner pool>",
+  "selected_adapters": ["<adapter-id>", "<adapter-id>"],
+  "merge": { "combination_type": "ties_svd", "density": 0.5,
+             "majority_sign_method": "total", "random_seed": 0 },
+  "global_weights": { "<adapter-id>": 1.0, "<adapter-id>": 1.0 },
+  "layer_group_overrides": {},
   "compression": { "output_rank": 64, "svd_clamp_quantile": 0.99 }
 }
 ```

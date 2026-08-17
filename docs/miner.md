@@ -276,38 +276,30 @@ not equally valuable if one costs twice as much to run.
 
 ## The document
 
+Every value below is a placeholder, chosen to be neutral rather than good: equal
+weights, no layer emphasis, a middling density. It shows the shape of the
+document and nothing about which composition wins — that is the search, and it is
+yours. `examples/quickstart_miner.py` writes a valid recipe you can run.
+
 ```jsonc
 {
   "schema_version": 1,
-  "workflow_id": "industrial_maintenance_de_v1",
-  "base_revision": "<pinned commit sha>",
-  "source_snapshot_sha256": "sha256:...",
+  "workflow_id": "lora_merger_logic_v1",
+  "base_revision": "<from: capability-miner pool>",
+  "source_snapshot_sha256": "<from: capability-miner pool>",
 
-  "selected_adapters": [
-    "embedded-engineering-v1",
-    "chained-reasoning-v1",
-    "industrial-ifc-v1",
-    "code-generation-v1",
-    "action-planner-v1",
-    "constrained-selection-v1",
-    "structured-explanation-v1"
-  ],
+  "selected_adapters": ["<adapter-id>", "<adapter-id>"],
 
   "merge": {
-    "combination_type": "dare_ties_svd",
-    "density": 0.35,
+    "combination_type": "ties_svd",
+    "density": 0.5,
     "majority_sign_method": "total",
-    "random_seed": 937152
+    "random_seed": 0
   },
 
-  "global_weights": {
-    "industrial-ifc-v1": 1.20,
-    "constrained-selection-v1": 1.15
-  },
+  "global_weights": { "<adapter-id>": 1.0, "<adapter-id>": 1.0 },
 
-  "layer_group_overrides": {
-    "group_2": { "industrial-ifc-v1": 1.30 }
-  },
+  "layer_group_overrides": {},
 
   "compression": {
     "output_rank": 64,
@@ -318,7 +310,6 @@ not equally valuable if one costs twice as much to run.
     "dtype": "bfloat16",
     "adapter_name": "candidate"
   }
-}
 ```
 
 **No executable content is accepted, and unknown fields are rejected outright.**
@@ -440,7 +431,7 @@ layer group override  →  global weight  →  1.0
 ```
 
 ```python
-recipe.effective_weight("industrial-ifc-v1", "group_2")
+recipe.effective_weight("<adapter-id>", "group_2")
 ```
 
 ---
