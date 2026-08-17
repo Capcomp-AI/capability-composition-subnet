@@ -28,6 +28,7 @@ from contextlib import AbstractContextManager, ExitStack
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from capability_subnet.common import constants as C
 from capability_subnet.common.schemas import CandidateScores, InstanceResult, Recipe
 from capability_subnet.registry.snapshot import PoolSnapshot, load_snapshot
 from capability_subnet.sandbox.model_client import ModelClient
@@ -147,12 +148,27 @@ def evaluate_candidate(
             for seed, result in zip(seeds, hidden_results, strict=False)
         }
 
-        # A default SandboxConfig leaves this unset, and measure_resources wants a
-        # number. 0.0 reads as "not measured here" rather than "measured as zero":
-        # peak VRAM is a property of the host that served the package, so a
-        # validator that did not measure it has no business asserting one, and the
-        # deployment gate that cares must treat an unmeasured value as unproven.
-        peak_vram = float(config.peak_vram_gb or 0.0)
+        # A default SandboxConfig leaves this unset, and the scorer wants a number.
+        # Which number matters: the efficiency term is 1 - peak/limit, so passing
+        # 0.0 for "nobody measured this" awards the *maximum* VRAM credit — 0.667
+        # against the 0.170 a real 23.8 GiB measurement earns. That is a bonus for
+        # a measurement that was never taken, and it lands on every candidate this
+        # validator scores, so its numbers stop being comparable with a validator
+        # that did measure.
+        #
+        # Unmeasured therefore reads as the worst admissible case, which is what
+        # the engine already does: "an unmeasured package scores no efficiency
+        # credit here". The value is reported unchanged so a reader can see that
+        # nothing was measured rather than infer it from a suspiciously round score.
+        measured_vram = config.peak_vram_gb
+        peak_vram = C.MAX_PEAK_VRAM_GB if measured_vram is None else float(measured_vram)
+        if measured_vram is None:
+            log.warning(
+                "peak VRAM was not measured for %s; scoring it as the %.0f GB limit so it "
+                "earns no efficiency credit it did not demonstrate",
+                candidate_id or recipe.digest()[:19],
+                C.MAX_PEAK_VRAM_GB,
+            )
 
         resources = measure_resources(
             hidden_results, artifact_bytes=artifact_bytes, peak_vram_gb=peak_vram
