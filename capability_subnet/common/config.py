@@ -162,42 +162,6 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
         help="Name used for this neuron's state directory.",
     )
     parser.add_argument(
-        "--backend.url",
-        dest="backend_url",
-        type=str,
-        default=_env("CAPSUB_BACKEND_URL", "http://127.0.0.1:8080"),
-        help="Base URL of the evaluation engine's read-only API.",
-    )
-    parser.add_argument(
-        "--backend.timeout",
-        dest="backend_timeout",
-        type=float,
-        default=_env_float("CAPSUB_BACKEND_TIMEOUT", 30.0),
-        help="HTTP timeout in seconds when polling the engine.",
-    )
-    parser.add_argument(
-        "--backend.trusted_signers",
-        dest="trusted_signers",
-        type=str,
-        default=_env("CAPSUB_TRUSTED_SIGNERS", ""),
-        help=(
-            "Comma-separated operator hotkeys whose signatures this validator "
-            "accepts. Leave empty ONLY for local development."
-        ),
-    )
-    parser.add_argument(
-        "--backend.allow_unsigned",
-        dest="allow_unsigned",
-        action="store_true",
-        default=_env_bool("CAPSUB_ALLOW_UNSIGNED"),
-        help=(
-            "Accept weight vectors that carry no verifiable operator signature. "
-            "Without this flag an empty trusted-signer list is a startup error, "
-            "because silently trusting whatever answers at the configured URL is "
-            "not a default anyone should get by omission."
-        ),
-    )
-    parser.add_argument(
         "--neuron.weight_interval",
         dest="weight_interval",
         type=int,
@@ -227,20 +191,6 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         default=_env_bool("CAPSUB_DISABLE_SET_WEIGHTS"),
         help="Compute and log the weight vector without submitting it.",
-    )
-    parser.add_argument(
-        "--neuron.evaluation",
-        dest="evaluation",
-        choices=("own", "delegated"),
-        default=_env("CAPSUB_EVALUATION", "own"),
-        help=(
-            "Where a validator's numbers come from. 'own' measures every "
-            "candidate on this host — it needs a GPU and a served endpoint, and "
-            "it is the only mode in which the network has no operator to trust. "
-            "'delegated' fetches a signed vector from an evaluation backend and "
-            "verifies it by replaying published traces; cheap, auditable, and "
-            "dependent on somebody else having done the measuring."
-        ),
     )
     parser.add_argument(
         "--neuron.serve_url",
@@ -278,31 +228,6 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
         dest="pool_dir",
         default=_env("CAPSUB_POOL_DIR", "pool"),
         help="Certified adapter pool on disk, for reconstructing candidates.",
-    )
-    parser.add_argument(
-        "--neuron.no_spot_check",
-        dest="spot_check",
-        action="store_false",
-        default=not _env_bool("CAPSUB_DISABLE_SPOT_CHECK"),
-        help=(
-            "Stop re-scoring the last closed window before submitting weights. "
-            "The spot check is what makes this validator a verifier rather than "
-            "a relay: it regenerates the instances from their published seeds "
-            "and re-runs the deterministic scorer over the published traces, "
-            "with no GPU and no model. Disabling it means paying on the "
-            "operator's word alone."
-        ),
-    )
-    parser.add_argument(
-        "--neuron.max_stale_windows",
-        dest="max_stale_windows",
-        type=int,
-        default=_env_int("CAPSUB_MAX_STALE_WINDOWS", 3),
-        help=(
-            "Stop resubmitting a published vector once it is this many windows "
-            "behind the chain head. Prevents a dead engine from pinning "
-            "emission to a stale champion forever."
-        ),
     )
 
 

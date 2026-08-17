@@ -1,44 +1,58 @@
-class TestAnUnavailableEngineStillProducesAVector:
-    """A validator that stops submitting is worse than one that burns.
+"""A validator that cannot measure must burn, not fall silent.
 
-    Every other failure path in `step` burns. The unavailable-engine path
-    returned instead, so when the engine had published nothing yet and
-    `/weights` answered 404, three validators sat silent for a day with the
-    previous run's weights still standing on chain.
-    """
+Going quiet is the one option strictly worse than either paying or burning. A
+validator that stops submitting leaves its previous vector standing on chain, so
+it keeps paying whoever it last named until the chain stops counting it — and
+then pays nobody, while still looking alive.
 
-    def test_backend_unavailable_burns_rather_than_returning(self, monkeypatch):
+Observed doing exactly that: the engine had published no vector yet, `/weights`
+answered 404, and three validators sat silent for a day with the previous run's
+weights still standing. That failure came from the delegated mode, which is gone;
+the property it taught is not, because a validator measuring for itself has its
+own way to be unable to proceed — it cannot read the block its window opened at,
+and therefore has no draw.
+"""
+
+from __future__ import annotations
+
+
+class TestAnUnreadableBeaconBurnsRatherThanReturning:
+    def test_a_beacon_that_cannot_be_read_burns_this_window(self, monkeypatch):
         import capability_subnet.validator.neuron as module
 
-        calls = []
+        burned: list[str] = []
 
         class Neuron:
-            # Explicitly the delegated path: this is a property of fetching a
-            # vector from a backend, and a validator measuring for itself has no
-            # backend to be unavailable.
             config = type(
                 "C",
                 (),
                 {
                     "disable_set_weights": False,
-                    "spot_check": False,
-                    "evaluation": "delegated",
+                    "netuid": 1,
+                    "burn_percentage": 0.0,
+                    "pool_dir": "pool",
+                    "serve_url": "http://127.0.0.1:8000/v1",
+                    "device": "cuda",
                 },
             )()
+            subtensor = None
+            # The real method, so this exercises the beacon failure rather than a
+            # stand-in for it.
+            _step_own = module.ValidatorNeuron._step_own
             burn_uid = staticmethod(lambda: 0)
-            _burn = staticmethod(lambda block, *, reason: calls.append(reason))
+            _burn = staticmethod(lambda block, *, reason: burned.append(reason))
             resync = staticmethod(lambda: None)
             should_set_weights = staticmethod(lambda block: True)
 
-            class client:
-                @staticmethod
-                def fetch_weights():
-                    raise module.BackendUnavailable("404 Not Found")
+        # The chain read that has no fallback: a fabricated beacon would be this
+        # validator choosing which problems the candidates face.
+        def no_beacon(subtensor, block):
+            raise RuntimeError("chain unreachable")
 
-        neuron = Neuron()
-        monkeypatch.setattr(module, "current_block", lambda st: 100)
-        neuron.subtensor = None
-        module.ValidatorNeuron.step(neuron)
+        monkeypatch.setattr(module, "current_block", lambda st: 7_000_000)
+        monkeypatch.setattr("capability_subnet.common.chain.block_beacon", no_beacon)
 
-        assert calls, "an unavailable engine must still produce a burn, not silence"
-        assert "404" in calls[0]
+        module.ValidatorNeuron.step(Neuron())
+
+        assert burned, "a validator with no draw must burn, not return"
+        assert "no beacon" in burned[0]

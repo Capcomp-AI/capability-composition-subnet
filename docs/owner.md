@@ -23,9 +23,9 @@ This is a one-off per arena version. Re-running it is cheap: an adapter already 
 
 ### 2. The evaluation engine — optional
 
-The engine is what `delegated` validators read. It runs windows, serves candidates, publishes signed reports and a signed weight vector.
+The engine runs windows, serves candidates, and publishes signed reports and a signed weight vector.
 
-It is optional because the default validator mode is `own`, which needs no engine at all. Run it if you want a reference set of published numbers, a console for the subnet, or validators who prefer not to own a GPU. It needs its own 48 GB card and the same serving toolchain a validator needs.
+Nothing on the network depends on it. Validators measure for themselves, so no weight anyone sets comes from here — which is the point, and also why this is optional. Run it if you want a reference set of published numbers to compare validators against, a console for the subnet, or a disclosure feed that third parties can replay without a GPU. It needs its own 48 GB card and the same serving toolchain a validator needs.
 
 ```bash
 capability-backend --config backend.yaml

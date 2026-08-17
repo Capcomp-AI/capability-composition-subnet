@@ -208,14 +208,24 @@ class TestTheBindingIsCheckedAndNotJustPublished:
         assert ok
         assert "not checked" in detail
 
-    def test_the_validator_actually_runs_the_commitment_check(self):
-        """It was written and never called, which is the same as not having it."""
-        from pathlib import Path
+    def test_a_validator_has_no_root_to_grind(self):
+        """Stronger than checking the check ran.
 
-        import capability_subnet.validator.neuron as neuron
+        This used to assert the validator called ``check_draw_was_not_re_rolled``,
+        because the draw came from a root one operator held and a root that moved
+        between windows was that operator re-rolling which problems candidates
+        faced. A validator now derives the window itself from the hash of the
+        block it opened at, and the sample commits to nothing — so there is no
+        root to move, and grinding is not defended against, it is absent.
+        """
+        from capability_subnet.scoring.sampler import draw_window_open
 
-        source = Path(neuron.__file__).read_text()
-        assert "check_draw_was_not_re_rolled" in source
+        sample = draw_window_open(7, beacon="0x" + "ab" * 32, hidden_count=8, ood_count=2)
+        assert sample.root_commitment == "", "an open draw must hold nothing to commit to"
+
+        # And the same block always yields the same window, for everyone.
+        again = draw_window_open(7, beacon="0x" + "ab" * 32, hidden_count=8, ood_count=2)
+        assert sample.hidden_seeds == again.hidden_seeds
 
     def test_the_contract_carries_a_real_commitment(self):
         """Threaded from the engine's configured root, not left empty."""

@@ -201,7 +201,6 @@ Then read the guide for your role:
 
 Validators are not required to agree on artifact bytes — six of the seven merge methods run an SVD, and an SVD is not bitwise reproducible across devices — so they are compared on outcomes rather than on hashes.
 
-**`delegated`.** The validator fetches the signed weight vector an evaluation engine publishes and sets weights, on a VPS with no GPU. It is not a relay: before touching the chain it
 
 1. verifies the operator signature against an allow-list it controls,
 2. checks the vector against the chain it can see — does the champion still hold that UID? is the engine stalled?

@@ -1,27 +1,29 @@
-"""The validator neuron, in either of its two modes.
+"""The validator neuron. It measures, on its own GPU, or it does not run.
 
-``--neuron.evaluation`` decides where a validator's numbers come from, and the
-two modes ask for very different machines.
+A validator rebuilds every candidate on its own hardware, serves it through a
+runtime it starts itself, and scores it against instances it regenerates from a
+block hash. It needs a CUDA device, an adapter pool and
+`capability-subnet[merge]`. What it does not need is anyone to trust, and that is
+the whole reason the requirement is not negotiable.
 
-**own** — the default. The validator rebuilds every candidate on its own
-hardware, serves it through its own endpoint, and scores it against instances it
-regenerates from the pinned corpora. It needs a GPU, an adapter pool and
-`capability-subnet[merge]`; what it does *not* need is anyone to trust, which is
-the point. Validators are not required to agree on artifact bytes — an SVD is not
-bitwise reproducible across devices — so they are compared on outcomes instead.
+There used to be a second mode that fetched a signed weight vector from an
+operator's evaluation engine and verified it by replaying published traces. It
+was cheap — a small VPS, no GPU — and it was genuinely not a relay: it checked
+the signature against an allow-list and burned rather than submit anything it
+could not verify. It is gone anyway, because "verify what one party measured" is
+not the same claim as "measure it", and keeping both let the network describe
+itself with the stronger claim while running on the weaker one. Every validator
+now does the work, so agreeing with the others is evidence rather than a
+formality.
 
-**delegated** — the thin mode. The validator reconstructs, serves and scores
-nothing, and runs on a small VPS: it fetches the signed weight vector an
-evaluation engine published, satisfies itself that the vector is trustworthy and
-submittable, and sets weights on-chain. What keeps it honest is that it is not a
-relay — it verifies the operator signature against an allow-list it controls,
-checks the vector against the chain it can see, and burns rather than submitting
-anything it cannot verify.
+Validators are not required to agree on artifact bytes. An SVD is not bitwise
+reproducible across devices, so two honest validators on different cards build
+different weights from the same recipe; they are compared on outcomes over a
+shared core of instances instead.
 
-The failure that motivated the start-up preflight below is the seam between them:
-the packaging describes the thin mode, the default is the other one, and a
-validator that inherited the difference scored every miner zero without ever
-saying it could not measure them.
+Third parties can still audit without a GPU — the disclosure replay tooling in
+:mod:`capability_subnet.audit` is exactly that, and it did not need weight-setting
+rights to be useful.
 """
 
 from __future__ import annotations
@@ -40,18 +42,9 @@ from capability_subnet.common.chain import (
     submit_weights,
     window_id_for_block,
 )
-from capability_subnet.common.config import build_config, parse_trusted_signers
+from capability_subnet.common.config import build_config
 from capability_subnet.common.logging import setup_logging
-from capability_subnet.common.signing import SignatureError
-from capability_subnet.scoring.weight_vector import apply_validator_burn
-from capability_subnet.validator.client import (
-    BackendClient,
-    BackendUnavailable,
-    check_draw_was_not_re_rolled,
-    safe_fallback,
-    spot_check_window,
-    validate_vector,
-)
+from capability_subnet.validator.client import safe_fallback
 
 log = logging.getLogger(__name__)
 
@@ -61,7 +54,7 @@ class BurnTargetUnavailable(Exception):
 
 
 class ValidatorNeuron:
-    """Fetches published weights and sets them on-chain."""
+    """Measures every candidate on this host and sets weights from it."""
 
     def __init__(self, config=None) -> None:
         import bittensor as bt
@@ -80,53 +73,32 @@ class ValidatorNeuron:
         self.subtensor = bt.Subtensor(self.config.network)
         self.metagraph: MetagraphView = fetch_metagraph(self.subtensor, self.config.netuid)
 
-        trusted = parse_trusted_signers(self.config.trusted_signers)
-        if trusted is None and not getattr(self.config, "allow_unsigned", False):
-            raise SystemExit(
-                "no operator allow-list configured. Without --backend.trusted_signers "
-                "this validator would submit whatever the configured URL returns, so it "
-                "refuses to start. Set the operator hotkey(s), or pass "
-                "--backend.allow_unsigned to accept that risk deliberately."
-            )
-        if trusted is None:
-            log.warning(
-                "running with --backend.allow_unsigned: weight vectors from %s will be "
-                "submitted without verifying an operator signature",
-                self.config.backend_url,
-            )
-
-        self.client = BackendClient(
-            self.config.backend_url,
-            timeout=self.config.backend_timeout,
-            trusted_signers=trusted,
-        )
-
-        if self.config.evaluation == "own":
-            self._preflight_own_evaluation()
+        # Unconditional. There is no mode this validator can fall back to, so a
+        # host that cannot measure a candidate must find that out here rather
+        # than discover it one window later having scored every miner zero.
+        self._preflight_own_evaluation()
 
         self.uid = self._resolve_uid()
         self.last_weight_block = 0
         self.should_exit = False
 
         log.info(
-            "validator ready: uid %s on netuid %s, reading %s",
+            "validator ready: uid %s on netuid %s, measuring on %s",
             self.uid,
             self.config.netuid,
-            self.config.backend_url,
+            self.config.device,
         )
 
     def _preflight_own_evaluation(self) -> None:
         """Refuse to start if this host cannot actually measure a candidate.
 
-        In ``own`` mode every number this validator submits comes from work it
-        does itself, and each thing checked here fails *quietly* at the moment a
-        miner is scored rather than loudly at start-up.
+        Every number this validator submits comes from work it does itself, and
+        each thing checked here fails *quietly* at the moment a miner is scored
+        rather than loudly at start-up.
 
-        The reconstruction stack is the sharp one. It is not in the base install
-        — the packaging describes a validator as needing no tensor library, which
-        was true when ``delegated`` was the only mode and is not true of this one
-        — so a validator installed from `capability-subnet` without extras cannot
-        import torch. It cannot then even *parse* a committed recipe, because
+        The reconstruction stack is the sharp one. It lives behind an extra, so a
+        validator installed from `capability-subnet` without them cannot import
+        torch. It cannot then even *parse* a committed recipe, because
         validating a Recipe resolves the merge method. And because
         :func:`~capability_subnet.validator.evaluator.evaluate_candidate` treats
         reconstruction failure as a scored outcome, the result is not a crash: it
@@ -140,8 +112,8 @@ class ValidatorNeuron:
         if not self.config.serve_url:
             problems.append(
                 "--neuron.serve_url is unset, so there is nowhere to serve a reconstructed "
-                "candidate. In 'own' mode this validator measures every candidate itself and "
-                "needs its own endpoint."
+                "candidate. This validator measures every candidate itself and needs its own "
+                "endpoint."
             )
 
         try:
@@ -149,19 +121,19 @@ class ValidatorNeuron:
             from capability_subnet.merge_engine.engine import reconstruct  # noqa: F401
         except ImportError as exc:
             problems.append(
-                f"the reconstruction stack cannot be imported ({exc}). 'own' mode rebuilds "
+                f"the reconstruction stack cannot be imported ({exc}). A validator rebuilds "
                 "every candidate locally, and this is not part of the base install. Install "
-                "`capability-subnet[merge]`, or run --neuron.evaluation=delegated, which needs "
-                "no tensor library."
+                "`capability-subnet[merge]` — there is no mode that skips it."
             )
 
         device = str(getattr(self.config, "device", "cuda"))
         if not device.startswith("cuda"):
             problems.append(
-                f"--neuron.device is {device!r}. 'own' evaluation rebuilds every submission "
+                f"--neuron.device is {device!r}. A validator rebuilds every submission "
                 "locally, and the trimming methods run roughly thirty times slower on a CPU — "
-                "a queue that takes minutes per candidate on a GPU takes most of a day. Set a "
-                "CUDA device, or run --neuron.evaluation=delegated."
+                "a queue that takes minutes per candidate on a GPU takes most of a day, so a "
+                "CPU validator would fall behind the window it is meant to decide. Set a CUDA "
+                "device; there is no mode that measures without one."
             )
         else:
             try:
@@ -233,94 +205,13 @@ class ValidatorNeuron:
         return (block - self.last_weight_block) >= self.config.weight_interval
 
     def step(self) -> None:
-        """One pass: measure or fetch, verify, submit."""
+        """One pass: measure this window here, then set weights from it."""
         block = current_block(self.subtensor)
         if not self.should_set_weights(block):
             return
 
         self.resync()
-
-        if getattr(self.config, "evaluation", "own") == "own":
-            self._step_own(block)
-            return
-
-        try:
-            vector = self.client.fetch_weights()
-        except SignatureError as exc:
-            # The engine is reachable but the vector cannot be attributed to a
-            # trusted operator. Burning is the safe answer: submitting an
-            # unverifiable vector would pay whoever produced it.
-            log.error("refusing the published vector: %s", exc)
-            self._burn(block, reason=str(exc))
-            return
-        except BackendUnavailable as exc:
-            # Burn, do not go quiet. Every other failure here burns; this one
-            # returned, which is the one option that is strictly worse than
-            # either paying or burning. A validator that stops submitting leaves
-            # its previous vector on chain to go stale, so it keeps paying
-            # whoever it last named until the chain stops counting it — and then
-            # pays nobody while the validator still looks alive.
-            #
-            # Observed doing exactly that: the engine had published no vector
-            # yet, `/weights` answered 404, and three validators sat silent for
-            # a day with weights from the previous run still standing.
-            log.warning("engine unavailable, burning this pass: %s", exc)
-            try:
-                self.burn_uid()
-            except BurnTargetUnavailable as burn_exc:
-                log.error("cannot even burn: %s", burn_exc)
-                return
-            self._burn(block, reason=str(exc))
-            return
-
-        # Staleness is measured against the engine's own window length, not a
-        # compiled-in default, so a deployment that tuned the window is judged by
-        # the window it actually runs.
-        window_blocks = self.client.window_blocks()
-        current_window = window_id_for_block(block, window_blocks) if window_blocks else None
-
-        try:
-            burn_uid = self.burn_uid()
-        except BurnTargetUnavailable as exc:
-            log.error("not submitting anything this pass: %s", exc)
-            return
-
-        problems = validate_vector(
-            vector,
-            metagraph_size=self.metagraph.size,
-            hotkeys=list(self.metagraph.hotkeys),
-            current_window=current_window,
-            max_stale_windows=self.config.max_stale_windows,
-            burn_uid=burn_uid,
-        )
-
-        if problems:
-            for problem in problems:
-                log.error("weight vector rejected [%s]: %s", problem.code, problem.detail)
-            self._burn(block, reason=problems[0].detail)
-            return
-
-        # A signature proves the operator produced this vector. It does not
-        # prove the evaluation behind it was honest. Before paying, re-score a
-        # closed window from the traces the engine itself published: instance
-        # generation is a pure function of the seed and the scorer is
-        # deterministic, so a score that does not follow from its own trace is
-        # caught here — by the party about to pay for it, on a VPS, with no GPU.
-        if current_window is not None and self.config.spot_check:
-            passed, detail = spot_check_window(self.client, current_window - 1)
-            if passed:
-                # Replay checks that instances match seeds. It cannot check where the
-                # seeds came from, and a root that moves between windows is the
-                # operator re-rolling which problems candidates face.
-                passed, detail = check_draw_was_not_re_rolled(self.client, current_window - 1)
-            if not passed:
-                log.error("refusing to pay: %s", detail)
-                self._burn(block, reason=detail)
-                return
-            log.info("spot check %s", detail)
-
-        final = apply_validator_burn(vector, self.config.burn_percentage, burn_uid)
-        self._submit(final, block)
+        self._step_own(block)
 
     def _step_own(self, block: int) -> None:
         """Measure this window here, and set weights from what was measured.

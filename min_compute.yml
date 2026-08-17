@@ -42,19 +42,18 @@ miner:
       upload: 50
 
 validator:
-  # Sized for `--neuron.evaluation=own`, the default, in which the validator
-  # rebuilds every candidate on its own hardware, serves it through its own
-  # endpoint and scores it against instances it regenerates. It loads an 8B model
-  # with a rank-64 adapter applied.
+  # A validator rebuilds every candidate on its own hardware, serves it through
+  # its own endpoint and scores it against instances it regenerates. It loads an
+  # 8B model with a rank-64 adapter applied. There is no lighter mode: a host
+  # that cannot measure a candidate refuses to start rather than score every
+  # miner zero for its own missing dependency.
   #
   # 48 GB rather than the ~18 GB the model actually occupies: a candidate's peak
   # is gated at 24 GiB, vLLM reserves a fraction of the whole card, and a card
   # sized to the model leaves no room to set that fraction low enough to stay
   # under the gate while holding cache blocks. Set
   # serving_gpu_memory_utilization to 0.45 on a 48 GB card.
-  #
-  # `--neuron.evaluation=delegated` reconstructs nothing and needs no GPU:
-  # 2 cores, 4 GB RAM, 20 GB disk.
+
   cpu:
     min_cores: 8
     min_speed: 2.5

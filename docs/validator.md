@@ -1,30 +1,29 @@
 # Validator guide
 
-A validator decides where emission goes. `--neuron.evaluation` decides where its numbers come from, and the two modes ask for very different machines.
+A validator decides where emission goes, and it earns that by measuring. There is one mode: every number you submit comes from work you did, on your hardware, against instances you regenerated yourself.
 
-| | `own` (default) | `delegated` |
-|---|---|---|
-| Measures candidates | Yes, on your hardware | No |
-| GPU | **48 GB** | None |
-| Adapter pool on disk | Yes, ~9 GB | No |
-| Install | `capability-subnet[merge]` | `capability-subnet` |
-| Trusts an operator | No | Yes, an allow-list you control |
+| What you need | |
+|---|---|
+| GPU | **48 GB** |
+| Adapter pool on disk | ~9 GB |
+| Install | `capability-subnet[merge]` |
+| An operator to trust | None |
 
-Run `own` unless you have a specific reason not to. It is the mode in which the network has no operator to trust: every number you submit comes from work you did, against instances you regenerated yourself.
+There used to be a thin mode that fetched a signed weight vector from an operator's engine and verified it by replaying published traces. It ran on a small VPS with no GPU, and it was genuinely not a relay. It is gone: "verify what one party measured" is a weaker claim than "measure it", and offering both let the network describe itself with the stronger one while running on the weaker.
+
+If you want to check this network without a GPU, you still can — see [Verifying an evaluation yourself](#verifying-an-evaluation-yourself). That path never needed weight-setting rights to be useful.
 
 ---
 
 ## What you are doing
 
-**In `own` mode.** Each window, your validator reads the commitments on chain, fetches each miner's recipe from the URI it committed, checks the recipe against its digest, reconstructs the merged adapter locally, serves it through your own endpoint, and scores it against hidden instances it regenerates from seeds derived from a block hash. It then ranks what it measured and writes weights.
+Each window, your validator reads the commitments on chain, fetches each miner's recipe from the URI it committed, checks the recipe against its digest, reconstructs the merged adapter locally, serves it through your own endpoint, and scores it against hidden instances it regenerates from seeds derived from a block hash. It then ranks what it measured and writes weights.
 
 Validators are not required to agree on artifact bytes. Six of the seven merge methods run an SVD, and an SVD is not bitwise reproducible across devices, so agreement is on **outcomes** rather than on hashes. The artifact digest is still recorded — a validator whose digest matches another's is stronger evidence — but it is evidence, not a gate.
 
-**In `delegated` mode.** Your validator fetches the signed weight vector an evaluation engine published, verifies it, and sets weights. It reconstructs nothing and needs no GPU.
-
 ## What you are not doing
 
-You are not a relay. In either mode, before anything touches the chain your validator:
+You are not a relay. Before anything touches the chain your validator:
 
 1. **Verifies signatures** against an allow-list *you* configure, when it takes numbers from an engine. A vector it cannot attribute to a trusted operator is refused.
 2. **Checks the vector against the chain it can see.** Does the champion still hold that UID, or did it deregister and leave the slot to a stranger? Is every UID inside this subnet? Do the weights sum to one? Are there duplicate UIDs the chain would reject?
@@ -55,8 +54,6 @@ On a 48 GB card, `0.45` lands peak at roughly 21–22.5 GiB, leaving ~4 GB of KV
     serving_max_model_len: 4096
 
 The model itself needs about 15.3 GiB of weights. Everything above that is reservation, so a larger card does not need a larger fraction — it needs a smaller one.
-
-`delegated` mode needs 2 cores, 4 GB RAM, 20 GB disk and no GPU.
 
 ---
 
@@ -107,7 +104,6 @@ python neurons/validator.py \
     --netuid 103 \
     --wallet.name <coldkey> \
     --wallet.hotkey <hotkey> \
-    --neuron.evaluation own \
     --neuron.device cuda \
     --neuron.serve_url http://127.0.0.1:8000 \
     --neuron.pool_dir pool \
@@ -123,58 +119,10 @@ The validator checks at start-up that it has a serving endpoint, a CUDA device, 
 
 Expect roughly 40 minutes of reconstruction per candidate that uses a trimming merge, and about twice that when the cross-worker digest check is on. Linear merges take seconds.
 
-## Setup for `delegated` mode
-
-```bash
-pip install -e .
-
-python neurons/validator.py \
-    --netuid 103 \
-    --wallet.name <coldkey> \
-    --wallet.hotkey <hotkey> \
-    --neuron.evaluation delegated \
-    --backend.url https://<engine-host> \
-    --backend.trusted_signers <operator-hotkey-ss58>
-```
-
-### The one setting that matters
-
-`--backend.trusted_signers` is the allow-list of operator hotkeys whose signatures you accept.
-
-**Leaving it empty is a startup error.** The validator refuses to run rather than submit whatever the configured URL returns — that is not a behaviour anyone should inherit by omission. If you genuinely want it on a local network, pass `--backend.allow_unsigned` to say so deliberately.
-
-Get the operator hotkey from the subnet's published channels, not from the engine you are about to trust.
-
-### Under a process manager
-
-```bash
-pm2 start "python neurons/validator.py \
-    --netuid <netuid> \
-    --wallet.name <coldkey> --wallet.hotkey <hotkey> \
-    --backend.url https://<engine-host> \
-    --backend.trusted_signers <operator-hotkey>" \
-  --name capsub-validator
-```
-
-Or with environment variables (`.env.example` has the full list):
-
-```bash
-export CAPSUB_NETUID=<netuid>
-export CAPSUB_BACKEND_URL=https://<engine-host>
-export CAPSUB_TRUSTED_SIGNERS=<operator-hotkey>
-python neurons/validator.py --wallet.name <coldkey> --wallet.hotkey <hotkey>
-```
-
----
-
 ## Configuration
 
 | Flag | Default | What it does |
 |---|---|---|
-| `--backend.url` | `http://127.0.0.1:8080` | The engine's read-only API |
-| `--backend.trusted_signers` | *empty* | Operator hotkeys you accept. **Required.** |
-| `--backend.allow_unsigned` | off | Explicitly accept unsigned vectors. Local development only. |
-| `--backend.timeout` | `30` | HTTP timeout in seconds |
 | `--neuron.weight_interval` | `300` | Minimum blocks between submissions |
 | `--neuron.poll_interval` | `60` | Seconds between polls |
 | `--neuron.burn_percentage` | `0.0` | Additional fraction *you* route to burn |
@@ -304,7 +252,7 @@ curl https://<engine-host>/health
 
 ## Requirements
 
-See [Hardware](#hardware) above: `own` mode needs a 48 GB card, `delegated` needs no GPU.
+See [Hardware](#hardware) above: a validator needs a 48 GB card.
 
 See [min_compute.yml](../min_compute.yml).
 
@@ -399,11 +347,12 @@ Run the pieces against it:
 CAPSUB_NETUID=1 CAPSUB_CHAIN_ENDPOINT=ws://127.0.0.1:9944 \
 python -m capability_subnet.backend.service --config backend.yaml
 
-# Validator — no allow-list is acceptable here and nowhere else
+# Validator
 python neurons/validator.py --netuid 1 \
     --wallet.name owner --wallet.hotkey default \
     --subtensor.chain_endpoint ws://127.0.0.1:9944 \
-    --backend.url http://127.0.0.1:8080
+    --neuron.serve_url http://127.0.0.1:8000 \
+    --neuron.pool_dir pool
 
 # Miner
 python neurons/miner.py --netuid 1 \
@@ -490,12 +439,13 @@ Put the API behind TLS. It is read-only and cannot change engine state, but vali
 pm2 start "python neurons/validator.py \
     --netuid <netuid> \
     --wallet.name <coldkey> --wallet.hotkey <hotkey> \
-    --backend.url https://<engine-host> \
-    --backend.trusted_signers <operator-hotkey>" \
+    --neuron.serve_url http://127.0.0.1:8000 \
+    --neuron.pool_dir pool \
+    --neuron.base_model_path base-model/Qwen3-8B" \
   --name capsub-validator
 ```
 
-**Set `--backend.trusted_signers`.** Without it the validator submits whatever the URL returns.
+**Give it a GPU.** The validator refuses to start without a CUDA device, a serving endpoint, an importable reconstruction stack and a pool on disk — a host that cannot measure must not vote on who deserves emission.
 
 ### Miner
 
