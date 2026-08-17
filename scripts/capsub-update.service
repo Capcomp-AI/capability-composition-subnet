@@ -21,6 +21,18 @@ Environment=CAPSUB_REPO=/opt/capability-composition-subnet
 Environment=CAPSUB_UPDATE_REMOTE=https://github.com/Capcomp-AI/capability-composition-subnet.git
 Environment=CAPSUB_UPDATE_BRANCH=main
 
+# The only identities whose commits this node will run. Every incoming commit
+# must carry one of these as BOTH author and committer, checked before the merge
+# so untrusted code never becomes HEAD.
+#
+# This is a guard against the wrong identity pushing — a stray account, a machine
+# with the wrong gitconfig — not against someone who can push and can also type a
+# different name, because git does not authenticate these fields. Set
+# CAPSUB_REQUIRE_SIGNED=1 once these identities sign their commits, and the check
+# becomes one on a key instead of on a claim.
+Environment="CAPSUB_TRUSTED_AUTHORS=josiah.dev521@gmail.com xinyangtaylor@gmail.com"
+Environment=CAPSUB_REQUIRE_SIGNED=0
+
 # The units to restart, space separated. Leave empty on a miner: it submits and
 # exits, so there is nothing to restart and the next run picks the change up.
 # Only units that are *already running* are touched.

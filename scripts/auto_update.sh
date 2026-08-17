@@ -13,6 +13,8 @@
 #     one of them is an attack.
 #   * the remote URL is checked before fetching. A repointed origin is the
 #     cheapest way to feed a node someone else's code.
+#   * every incoming commit has to carry a trusted author *and* committer, and
+#     is checked before the merge, so untrusted code never becomes HEAD.
 #   * the new revision has to import and pass the fast suite *before* anything is
 #     restarted. A node that updates into a broken tree and restarts is worse
 #     than one that never updated.
@@ -20,10 +22,12 @@
 #     restarted. Ending in a state nobody chose is the failure mode worth
 #     engineering against.
 #
-# Worth being plain about the limit: commits in this repository are not signed,
-# so this verifies that the code came from the expected URL and that it works —
-# not who wrote it. Anyone who can push to the tracked branch can run code here.
-# That is the trade every auto-updater makes; it is stated rather than hidden.
+# Worth being plain about the limit. Author and committer are strings the pusher
+# chooses, and git does not authenticate them, so the identity check below stops
+# the wrong identity pushing — not somebody who can push and can also type a
+# different name. Until these identities sign their commits, what is really
+# verified is the remote, the fast-forward, and that the code works here.
+# CAPSUB_REQUIRE_SIGNED=1 closes that gap the day signing starts.
 set -uo pipefail
 
 REPO="${CAPSUB_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
@@ -33,6 +37,16 @@ UNITS="${CAPSUB_UPDATE_UNITS:-}"          # space-separated; empty is valid (a m
 PIP="${CAPSUB_PIP:-pip}"
 EXTRAS="${CAPSUB_INSTALL_EXTRAS:-[merge]}"
 SMOKE="${CAPSUB_UPDATE_SMOKE:-1}"         # 0 disables the pre-restart test run
+
+# Identities whose commits this node will run. Space-separated emails; both the
+# author and the committer of every incoming commit must appear here.
+TRUSTED_AUTHORS="${CAPSUB_TRUSTED_AUTHORS:-josiah.dev521@gmail.com xinyangtaylor@gmail.com}"
+
+# Require a good signature on every incoming commit as well. Off by default
+# because this repository's history is unsigned and turning it on would refuse
+# every update; turn it on the day these identities start signing, and identity
+# stops being a claim and becomes a key.
+REQUIRE_SIGNED="${CAPSUB_REQUIRE_SIGNED:-0}"
 UNIT_SETTLE_SECONDS="${CAPSUB_UNIT_SETTLE_SECONDS:-45}"
 
 log() { printf '%s %s\n' "$(date -Is)" "$*"; }
@@ -58,6 +72,46 @@ after="$(git rev-parse "origin/$BRANCH")"
 if [ "$before" = "$after" ]; then
   log "already on ${after:0:12}, nothing to do"
   exit 0
+fi
+
+# Who wrote it, checked before anything is merged — the objects are already
+# fetched, so this rejects untrusted code without ever moving HEAD onto it.
+#
+# Both author and committer, because they differ: a commit written by a trusted
+# identity and rebased, amended or cherry-picked by somebody else carries the
+# first name and the second one's content.
+#
+# Be clear about what this is worth. Author and committer are strings the pusher
+# chooses; git does not authenticate them. This stops a commit from an identity
+# that should not be pushing here — a stray account, a machine with the wrong
+# gitconfig, a contributor pushing to the wrong remote — and it does not stop
+# anyone who can push and can also type a different name. The control that does
+# is a signature: set CAPSUB_REQUIRE_SIGNED=1 once these identities sign, and
+# this becomes a check on a key rather than on a claim.
+untrusted=""
+while IFS='|' read -r sha aemail cemail sig; do
+  [ -z "$sha" ] && continue
+  # Author and committer are usually the same person; report the pair once so a
+  # single bad commit reads as one problem rather than two.
+  identities="$aemail"
+  [ "$cemail" != "$aemail" ] && identities="$aemail $cemail"
+  for who in $identities; do
+    case " $TRUSTED_AUTHORS " in
+      *" $who "*) ;;
+      *) untrusted="$untrusted ${sha:0:12}($who)" ;;
+    esac
+  done
+  if [ "$REQUIRE_SIGNED" = "1" ] && [ "$sig" != "G" ] && [ "$sig" != "U" ]; then
+    untrusted="$untrusted ${sha:0:12}(unsigned:$sig)"
+  fi
+done <<EOF
+$(git log --format='%H|%ae|%ce|%G?' "$before..origin/$BRANCH")
+EOF
+
+if [ -n "$untrusted" ]; then
+  log "ERROR refusing revisions not from a trusted identity:$untrusted"
+  log "      trusted: $TRUSTED_AUTHORS"
+  exit 1
 fi
 
 # Fast-forward only. If the remote rewrote history this fails, and it should:
