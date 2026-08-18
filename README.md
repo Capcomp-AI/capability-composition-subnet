@@ -67,7 +67,7 @@ CHAIN          identity, commitments, consensus, emission
 
 There is no round ceremony. A champion holds the throne continuously; challengers are drawn from a queue **in commit order** and evaluated one at a time. Nobody chooses who challenges next — the chain does, by the order it accepted commitments.
 
-Every window (~24 h) the engine draws a **fresh set of hidden instances** and re-measures the champion and every baseline on them. Nobody defends on data they have already been scored on, and nothing needs to be revealed, because the instances did not exist in observable form before the window opened.
+Every run (~24 h) the engine draws a **fresh set of hidden instances** and re-measures the champion and every baseline on them. Nobody defends on data they have already been scored on, and nothing needs to be revealed, because the instances did not exist in observable form before the run opened.
 
 ### Taking the throne is hard on purpose
 
@@ -83,11 +83,11 @@ A challenger must clear four independent bars:
 
 The second bar stops a package trading away one capability for a better average.
 
-The third bar is **off by default** (`require_beat_reference`): the highest score on the board is paid whether or not it cleared the strongest reference. References are still measured and published every window. Enable it for the stricter contract.
+The third bar is **off by default** (`require_beat_reference`): the highest score on the board is paid whether or not it cleared the strongest reference. References are still measured and published every run. Enable it for the stricter contract.
 
 The incumbent is not one of the permanent references. It gets its own smaller margin, which decays to zero over roughly thirty days.
 
-**One measurement per commitment.** A commitment is evaluated in the window after the one it was made in and earns from that measurement alone; to earn again, commit again. Nothing is terminated, and a failure that indicts the validator — an unreadable memory counter, too few scored instances — is not scored against the miner at all.
+**One measurement per commitment.** A commitment is evaluated in the run after the one it was made in and earns from that measurement alone; to earn again, commit again. Nothing is terminated, and a failure that indicts the validator — an unreadable memory counter, too few scored instances — is not scored against the miner at all.
 
 ### Losing well is worth something
 
@@ -104,21 +104,21 @@ Only packages that cleared **every hard gate** are graded. If nobody qualifies t
 
 Miners still waiting in the queue earn a small tapered share, so an unevaluated challenger is not the first thing the chain prunes.
 
-### How a window's emission splits
+### How a run's emission splits
 
-Under `graded_contribution`, four fifths of every window burns to the subnet
+Under `graded_contribution`, four fifths of every run burns to the subnet
 owner's UID and the remaining fifth is the miner pool. The best measured package
 takes 95% of that pool; the graded runners-up split the other 5%.
 
-| Recipient | Share of the miner pool | Share of the window |
+| Recipient | Share of the miner pool | Share of the run |
 |---|---|---|
 | Burn (subnet owner's UID) | — | 80% |
 | Best measured package | 95% | 19% |
 | Graded runners-up, ranks 2–10 | 5% | 1% |
 
-At most ten miners are paid in one window: the leader and nine graded runners-up.
+At most ten miners are paid in one run: the leader and nine graded runners-up.
 A share nobody earned burns rather than being promoted into the leader's — a
-window with one qualified package is not a bigger achievement than a contested
+run with one qualified package is not a bigger achievement than a contested
 one.
 
 ## Two arenas
@@ -132,11 +132,11 @@ A package is judged by a **workflow**, and the engine does not hardcode one. Wor
 
 ### `lora_merger_logic_v1` — the arena
 
-Two pinned corpora. ~3,193 logic puzzles across ten families, scored by exact match against the answer the prompt asked for. ~2,944 competitive-programming problems, scored by **running the submitted program** against stdin/stdout cases in an isolated interpreter — a quarter of every window, because execution asks whether the code works rather than whether the answer looks right.
+Two pinned corpora. ~3,193 logic puzzles across ten families, scored by exact match against the answer the prompt asked for. ~2,944 competitive-programming problems, scored by **running the submitted program** against stdin/stdout cases in an isolated interpreter — a quarter of every run, because execution asks whether the code works rather than whether the answer looks right.
 
 Items are selected in the band where a model of this class discriminates — the corpus carries its own measured pass rate — stratified by family, and deterministic in a hidden seed.
 
-Two limits apply. The corpora are public, so the seed protects *which* items a window draws rather than the items themselves. And the difficulty labels were measured at pass@16 with sampling while this engine scores pass@1 greedy, so absolute scores land below the band. See [docs/arena.md](docs/arena.md).
+Two limits apply. The corpora are public, so the seed protects *which* items a run draws rather than the items themselves. And the difficulty labels were measured at pass@16 with sampling while this engine scores pass@1 greedy, so absolute scores land below the band. See [docs/arena.md](docs/arena.md).
 
 ### `industrial_maintenance_de_v1` — the demonstration
 
@@ -158,7 +158,7 @@ Determinism is what makes the paired statistics valid and lets a disputed evalua
 | Repository | What it holds | Who needs it |
 |---|---|---|
 | **this one** | The protocol: recipe contract, merge engine, workflows, and every rule that decides a score — aggregation, gates, retention, the comparator, ranking, contribution, the weight vector | Miners, validators, auditors |
-| [`lora-merger-engine`](https://github.com/Capcomp-AI/lora-merger-engine) | The evaluation engine that *runs* those rules: window loop, candidate serving, store, read-only API, operator configuration | The subnet operator only |
+| [`lora-merger-engine`](https://github.com/Capcomp-AI/lora-merger-engine) | The evaluation engine that *runs* those rules: run loop, candidate serving, store, read-only API, operator configuration | The subnet operator only |
 
 The line is drawn where it is for one reason: a validator pays only for a score
 it can recompute. So everything that turns evidence into a number is here and
@@ -219,7 +219,7 @@ Validators are not required to agree on artifact bytes — six of the seven merg
 
 1. verifies the operator signature against an allow-list it controls,
 2. checks the vector against the chain it can see — does the champion still hold that UID? is the engine stalled?
-3. **re-scores a closed window from the engine's own published traces**, and
+3. **re-scores a closed run from the engine's own published traces**, and
 4. **burns rather than submitting anything it cannot verify.**
 
 Step 3 is what turns a signature into evidence. Instance generation is a pure function of the seed and the scorer is deterministic, so a validator regenerates the problems the candidates faced and re-runs the scoring over the published traces — no GPU and no model needed for that step. **An engine whose scores do not follow from its own traces does not get paid.**
@@ -227,11 +227,11 @@ Step 3 is what turns a signature into evidence. Instance generation is a pure fu
 Every validator does this automatically. Beyond that, anyone can check the record by hand, also without a GPU:
 
 ```bash
-capability-audit window --window <n>    # do the reports and the weight vector agree?
-capability-audit replay --window <n>    # re-score a closed window from its own traces
+capability-audit run --run <n>    # do the reports and the weight vector agree?
+capability-audit replay --run <n>    # re-score a closed run from its own traces
 ```
 
-Closed windows publish their instance seeds and the traces the scorer read.
+Closed runs publish their instance seeds and the traces the scorer read.
 Instance generation is a pure function of the seed, so an auditor regenerates the
 exact problems a candidate faced and re-runs the deterministic scorer over them.
 A published score that does not follow from its published trace is caught.

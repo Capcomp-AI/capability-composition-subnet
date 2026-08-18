@@ -20,7 +20,7 @@ answer and the measurement as possible:
 | One turn | No state, no tool loop, no partial-credit chain to argue about |
 | Pre-measured difficulty | Items carry a pass rate, so selection targets the band where packages actually differ |
 | No model judges anything | Exact match, or the program runs and its stdout is compared |
-| Paired | Every package sees the identical item set for a given window |
+| Paired | Every package sees the identical item set for a given run |
 | Twelve axes | Ten logic families, code execution, format compliance |
 
 Workflows register through the `capability_subnet.workflows` entry-point group.
@@ -40,13 +40,13 @@ is not reproducible.
 | code corpus | ~2,944 problems | execution |
 
 The pins themselves live in `capability_subnet/workflows/lora_merger_logic_v1/sources.py`,
-which is what regenerates a window's instances — so anyone re-scoring a closed
-window resolves exactly the items the engine used. They are deliberately not
+which is what regenerates a run's instances — so anyone re-scoring a closed
+run resolves exactly the items the engine used. They are deliberately not
 repeated in the published contract or on the console. Naming a corpus in the
-shop window mostly helps somebody go looking for adapters already trained on it,
+shop run mostly helps somebody go looking for adapters already trained on it,
 and that is a way of scoring well without composing anything.
 
-A quarter of every window is drawn from the code corpus (`CODE_FRACTION`).
+A quarter of every run is drawn from the code corpus (`CODE_FRACTION`).
 Execution is the stronger signal — it asks whether the code works rather than
 whether the answer looks right — but every case is a subprocess, so it is
 deliberately neither a tenth of the board nor all of it.
@@ -71,7 +71,7 @@ too easy and every package ties, too hard and every package scores zero.
 Code problems are admitted at the `introductory` and `interview` tiers on the
 same reasoning.
 
-Selection is stratified by family and deterministic in the seed, so a window
+Selection is stratified by family and deterministic in the seed, so a run
 cannot be dominated by whichever family the corpus is densest in — or a miner
 happened to study.
 
@@ -79,11 +79,11 @@ happened to study.
 
 Two limits apply, and a miner needs both to decide whether to compete.
 
-**The items are public.** What the hidden seed protects is *which* items a window
+**The items are public.** What the hidden seed protects is *which* items a run
 draws, not the items themselves — a weaker anti-overfitting property than a
 generated workflow, and the price of corpora whose difficulty is already
 measured. Corpus size is not the mitigation and is not offered as one. What
-applies instead: stratified selection, the executed quarter of each window, and a
+applies instead: stratified selection, the executed quarter of each run, and a
 general-capability probe scored outside these corpora entirely.
 
 **The difficulty labels overstate this harness.** They were measured at pass@16
@@ -135,7 +135,7 @@ information mainly on the scalar families and on code.
 
 ---
 
-## Reproducing a window
+## Reproducing a run
 
 Everything an auditor needs is in the published record. A seed regenerates the
 exact instance, including its test cases; every revision is pinned, so the items
@@ -146,7 +146,7 @@ a disagreement: a score the traces do not support can be shown not to hold, by
 anyone, without a GPU and without the operator's cooperation.
 
 ```bash
-capability-audit window --backend-url https://<engine-host> --window <id>
+capability-audit run --backend-url https://<engine-host> --run <id>
 ```
 
 It regenerates each instance from its seed, re-runs the deterministic scorer over

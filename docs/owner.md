@@ -23,7 +23,7 @@ This is a one-off per arena version. Re-running it is cheap: an adapter already 
 
 ### 2. The evaluation engine — optional
 
-The engine runs windows, serves candidates, and publishes signed reports and a signed weight vector.
+The engine runs runs, serves candidates, and publishes signed reports and a signed weight vector.
 
 Nothing on the network depends on it. Validators measure for themselves, so no weight anyone sets comes from here — which is the point, and also why this is optional. Run it if you want a reference set of published numbers to compare validators against, a console for the subnet, or a disclosure feed that third parties can replay without a GPU. It needs its own 48 GB card and the same serving toolchain a validator needs.
 

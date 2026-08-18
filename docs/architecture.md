@@ -133,7 +133,7 @@ All arithmetic happens in **delta space** on the effective update `ΔW = (α/r)�
 ## The continuous loop
 
 ```
-open window   → draw fresh hidden instances, re-measure every reference and the incumbent
+open run   → draw fresh hidden instances, re-measure every reference and the incumbent
 admit         → validate, verify digest, check the frozen pool, anti-copy      (no GPU)
 take the head → the earliest commitment still waiting becomes the challenger
 evaluate      → reconstruct, serve, run the fixed agent, score deterministically
@@ -143,7 +143,7 @@ publish       → signed report, signed weight vector
 
 Role assignment is **mechanical**: the queue is ordered by the block each commitment was made at, and the head is the challenger. Nobody chooses.
 
-Re-measuring the references every window is the expensive part and is not optional. A challenger compared against last window's reference numbers would be compared on a different instance set, and the paired statistics would be meaningless.
+Re-measuring the references every run is the expensive part and is not optional. A challenger compared against last run's reference numbers would be compared on a different instance set, and the paired statistics would be meaningless.
 
 ### The two failure policies
 
@@ -152,7 +152,7 @@ This distinction matters more than any other rule in the engine:
 - **Miner failures fail closed.** An invalid submission scores zero.
 - **Infrastructure failures fail open.** The queue *holds* rather than terminating a candidate on flaky hardware.
 
-Charging a miner for a window is only defensible if the engine never charges it for the engine's own bad night.
+Charging a miner for a run is only defensible if the engine never charges it for the engine's own bad night.
 
 ---
 
@@ -168,13 +168,13 @@ Five independent bars, all of which must clear:
 
 ### Bar 3 is optional, and ships off
 
-`require_beat_reference` defaults to **False**: the highest score on the board is paid, whether or not it cleared the strongest reference. The product is the best composition anyone has found, not proof that composition was worth attempting — and the strict rule had a real failure attached, where a network producing perfectly good comparative information would burn its emission indefinitely because nothing cleared an absolute bar. References are still measured and published every window, so the question stays answerable from the record; it just stops gating payment. Set it True for the stricter contract.
+`require_beat_reference` defaults to **False**: the highest score on the board is paid, whether or not it cleared the strongest reference. The product is the best composition anyone has found, not proof that composition was worth attempting — and the strict rule had a real failure attached, where a network producing perfectly good comparative information would burn its emission indefinitely because nothing cleared an absolute bar. References are still measured and published every run, so the question stays answerable from the record; it just stops gating payment. Set it True for the stricter contract.
 
 **Base retention does not move with it.** A package that destroyed the base model's general ability is not deployable whatever it scored, so that gate stays hard in both modes.
 
 Turning bar 3 off opens a hole that bar 4 was quietly closing, and it is closed separately. Under a margin rule a copy of the leader could not displace it, because identical scores are not a margin. Under highest-score-wins a copy *ties* — and since no two evaluations of two distinct artifacts land on exactly the same number, a copy with one coefficient nudged takes the top slot roughly half the time on sampling noise alone. Recipes are public, so this is read-and-resubmit rather than a hypothetical.
 
-So submissions closer together than the window can **resolve** are ranked as tied, and ties resolve to the earliest commitment. A copier commits later by construction, so it has to be measurably better — the same bar the margin enforced, expressed in the units the evidence actually supports. Indistinguishability is not transitive, so ranking groups maximal runs into equivalence classes rather than swapping pairs.
+So submissions closer together than the run can **resolve** are ranked as tied, and ties resolve to the earliest commitment. A copier commits later by construction, so it has to be measurably better — the same bar the margin enforced, expressed in the units the evidence actually supports. Indistinguishability is not transitive, so ranking groups maximal runs into equivalence classes rather than swapping pairs.
 
 Bars 3 and 4 are separate. If the incumbent counted among the references, every successive champion would have to beat the previous one by a further margin, and since completion is bounded by one that bar walks upward until nothing can move it.
 
@@ -186,7 +186,7 @@ An axis with too few paired samples counts as **worse**, not as a tie. Absence o
 
 A loss is *decisive* — and terminates the hotkey — only when the challenger was genuinely measured. An axis with no paired samples at all means the engine failed to gather evidence, and terminating on that would punish a miner for an evaluation the engine did not complete.
 
-The same principle governs the hard gates, which are split into two sets. A candidate that used 40 GB genuinely failed the memory limit; a candidate on a host whose memory counter was unreadable has not been shown to fail anything. The second kind is not scored against the candidate at all. Charging a miner for a window is only defensible if the engine never charges it for the engine's own bad night.
+The same principle governs the hard gates, which are split into two sets. A candidate that used 40 GB genuinely failed the memory limit; a candidate on a host whose memory counter was unreadable has not been shown to fail anything. The second kind is not scored against the candidate at all. Charging a miner for a run is only defensible if the engine never charges it for the engine's own bad night.
 
 ---
 
@@ -206,9 +206,9 @@ So the network keeps a set of references on the board permanently:
 
 They are measured through **exactly the same code path** as candidates — if baselines were measured differently, "the challenger beat the strongest reference" would be a statement about two harnesses rather than two packages.
 
-The base model and the three standard merges are re-measured every window. The per-adapter single-adapter references are **rotated**, a few per window on a schedule derived from the window id. Measuring all of them every window is correct and costs most of a window's GPU budget before any challenger is looked at — and a window that cannot finish never evaluates anybody. Rotation keeps the "beat the best specialist" bar honest over time while leaving room to actually run the queue.
+The base model and the three standard merges are re-measured every run. The per-adapter single-adapter references are **rotated**, a few per run on a schedule derived from the run id. Measuring all of them every run is correct and costs most of a run's GPU budget before any challenger is looked at — and a run that cannot finish never evaluates anybody. Rotation keeps the "beat the best specialist" bar honest over time while leaving room to actually run the queue.
 
-The **incumbent is not one of them**. It is re-measured every window and reported alongside them, but it does not set the absolute bar; see the dethrone rule above for why.
+The **incumbent is not one of them**. It is re-measured every run and reported alongside them, but it does not set the absolute bar; see the dethrone rule above for why.
 
 None of them can be terminated and **none of them earn emission**. Under the strict contract (`require_beat_reference=True`) a reference can hold the throne, and then the workflow share burns because the network has not yet produced anything worth paying for. Under the default it cannot: the best *submission* is paid regardless of where the references landed, and the references serve as published context for whether that submission was worth anything rather than as a gate on it.
 
@@ -228,15 +228,15 @@ The subnet owner runs an evaluation engine, and it sits outside this path. It pu
 
 ## Who chooses the problems
 
-Nobody. Each window's instances derive from the hash of the block the window opened at.
+Nobody. Each run's instances derive from the hash of the block the run opened at.
 
-That block is public, it is not any participant's to pick, and it does not exist until the window begins — so the draw cannot be selected after seeing a candidate, and every validator computes byte-identical seeds from material anyone can fetch. Instance generation is a pure function of the seed, so an auditor with a laptop can regenerate the exact problems a window asked, years later, from a block hash and a revision pin.
+That block is public, it is not any participant's to pick, and it does not exist until the run begins — so the draw cannot be selected after seeing a candidate, and every validator computes byte-identical seeds from material anyone can fetch. Instance generation is a pure function of the seed, so an auditor with a laptop can regenerate the exact problems a run asked, years later, from a block hash and a revision pin.
 
-Deriving from the window's own opening block — `window_id × window_blocks` — rather than from the moment a process happened to start is what makes it checkable and idempotent: a validator restarted mid-window re-derives the seeds it was already using instead of quietly evaluating a different test.
+Deriving from the run's own opening block — `window_id × window_blocks` — rather than from the moment a process happened to start is what makes it checkable and idempotent: a validator restarted mid-run re-derives the seeds it was already using instead of quietly evaluating a different test.
 
 What stops a miner tuning to the instances is not concealment but ordering. The commitment being evaluated is the one standing at the opening block, and one recipe per hotkey is final; learning the instances a moment later is worth nothing, because the recipe is already fixed.
 
-The draw holds no secret and commits to nothing, so there is nothing to reveal and nothing to grind. An empty beacon is refused outright rather than falling back to a fixed draw, because a fallback would silently give every window of every deployment the same instances.
+The draw holds no secret and commits to nothing, so there is nothing to reveal and nothing to grind. An empty beacon is refused outright rather than falling back to a fixed draw, because a fallback would silently give every run of every deployment the same instances.
 
 ---
 
@@ -245,8 +245,8 @@ The draw holds no secret and commits to nothing, so there is nothing to reveal a
 Recipes are public — they have to be, or nobody could verify an evaluation. So the protocol makes copying *worthless* rather than impossible:
 
 - **Earliest commit wins**, checked on the recipe digest at admission and again on the reconstructed artifact digest. Two differently-worded recipes that build the same bytes are the same package.
-- **One measurement per commitment.** Copying costs a window per attempt and buys nothing.
-- **Defender advantage.** A copy has to be *measurably* better, not merely higher. Under the strict contract that is the dethrone margin; under the default it is the tie rule — scores closer than the window can resolve are ranked equal and ties resolve to the earliest commitment, so a later copy cannot displace what it copied on sampling noise.
+- **One measurement per commitment.** Copying costs a run per attempt and buys nothing.
+- **Defender advantage.** A copy has to be *measurably* better, not merely higher. Under the strict contract that is the dethrone margin; under the default it is the tie rule — scores closer than the run can resolve are ranked equal and ties resolve to the earliest commitment, so a later copy cannot displace what it copied on sampling noise.
 
 The third point is what makes the first two sufficient. Even a copy nobody detected cannot win.
 
@@ -289,7 +289,7 @@ Quality carries 85%, efficiency 15% — a cheap package that does not finish the
 
 ## Who gets paid
 
-Ranking decides who leads — the dethrone rule under the strict contract, the tie-aware leaderboard by default. Either way it is far too blunt to also decide who gets *paid*, because almost every submission that is ever evaluated will fail to lead — and a commitment buys one measurement a window apart, so a miner cannot iterate on it the way a code-submitting miner can. Paying a miner who moved completion from 0.41 to 0.58 exactly what it pays one that submitted a soup of distractors leaves the second attempt no better informed than the first, in a network whose entire purpose is to learn which adapters compose.
+Ranking decides who leads — the dethrone rule under the strict contract, the tie-aware leaderboard by default. Either way it is far too blunt to also decide who gets *paid*, because almost every submission that is ever evaluated will fail to lead — and a commitment buys one measurement a run apart, so a miner cannot iterate on it the way a code-submitting miner can. Paying a miner who moved completion from 0.41 to 0.58 exactly what it pays one that submitted a soup of distractors leaves the second attempt no better informed than the first, in a network whose entire purpose is to learn which adapters compose.
 
 So the top slot is winner-takes-most and everything below it is graded:
 
@@ -302,9 +302,9 @@ So the top slot is winner-takes-most and everything below it is graded:
 
 Only candidates that cleared **every hard gate** are graded — this is not a consolation prize for producing something undeployable. If nobody qualifies, the graded pool burns rather than folding into the champion's share, because holding an uncontested throne is not an achievement. Each grade is published broken into its four terms, so a miner can act on it.
 
-The terms decide how the miner pool is divided; the pool itself is a fifth of the window:
+The terms decide how the miner pool is divided; the pool itself is a fifth of the run:
 
-| Recipient | Share of the window |
+| Recipient | Share of the run |
 |---|---|
 | Burn (subnet owner's UID) | 80% |
 | Best measured package | 19% |
@@ -316,7 +316,7 @@ Proximity is not a gate. Rewarding closeness alone would pay for copying the lea
 
 **Stage balance** is a geometric mean of the per-stage means, and the choice of mean is doing real work: a package scoring 1.0 on all but one axis and 0.1 on the last lands far below one scoring 0.8 everywhere, even though their arithmetic means are close. A workflow needs every axis it declares — seven for the maintenance chain, twelve for the arena — so a package that abandoned one has not solved it.
 
-**Retention** is measured on a held-out general-capability probe, *not* on the workflow. That distinction is the whole reason the term exists, and it is the one term that does not weaken when bar 3 is off: a comparison against the base model's *workflow* completion cannot detect collapse under the strict contract either, since a candidate only reaches the gate after beating the base by a margin, so the ratio is always above one and the clamp returns exactly `1.0` for every candidate that could possibly be crowned. The probe asks short, exactly-scored questions about the behaviours aggressive merging actually destroys — following a format, not padding an answer, arithmetic, ordering, answering in the language it was addressed in — drawn per window from their own secret seed and asked of the base model on the same draw.
+**Retention** is measured on a held-out general-capability probe, *not* on the workflow. That distinction is the whole reason the term exists, and it is the one term that does not weaken when bar 3 is off: a comparison against the base model's *workflow* completion cannot detect collapse under the strict contract either, since a candidate only reaches the gate after beating the base by a margin, so the ratio is always above one and the clamp returns exactly `1.0` for every candidate that could possibly be crowned. The probe asks short, exactly-scored questions about the behaviours aggressive merging actually destroys — following a format, not padding an answer, arithmetic, ordering, answering in the language it was addressed in — drawn per run from their own secret seed and asked of the base model on the same draw.
 
 ---
 
@@ -362,7 +362,7 @@ The design draws on published research and existing production code. None of it 
 | Tensor format | [safetensors](https://github.com/huggingface/safetensors) |
 | Chain and SDK | [Bittensor](https://github.com/opentensor/bittensor) · [subtensor](https://github.com/opentensor/subtensor) |
 
-The continuous champion-challenge shape — a queue ordered by commit block, per-window task refresh, single-recipient weight vectors, per-instance sample rows feeding a comparator — is an established pattern in this ecosystem, adapted here to the merged-adapter commodity.
+The continuous champion-challenge shape — a queue ordered by commit block, per-run task refresh, single-recipient weight vectors, per-instance sample rows feeding a comparator — is an established pattern in this ecosystem, adapted here to the merged-adapter commodity.
 
 ---
 
@@ -432,7 +432,7 @@ The pointer itself is not trusted, so a mutable host is fine for integrity. It i
 Three mechanisms, and the third is what makes the first two sufficient:
 
 1. **Earliest commit wins**, checked on the recipe digest at admission and again on the reconstructed **artifact** digest. Two differently-worded recipes that build the same bytes are the same package.
-2. **One measurement per commitment.** Copying costs a window per attempt.
+2. **One measurement per commitment.** Copying costs a run per attempt.
 3. **Defender advantage.** Dethroning requires a genuine margin, so a copy that exactly reproduces the champion's scores loses by construction.
 
 Even a copy nobody detected cannot win. That is the point.
@@ -447,7 +447,7 @@ Even a copy nobody detected cannot win. That is the point.
 | Hidden diagnostic cases | Their **expected outputs never enter the runner** — only inputs are sent |
 | The seed root | Never leaves the engine; the API has no route that exposes it |
 | Instance visibility | The visible payload is built explicitly, field by field, rather than filtered from the full object |
-| Per-window refresh | Instances rotate, so anything learned about one window is worth little in the next |
+| Per-run refresh | Instances rotate, so anything learned about one run is worth little in the next |
 
 That fourth row is a deliberate design choice: a new field added to the ground truth is invisible to the agent until someone *deliberately* adds it to the visible payload. A filter-based approach fails open; this fails closed.
 
@@ -494,10 +494,10 @@ This is the honest weak point of a centralised engine, and it is mitigated rathe
 | Chain consensus | Weights still pass through the chain's own aggregation |
 | Sample rows retained | Every per-instance outcome is stored, so a claimed aggregate can be checked against its parts |
 
-| Closed-window disclosure | Once a window closes, its seeds and the traces the scorer read are published, so anyone can regenerate the instances and re-run the scorer over them without a GPU |
+| Closed-run disclosure | Once a run closes, its seeds and the traces the scorer read are published, so anyone can regenerate the instances and re-run the scorer over them without a GPU |
 
 Since v1.0.0 the reported scores **can** be checked independently:
-`capability-audit replay --window <n>` regenerates each disclosed instance from
+`capability-audit replay --run <n>` regenerates each disclosed instance from
 its seed and re-scores the engine's own trace. A published score that does not
 follow from its published trace is caught, specifically and by anyone.
 
@@ -515,7 +515,7 @@ If that residual trust is unacceptable, it is better to know before registering 
 
 A validator refuses a vector that is unsigned, signed by a hotkey outside its allow-list, or whose signature does not verify. The signature covers canonical bytes that exclude the signature fields themselves, so signing is idempotent and tampering with any payload field invalidates it.
 
-Beyond the signature, the validator checks the vector against the chain: weights summing to one, distinct UIDs, UIDs inside the subnet, the champion still holding its UID, and the vector not being many windows stale. **A correctly-signed vector can still be unsubmittable**, and a deregistered champion is the common case.
+Beyond the signature, the validator checks the vector against the chain: weights summing to one, distinct UIDs, UIDs inside the subnet, the champion still holding its UID, and the vector not being many runs stale. **A correctly-signed vector can still be unsubmittable**, and a deregistered champion is the common case.
 
 ---
 
@@ -526,8 +526,8 @@ The operator is not in the path that decides emission, which removes most of thi
 | Threat | What stops it |
 |---|---|
 | Publishing scores the traces do not support | Anyone can regenerate the instances from their seeds and re-run the scorer; a score that does not follow from its own trace is demonstrable without the operator's cooperation |
-| Choosing which problems a window asks | Not possible. The draw is the hash of the window's opening block, which no participant picks and which validators derive independently |
-| Quietly not re-measuring references | Every window's reference scores are published in its report |
+| Choosing which problems a run asks | Not possible. The draw is the hash of the run's opening block, which no participant picks and which validators derive independently |
+| Quietly not re-measuring references | Every run's reference scores are published in its report |
 | Withholding disclosures entirely | Nothing stops it, and nothing depends on it. Disclosures are evidence about the engine's own numbers, which no validator consumes |
 | Influencing what a miner is paid | Not possible. Validators set weights from measurements they took |
 
@@ -601,9 +601,9 @@ Because concatenating factorisations is algebraically the sum of the updates, so
 
 ---
 
-### How long does a window take?
+### How long does a run take?
 
-Roughly `(references + 1) × instances × per-instance-time`. With the default 100 hidden instances and around ten references, opening a window is the dominant cost. Size `window_blocks` accordingly.
+Roughly `(references + 1) × instances × per-instance-time`. With the default 100 hidden instances and around ten references, opening a run is the dominant cost. Size `window_blocks` accordingly.
 
 ### Can I change the comparator thresholds?
 
@@ -622,7 +622,7 @@ Yes, but the container boundaries are the primary isolation for candidate-writte
 A small, tapered share — most at the front of the queue, least at the back. It
 is not payment for work: Bittensor prunes by lowest emission, so a miner holding
 exactly zero is the first the chain evicts. The engine evaluates roughly one
-challenger per window, so without it you could be deregistered before your
+challenger per run, so without it you could be deregistered before your
 single evaluation ever ran.
 
 ### The champion looks unbeatable. Is the subnet finished?
@@ -639,7 +639,7 @@ already answered it once.
 Yes, if your package cleared every hard gate. The champion takes a fixed share
 and everything below it is graded on quality, how far past the strongest
 permanent reference you got, how close you came to the champion, and what your
-package costs to run. That grade earns a proportional share for several windows,
+package costs to run. That grade earns a proportional share for several runs,
 and it is published broken into its four terms so you can see what earned it.
 
 Clearing the gates is the threshold, and it is not negotiable. Grading applies
@@ -654,7 +654,7 @@ gates, retention, the comparator, ranking, contribution and the weight vector �
 is in this repository, and a test enforces that none of it depends on the
 operator's engine.
 
-The engine itself is operator-only: the window loop, candidate serving, the
+The engine itself is operator-only: the run loop, candidate serving, the
 store, the read-only API and the configuration surface. None of that changes what
 a candidate scores, and a validator does not need it — it recomputes a published
 score from published traces using the public rules, and burns rather than paying

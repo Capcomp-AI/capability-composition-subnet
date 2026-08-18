@@ -11,13 +11,13 @@ A validator decides where emission goes, and it earns that by measuring. There i
 
 A validator that cannot measure a candidate refuses to start rather than score every miner zero for a dependency it is missing. There is no lighter configuration to fall back to: taking numbers from somebody else is a weaker claim than measuring, and a network that offers both ends up described by the stronger one while running on the weaker.
 
-Checking this network needs no GPU and no validator registration. `capability-audit` replays any published window from its seeds and traces, and is worth running whether or not you set weights.
+Checking this network needs no GPU and no validator registration. `capability-audit` replays any published run from its seeds and traces, and is worth running whether or not you set weights.
 
 ---
 
 ## What you are doing
 
-Each window, your validator reads the commitments on chain, fetches each miner's recipe from the URI it committed, checks the recipe against its digest, reconstructs the merged adapter locally, serves it through your own endpoint, and scores it against hidden instances it regenerates from seeds derived from a block hash. It then ranks what it measured and writes weights.
+Each run, your validator reads the commitments on chain, fetches each miner's recipe from the URI it committed, checks the recipe against its digest, reconstructs the merged adapter locally, serves it through your own endpoint, and scores it against hidden instances it regenerates from seeds derived from a block hash. It then ranks what it measured and writes weights.
 
 Validators are not required to agree on artifact bytes. Six of the seven merge methods run an SVD, and an SVD is not bitwise reproducible across devices, so agreement is on **outcomes** rather than on hashes. The artifact digest is still recorded — a validator whose digest matches another's is stronger evidence — but it is evidence, not a gate.
 
@@ -27,7 +27,7 @@ You are not a relay. Before anything touches the chain your validator:
 
 1. **Verifies signatures** against an allow-list *you* configure, when it takes numbers from an engine. A vector it cannot attribute to a trusted operator is refused.
 2. **Checks the vector against the chain it can see.** Does the champion still hold that UID, or did it deregister and leave the slot to a stranger? Is every UID inside this subnet? Do the weights sum to one? Are there duplicate UIDs the chain would reject?
-3. **Checks freshness**, against the window length the engine reports rather than a compiled-in default.
+3. **Checks freshness**, against the run length the engine reports rather than a compiled-in default.
 4. **Burns rather than submitting anything it cannot verify.**
 
 ---
@@ -54,18 +54,18 @@ a 24 GB card, a 48 GB card and an 80 GB card alike. A larger card therefore does
 not run more candidates; it runs the same one with a smaller fraction.
 
 Cards are the unit of parallelism. Each one measures a whole candidate at a
-time, so four cards measure four candidates at once and the window's throughput
+time, so four cards measure four candidates at once and the run's throughput
 scales with the count. Two candidates sharing a card would contend for memory
 and each would measure the other's footprint as its own.
 
-| Cards | Candidates in flight | Roughly per 72 h window |
+| Cards | Candidates in flight | Roughly per 72 h run |
 |---|---|---|
 | 1 | 1 | ~23 |
 | 2 | 2 | ~47 |
 | 4 | 4 | ~94 |
 
 One card still works and is still honest; it measures fewer candidates per
-window. A validator that cannot finish its queue should bound it with
+run. A validator that cannot finish its queue should bound it with
 `--neuron.max_candidates_per_window` rather than fall behind silently.
 
 Point the validator at the cards with `--neuron.devices`:
@@ -79,7 +79,7 @@ Each device gets a port of its own, counting up from the one in
 
 ### What one candidate costs
 
-Measured on a 24 GB card, for the default window:
+Measured on a 24 GB card, for the default run:
 
 | Stage | Cost |
 |---|---|
@@ -96,7 +96,7 @@ twelfth of the total, which is why there is no artifact cache — it would buy
 about 8%.
 
 The 540 is this validator's own slice: the shared core plus the tail drawn for
-its hotkey, out of the window's 1350 instances.
+its hotkey, out of the run's 1350 instances.
 
 > A 24 GB card measures p95 at roughly 24 s against a 25 s gate. That is real
 > but thin headroom, and it is the package's gate that fails when a host is
@@ -234,11 +234,11 @@ Expect roughly 15 minutes of reconstruction per candidate that uses a trimming m
 | `graded_top3` | 60/25/15 across the top three |
 | `graded_contribution` | 80% burns; the best measured package takes 95% of the remaining fifth and ranks 2–10 split the other 5% |
 
-Under `graded_contribution` a window pays at most ten miners — the leader and
+Under `graded_contribution` a run pays at most ten miners — the leader and
 nine graded runners-up — and burns anything nobody earned rather than promoting
 it into the leader's share:
 
-| Recipient | Share of the window |
+| Recipient | Share of the run |
 |---|---|
 | Burn (subnet owner's UID) | 80% |
 | Best measured package | 19% |
@@ -250,7 +250,7 @@ not graded at all.
 
 `--neuron.burn_percentage` compounds with this rather than replacing it. It is
 applied first, and the mode's own split then divides what is left, so a value of
-`0.5` under `graded_contribution` leaves miners a tenth of the window rather
+`0.5` under `graded_contribution` leaves miners a tenth of the run rather
 than a fifth.
 
 ### Your own burn
@@ -262,7 +262,7 @@ on every pass. It is not UID 0: that slot belongs to whichever neuron registered
 into it first, so weighting it would pay that miner rather than burning
 anything. If the owner holds no UID at all, this validator submits nothing for
 that pass — there is no address that "burn" could honestly mean, and paying an
-arbitrary neuron is worse than skipping a window.
+arbitrary neuron is worse than skipping a run.
 
 Allowing less would let a validator quietly override an operator's incident response. Allowing more is you declining to pay a champion you do not trust, with your own stake — which is a decision you are entitled to make, and one of the few levers you have if you disagree with an evaluation.
 
@@ -280,7 +280,7 @@ curl https://<engine-host>/champion
 # The full report: gate verdicts, per-axis comparison, paired statistics
 curl https://<engine-host>/reports/<report-sha256>
 
-# Every evaluation in a window
+# Every evaluation in a run
 curl "https://<engine-host>/reports?window_id=<n>"
 ```
 
@@ -293,8 +293,8 @@ python -m capability_subnet.miner.cli digest --recipe <the-published-recipe>
 ### The audit tool does this for you
 
 ```bash
-# Every report in a window, plus the weight vector derived from them
-capability-audit --trusted-signers <operator-hotkey> window --window <n>
+# Every report in a run, plus the weight vector derived from them
+capability-audit --trusted-signers <operator-hotkey> run --run <n>
 
 # One report
 capability-audit --trusted-signers <operator-hotkey> report --digest <sha256>
@@ -307,15 +307,15 @@ vector pays only someone a report crowned. A fabricated number has to be
 fabricated *consistently* across a signed record that was published the moment it
 was produced.
 
-### Re-scoring a closed window
+### Re-scoring a closed run
 
 Stronger still, and it needs no GPU:
 
 ```bash
-capability-audit --trusted-signers <operator-hotkey> replay --window <n>
+capability-audit --trusted-signers <operator-hotkey> replay --run <n>
 ```
 
-Hidden instances are drawn fresh every window and never reused, so once a window
+Hidden instances are drawn fresh every run and never reused, so once a run
 closes its seeds have no value as a secret. The engine publishes them together
 with the traces it scored. The tool regenerates each instance from its seed —
 generation is a pure function of the seed, so this reproduces the exact problem
@@ -332,7 +332,7 @@ as claimed. But the fabrication has to be carried down to per-turn tool calls
 that stay consistent with a workflow you can regenerate, which is considerably
 harder than adjusting an aggregate.
 
-The current window is never disclosed — its challenger is still sitting that test.
+The current run is never disclosed — its challenger is still sitting that test.
 
 ---
 
@@ -344,14 +344,14 @@ The current window is never disclosed — its challenger is still sitting that t
 | Vector unsigned or from an untrusted signer | **Burns.** |
 | Signature does not verify | **Burns.** |
 | Champion deregistered since the vector was computed | **Burns** — paying that UID now would pay a stranger. |
-| Vector many windows stale | **Burns** — the engine has stalled. |
-| Engine does not report its window length | **Burns** — freshness cannot be established, so it is not assumed. |
+| Vector many runs stale | **Burns** — the engine has stalled. |
+| Engine does not report its run length | **Burns** — freshness cannot be established, so it is not assumed. |
 | Weights malformed (bad sum, duplicate UID, out-of-range) | **Burns.** |
 | Chain rate limit | Treated as a no-op, retried next interval. |
-| Healthy vector | Re-scores the last closed window, then applies your burn setting and submits. |
+| Healthy vector | Re-scores the last closed run, then applies your burn setting and submits. |
 | Graded payments | Every non-champion recipient must have a published report showing it cleared all hard gates and carries a contribution grade; `capability-audit` checks this. |
-| Window does not re-score | **Burns.** The engine's published scores contradict its own published traces. |
-| Window not yet disclosed | Submits. Absence of a disclosure is absence of evidence, not proof of dishonesty — treating it otherwise would turn an outage into a punishment and give validators a reason to race the disclosure. |
+| Run does not re-score | **Burns.** The engine's published scores contradict its own published traces. |
+| Run not yet disclosed | Submits. Absence of a disclosure is absence of evidence, not proof of dishonesty — treating it otherwise would turn an outage into a punishment and give validators a reason to race the disclosure. |
 
 Burning is the deliberate fallback rather than resubmitting the last known-good vector, because a dead engine must not pin emission to a stale champion forever.
 
@@ -361,7 +361,7 @@ Burning is the deliberate fallback rather than resubmitting the last known-good 
 
 The validator logs every decision with its reason. Worth alerting on:
 
-- repeated `burning this window's share` — the engine is unhealthy or the allow-list is wrong
+- repeated `burning this run's share` — the engine is unhealthy or the allow-list is wrong
 - repeated `engine unavailable` — network or operator problem
 - `weight submission failed` other than rate limiting — a chain problem
 
@@ -488,7 +488,7 @@ python neurons/miner.py --netuid 1 \
 
 - A commitment is admitted and appears in `/queue`.
 - An invalid submission is rejected with a clear reason and does **not** enter the queue.
-- A window opens, references are measured, and `/weights` appears.
+- A run opens, references are measured, and `/weights` appears.
 - A validator fetches, verifies and submits.
 - The engine survives a restart with its queue and champion intact.
 
@@ -521,7 +521,7 @@ Run everything with `--subtensor.network test`.
 | ☐ | API behind TLS |
 | ☐ | `state/` backed up |
 | ☐ | Three or more independent validators setting weights from published reports |
-| ☐ | A full window completing unattended |
+| ☐ | A full run completing unattended |
 | ☐ | Champion ranking consistent across validators |
 | ☐ | Commitments surviving an engine restart |
 | ☐ | Invalid submissions failing closed |
@@ -600,11 +600,11 @@ Changing anything that affects how a recipe is reconstructed or scored is a **co
 ### What does not
 
 - The API, dashboard, logging or documentation
-- Operational settings such as window length or poll interval
+- Operational settings such as run length or poll interval
 
 ### Repinning the base model
 
-This creates a **new arena**, not a new window. Existing recipes target the old base and are not valid against the new one. Champions do not carry over. Plan it as a relaunch.
+This creates a **new arena**, not a new run. Existing recipes target the old base and are not valid against the new one. Champions do not carry over. Plan it as a relaunch.
 
 ---
 
@@ -619,7 +619,7 @@ tar czf backup/reports-$(date +%F).tar.gz state/reports state/recipes
 
 Sample rows in particular cannot be reconstructed from aggregates, and the comparator needs them for paired statistics.
 
-To recover: restore `state/`, restart the engine. It re-reads the chain, rebuilds any missing artifacts from cached recipes, and continues from the current window. Losing the artifact cache costs rebuild time and nothing else — artifacts are content-addressed and reproducible.
+To recover: restore `state/`, restart the engine. It re-reads the chain, rebuilds any missing artifacts from cached recipes, and continues from the current run. Losing the artifact cache costs rebuild time and nothing else — artifacts are content-addressed and reproducible.
 
 ---
 
@@ -637,7 +637,7 @@ What that does **not** give is independent verification that the hidden instance
 
 ### What if the engine goes down?
 
-The validator keeps the last submitted weights in force while retrying. If the published vector goes many windows stale, the validator **burns** rather than continuing to pay a champion the engine can no longer defend.
+The validator keeps the last submitted weights in force while retrying. If the published vector goes many runs stale, the validator **burns** rather than continuing to pay a champion the engine can no longer defend.
 
 ### Can I burn more than the engine asked?
 

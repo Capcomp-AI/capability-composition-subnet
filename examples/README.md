@@ -42,7 +42,7 @@ capability-miner commitment --recipe recipe.json --recipe-uri https://…/recipe
 Order matters. The commitment names bytes by digest, and the engine fetches the
 pointer and checks it against that digest — so publish first, commit second. A
 pointer that resolves to different bytes is rejected, and a rejected commitment
-costs you the window.
+costs you the run.
 
 The whole payload is capped at 128 bytes, of which 57 are the magic, the
 workflow code and the digest. That leaves **71 characters for the URI**, which

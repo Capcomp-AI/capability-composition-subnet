@@ -8,22 +8,22 @@ Your entire on-chain footprint is a single commitment. You never serve inference
 
 ## Before anything else: a commitment is measured once
 
-Your commitment is evaluated in the window **after** the one you made it in, and
+Your commitment is evaluated in the run **after** the one you made it in, and
 it earns from that measurement alone. It is not re-measured and it does not keep
 earning afterwards. To earn again, commit again.
 
-That gives you one evaluated attempt per window — a floor of one window between
-attempts, because a commitment made after a window opened is not measured in it.
-Nothing is terminated: a package that loses costs you that window, not the
+That gives you one evaluated attempt per run — a floor of one run between
+attempts, because a commitment made after a run opened is not measured in it.
+Nothing is terminated: a package that loses costs you that run, not the
 hotkey.
 
 The floor is what keeps copying expensive. Reading a published recipe, tweaking
-it and resubmitting costs a full window per attempt, against an anti-copy check
+it and resubmitting costs a full run per attempt, against an anti-copy check
 that compares you to every commitment already admitted and a champion whose
 margin you still have to clear.
 
 So: validate locally, evaluate locally, and only then commit — a wasted
-commitment costs you a window.
+commitment costs you a run.
 
 **Start from the worked example.** [`examples/quickstart_miner.py`](../examples/quickstart_miner.py)
 does the whole loop in one file — builds valid recipes, rejects the inadmissible
@@ -38,16 +38,16 @@ weakest search there is and the part you are meant to replace; everything around
 it — validation, digests, commitment encoding, local scoring — is the part you
 can rely on. See [examples/README.md](../examples/README.md).
 
-> An *infrastructure* failure costs you nothing beyond the window. If a validator cannot serve your package or the sandbox falls over, you are not scored down for it — you are simply not measured, exactly as if you had not committed.
+> An *infrastructure* failure costs you nothing beyond the run. If a validator cannot serve your package or the sandbox falls over, you are not scored down for it — you are simply not measured, exactly as if you had not committed.
 
 ---
 
-## What a window pays
+## What a run pays
 
-Four fifths of every window burns to the subnet owner's UID. The remaining fifth
+Four fifths of every run burns to the subnet owner's UID. The remaining fifth
 is the miner pool, and the best measured package takes 95% of it.
 
-| Recipient | Share of the miner pool | Share of the window |
+| Recipient | Share of the miner pool | Share of the run |
 |---|---|---|
 | Burn (subnet owner's UID) | — | 80% |
 | Best measured package | 95% | 19% |
@@ -280,23 +280,23 @@ See [min_compute.yml](../min_compute.yml) for detail.
 
 **Omitting the retention adapter.** The base-retention gate rejects packages that traded away general ability for workflow score. It is measured on a held-out probe of short, exactly-scored general instructions — arithmetic, ordering, exact formats, answering in the language you were addressed in — so a package can score well on the workflow and still fail it. The retention anchor exists for exactly that.
 
-**Tuning to the public pack.** The hidden set is drawn fresh each window and includes out-of-distribution mutations — renamed components, converted units, aliased database columns, reformatted fault codes. A package that memorised surface patterns fails on those, and out-of-distribution robustness carries 10% of the qualified score directly.
+**Tuning to the public pack.** The hidden set is drawn fresh each run and includes out-of-distribution mutations — renamed components, converted units, aliased database columns, reformatted fault codes. A package that memorised surface patterns fails on those, and out-of-distribution robustness carries 10% of the qualified score directly.
 
 **Assuming only the throne pays.** It does not. Every package that clears all
 hard gates is graded on quality, improvement over the strongest reference,
 proximity to the champion, and running cost — and earns a share of emission for
-several windows whether or not it dethroned anything. Getting close is worth
+several runs whether or not it dethroned anything. Getting close is worth
 something; producing something undeployable is not. See
-[what a window pays](#what-a-window-pays) for the split.
+[what a run pays](#what-a-run-pays) for the split.
 
 **Ignoring token spend.** It is now a scored component, and it is measured per
 *completed* instance rather than per attempted one — so giving up early makes it
 worse, not better. Two packages that finish the same fraction of workflows are
 not equally valuable if one costs twice as much to run.
 
-**Committing before evaluating.** A commitment is measured once and the next attempt is a window away. There is no reason to spend one on a package you have not measured.
+**Committing before evaluating.** A commitment is measured once and the next attempt is a run away. There is no reason to spend one on a package you have not measured.
 
-**Assuming a loss is the end.** It is, if you were genuinely measured and genuinely lost. It is not when the engine could not evaluate you — an unreadable memory counter or too few scored instances holds your submission for a later window rather than terminating it. While it waits it earns a small share of emission, which is what keeps it from being deregistered before its turn comes.
+**Assuming a loss is the end.** It is, if you were genuinely measured and genuinely lost. It is not when the engine could not evaluate you — an unreadable memory counter or too few scored instances holds your submission for a later run rather than terminating it. While it waits it earns a small share of emission, which is what keeps it from being deregistered before its turn comes.
 
 ---
 
@@ -506,7 +506,7 @@ Any failure zeroes the candidate.
 
 Two of these say the validator could not measure you rather than that you fell
 short: an unreadable GPU memory counter, and too few instances scored to compare
-on. Neither is scored against you — the window simply does not pay you, and the
+on. Neither is scored against you — the run simply does not pay you, and the
 next commitment is measured on its own terms.
 
 ---
@@ -557,16 +557,16 @@ Building and validating recipes: any machine. Reconstructing an artifact: ~32 GB
 
 ### How often can I submit?
 
-Once per window, in effect. A commitment is measured in the window after the one
+Once per run, in effect. A commitment is measured in the run after the one
 it was made in, so committing again immediately does not buy you a second
-measurement in the same window — it replaces what will be measured in the next
-one. Nothing is terminated, and a loss costs you that window rather than the
+measurement in the same run — it replaces what will be measured in the next
+one. Nothing is terminated, and a loss costs you that run rather than the
 hotkey.
 
 ### Doesn't that make copying cheap?
 
 It makes it slow, which is the part that matters. Reading a published recipe and
-tweaking it costs a window per attempt, and each attempt still has to clear the
+tweaking it costs a run per attempt, and each attempt still has to clear the
 anti-copy check against every commitment already admitted and beat the champion
 by its margin. Iterating toward a win that way is strictly more expensive than
 searching properly, and it is visible the whole time.
@@ -593,7 +593,7 @@ Yes, within `-2.0 … 2.0`. Subtracting an adapter's update is a real operation.
 
 ### How much do local scores predict hidden scores?
 
-Directionally, quite well — same generator, same tools, same scorer. But the hidden set is drawn fresh each window and includes out-of-distribution mutations. And a completion rate over twenty instances has wide enough variance that two recipes differing by a few points are indistinguishable at that sample size.
+Directionally, quite well — same generator, same tools, same scorer. But the hidden set is drawn fresh each run and includes out-of-distribution mutations. And a completion rate over twenty instances has wide enough variance that two recipes differing by a few points are indistinguishable at that sample size.
 
 ### Why is my submission not in the queue?
 
