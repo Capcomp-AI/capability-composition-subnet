@@ -312,19 +312,51 @@ def block_beacon(subtensor: bt.Subtensor, block: int) -> str:
     """
     try:
         info = subtensor.block_info(block)
+        for attribute in ("block_hash", "hash", "parent_hash"):
+            value = getattr(info, attribute, None) or (
+                info.get(attribute) if isinstance(info, dict) else None
+            )
+            if value:
+                return str(value)
     except Exception:
+        # block_info reads the block's *state*, which a pruned (non-archive) node
+        # discards for old blocks. The beacon only needs the block *hash* — a
+        # header field that survives pruning — so fall back to chain_getBlockHash,
+        # which returns the identical value on both archive and pruned nodes.
+        beacon = _block_hash_via_rpc(subtensor, block)
+        if beacon:
+            return beacon
         log.warning("could not read block %s for the draw beacon", block, exc_info=True)
         return ""
 
-    for attribute in ("block_hash", "hash", "parent_hash"):
-        value = getattr(info, attribute, None) or (
-            info.get(attribute) if isinstance(info, dict) else None
-        )
-        if value:
-            return str(value)
-
     log.warning("block %s carried no hash; the draw will not be bound to it", block)
     return ""
+
+
+def _block_hash_via_rpc(subtensor: bt.Subtensor, block: int) -> str:
+    """Fetch a block's hash straight from ``chain_getBlockHash``.
+
+    A header-only lookup that does not touch state, so it works on a pruned node
+    where :meth:`Subtensor.block_info` — which reads state — cannot.
+    """
+    endpoint = getattr(subtensor, "endpoint", None) or getattr(subtensor, "chain_endpoint", None)
+    if not endpoint:
+        return ""
+    url = str(endpoint).replace("ws://", "http://").replace("wss://", "https://")
+    try:
+        import httpx
+
+        response = httpx.post(
+            url,
+            json={"id": 1, "jsonrpc": "2.0", "method": "chain_getBlockHash", "params": [block]},
+            timeout=15.0,
+        )
+        response.raise_for_status()
+        result = response.json().get("result")
+        return str(result) if result else ""
+    except Exception:
+        log.warning("chain_getBlockHash fallback failed for block %s", block, exc_info=True)
+        return ""
 
 
 def window_id_for_block(block: int, window_blocks: int) -> int:
