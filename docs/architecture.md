@@ -234,7 +234,7 @@ That block is public, it is not any participant's to pick, and it does not exist
 
 Deriving from the run's own opening block — `window_id × window_blocks` — rather than from the moment a process happened to start is what makes it checkable and idempotent: a validator restarted mid-run re-derives the seeds it was already using instead of quietly evaluating a different test.
 
-What stops a miner tuning to the instances is not concealment but ordering. The commitment being evaluated is the one standing at the opening block, and one recipe per hotkey is final; learning the instances a moment later is worth nothing, because the recipe is already fixed.
+What stops a miner tuning to the instances is not concealment but ordering. The commitment being evaluated is the one standing at the opening block, and its recipe is fixed before the instances it will face are drawn; learning them a moment later is worth nothing. A hotkey may resubmit in a later run, but each recipe still faces a draw it could not see when it was committed.
 
 The draw holds no secret and commits to nothing, so there is nothing to reveal and nothing to grind. An empty beacon is refused outright rather than falling back to a fixed draw, because a fallback would silently give every run of every deployment the same instances.
 
