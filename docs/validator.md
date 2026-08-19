@@ -4,7 +4,7 @@ A validator decides where emission goes, and it earns that by measuring. There i
 
 | What you need | |
 |---|---|
-| GPU | **4 × 24 GB**, one candidate per card |
+| GPU | **8 × RTX 5090 (32 GB)**, one candidate per card |
 | Adapter pool on disk | ~9 GB |
 | Install | `capability-subnet[merge]` |
 | An operator to trust | None |
@@ -38,31 +38,32 @@ You are not a relay. Before anything touches the chain your validator:
 
 | | |
 |---|---|
-| GPU | **4 × 24 GB**, one candidate per card |
+| GPU | **8 × RTX 5090 (32 GB)**, one candidate per card |
 | CPU | 8 cores |
 | RAM | 32 GB |
 | Disk | 120 GB — base model ~16 GB, adapter pool ~9 GB, artifacts and state |
 | Network | 100 Mbps |
 
 A candidate reserves a fixed **20 GiB** while it is served, so a card needs more
-than that free to hold one. A 24 GB card exposes about 22.0 GiB and serves at
-0.907 utilization; anything smaller is refused at start-up rather than measuring
-a package it cannot fit. The reservation is absolute and the fraction is derived
-from whatever card you have, which is what keeps peak memory a property of the
-package rather than of your hardware — the same candidate peaks near 20.9 GiB on
-a 24 GB card, a 48 GB card and an 80 GB card alike. A larger card therefore does
-not run more candidates; it runs the same one with a smaller fraction.
+than that free to hold one. A 32 GB RTX 5090 exposes about 30.5 GiB and serves
+at 0.66 utilization; a card that cannot clear the 20 GiB reservation is refused
+at start-up rather than measuring a package it cannot fit. The reservation is
+absolute and the fraction is derived from whatever card you have, which is what
+keeps peak memory a property of the package rather than of your hardware — the
+same candidate peaks near 20.9 GiB on a 32 GB card, a 48 GB card and an 80 GB
+card alike. A larger card therefore does not run more candidates; it runs the
+same one with a smaller fraction and more headroom over the latency gate.
 
 Cards are the unit of parallelism. Each one measures a whole candidate at a
-time, so four cards measure four candidates at once and the run's throughput
+time, so eight cards measure eight candidates at once and the run's throughput
 scales with the count. Two candidates sharing a card would contend for memory
 and each would measure the other's footprint as its own.
 
 | Cards | Candidates in flight | Roughly per 72 h run |
 |---|---|---|
 | 1 | 1 | ~23 |
-| 2 | 2 | ~47 |
 | 4 | 4 | ~94 |
+| 8 | 8 | ~188 |
 
 One card still works and is still honest; it measures fewer candidates per
 run. A validator that cannot finish its queue should bound it with
@@ -71,7 +72,7 @@ run. A validator that cannot finish its queue should bound it with
 Point the validator at the cards with `--neuron.devices`:
 
 ```bash
---neuron.devices cuda:0,cuda:1,cuda:2,cuda:3
+--neuron.devices cuda:0,cuda:1,cuda:2,cuda:3,cuda:4,cuda:5,cuda:6,cuda:7
 ```
 
 Each device gets a port of its own, counting up from the one in
@@ -79,7 +80,8 @@ Each device gets a port of its own, counting up from the one in
 
 ### What one candidate costs
 
-Measured on a 24 GB card, for the default run:
+For the default run, per candidate. Evaluation is bounded by the latency gate,
+not the card, so these are an upper bound an RTX 5090 clears comfortably:
 
 | Stage | Cost |
 |---|---|
@@ -98,9 +100,9 @@ about 8%.
 The 540 is this validator's own slice: the shared core plus the tail drawn for
 its hotkey, out of the run's 1350 instances.
 
-> A 24 GB card measures p95 at roughly 24 s against a 25 s gate. That is real
-> but thin headroom, and it is the package's gate that fails when a host is
-> slower — so a card materially slower than this one fails candidates for a
+> An RTX 5090 clears the 25 s p95 gate with comfortable headroom, which is the
+> point of the requirement: it is the package's gate that fails when a host is
+> slow, so a card materially slower than this one can fail candidates for a
 > reason that has nothing to do with them.
 
 ---
