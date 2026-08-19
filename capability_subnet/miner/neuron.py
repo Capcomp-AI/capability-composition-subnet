@@ -9,8 +9,10 @@ judges the artifact a recipe reconstructs to, not the process that produced it �
 so a miner is free to search however it likes, on whatever hardware it likes, and
 none of that ever touches the network.
 
-One recipe per hotkey is final. The neuron therefore refuses to commit without an
-explicit confirmation, and checks everything it can check locally first.
+A hotkey may resubmit, but only once per run — a second commitment in the same
+run replaces the first on-chain and is never evaluated. The neuron therefore
+refuses to commit without an explicit confirmation, and checks everything it can
+check locally first.
 """
 
 from __future__ import annotations
@@ -18,7 +20,13 @@ from __future__ import annotations
 import logging
 import sys
 
-from capability_subnet.common.chain import fetch_metagraph, is_registered, write_commitment
+from capability_subnet.common import constants as C
+from capability_subnet.common.chain import (
+    fetch_metagraph,
+    is_registered,
+    window_id_for_block,
+    write_commitment,
+)
 from capability_subnet.common.commitments import CommitmentError, encode_commitment
 from capability_subnet.common.config import build_config
 from capability_subnet.common.logging import setup_logging
@@ -71,23 +79,27 @@ class MinerNeuron:
             self._graph = fetch_metagraph(self.subtensor, self.config.netuid)
         return self._graph
 
-    def already_committed(self) -> str | None:
-        """This hotkey's existing commitment, if it has one.
+    def already_committed(self):
+        """This hotkey's existing commitment and the current block, if readable.
 
-        One recipe per hotkey is enforced by the engine at admission, so a second
-        commitment is not an error on-chain — it simply will not be evaluated.
-        Checking first turns a silently wasted transaction into a clear message.
+        A hotkey may resubmit, but only once per run. A second commitment in the
+        run the hotkey already committed in replaces the first on-chain and is
+        never evaluated, so it is refused here; a commitment made in a later run
+        is a real resubmission, measured the run after it lands. Returns
+        ``(commitment_or_None, current_block_or_None)``.
         """
         try:
             view = self._metagraph()
         except Exception:  # noqa: BLE001
             log.warning("could not read existing commitments", exc_info=True)
-            return None
+            return None, None
 
         hotkey = self.wallet.hotkey.ss58_address
+        current_block = int(view.block)
         for commitment in view.commitments:
             if commitment.hotkey == hotkey:
-                return commitment.payload.recipe_sha256
+                return commitment, current_block
+        return None, current_block
         return None
 
     # -- submit -------------------------------------------------------------
@@ -134,17 +146,34 @@ class MinerNeuron:
         if not self.check_registered():
             return 3
 
-        existing = self.already_committed()
-        if existing and existing != digest:
-            log.error(
-                "this hotkey has already committed recipe %s. One recipe per hotkey is "
-                "final; register a new hotkey to submit a different package.",
-                existing[:19],
+        existing, current_block = self.already_committed()
+        if existing is not None:
+            if existing.payload.recipe_sha256 == digest:
+                log.info("this recipe is already committed; nothing to do")
+                return 0
+            window_blocks = C.DEFAULT_WINDOW_BLOCKS
+            existing_run = window_id_for_block(existing.block, window_blocks)
+            current_run = (
+                window_id_for_block(current_block, window_blocks)
+                if current_block is not None
+                else existing_run
             )
-            return 4
-        if existing == digest:
-            log.info("this recipe is already committed; nothing to do")
-            return 0
+            if existing_run >= current_run:
+                log.error(
+                    "this hotkey already submitted in run %d; one submission per run. "
+                    "Resubmit once run %d opens — it is then measured in run %d.",
+                    existing_run,
+                    current_run + 1,
+                    current_run + 2,
+                )
+                return 4
+            log.info(
+                "resubmitting: the last commitment was run %d; this one lands in run %d "
+                "and is measured in run %d.",
+                existing_run,
+                current_run,
+                current_run + 1,
+            )
 
         print(describe(recipe, self.snapshot))
         print(f"\ncommitment payload ({len(payload.encode())} bytes):\n  {payload}")
@@ -152,7 +181,8 @@ class MinerNeuron:
         if not self.config.confirm:
             print(
                 "\nNothing was committed. Re-run with --confirm to submit.\n"
-                "This is final: the hotkey gets one evaluation."
+                "One submission per run: this replaces any earlier recipe and is "
+                "measured next run."
             )
             return 0
 
