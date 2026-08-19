@@ -52,7 +52,7 @@ absolute and the fraction is derived from whatever card you have, which is what
 keeps peak memory a property of the package rather than of your hardware — the
 same candidate peaks near 20.9 GiB on a 32 GB card, a 48 GB card and an 80 GB
 card alike. A larger card therefore does not run more candidates; it runs the
-same one with a smaller fraction and more headroom over the latency gate.
+same one with a smaller fraction.
 
 Cards are the unit of parallelism. Each one measures a whole candidate at a
 time, so eight cards measure eight candidates at once and the run's throughput
@@ -80,8 +80,7 @@ Each device gets a port of its own, counting up from the one in
 
 ### What one candidate costs
 
-For the default run, per candidate. Evaluation is bounded by the latency gate,
-not the card, so these are an upper bound an RTX 5090 clears comfortably:
+For the default run, per candidate:
 
 | Stage | Cost |
 |---|---|
@@ -100,10 +99,9 @@ about 8%.
 The 540 is this validator's own slice: the shared core plus the tail drawn for
 its hotkey, out of the run's 1350 instances.
 
-> An RTX 5090 clears the 25 s p95 gate with comfortable headroom, which is the
-> point of the requirement: it is the package's gate that fails when a host is
-> slow, so a card materially slower than this one can fail candidates for a
-> reason that has nothing to do with them.
+> It is the package's latency gate that fails when a host is slow, so a card
+> materially slower than an RTX 5090 can fail candidates for a reason that has
+> nothing to do with them.
 
 ---
 
