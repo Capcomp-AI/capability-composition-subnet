@@ -45,13 +45,13 @@ can rely on. See [examples/README.md](../examples/README.md).
 ## What a run pays
 
 Four fifths of every run burns to the subnet owner's UID. The remaining fifth
-is the miner pool, and the best measured package takes 95% of it.
+is the miner pool, and the best measured package takes 90% of it, and the graded runners-up split the rest by rank.
 
 | Recipient | Share of the miner pool | Share of the run |
 |---|---|---|
 | Burn (subnet owner's UID) | — | 80% |
-| Best measured package | 95% | 19% |
-| Graded runners-up, ranks 2–10 | 5% | 1% |
+| Best measured package | 90% | 18% |
+| Graded runners-up, ranks 2–10 | 10%, by rank | 2% |
 
 Ten miners are paid at most: the leader and nine graded runners-up. Ranking is by
 graded contribution — quality 50%, improvement over the strongest reference 25%,

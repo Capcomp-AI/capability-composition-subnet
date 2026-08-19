@@ -307,7 +307,7 @@ The terms decide how the miner pool is divided; the pool itself is a fifth of th
 | Recipient | Share of the run |
 |---|---|
 | Burn (subnet owner's UID) | 80% |
-| Best measured package | 19% |
+| Best measured package | 18% |
 | Graded runners-up, ranks 2–10 | 1% |
 
 Ten miners are paid at most. The burn goes to the subnet owner's UID resolved from the metagraph rather than to UID 0, which belongs to whichever neuron registered into the first slot.

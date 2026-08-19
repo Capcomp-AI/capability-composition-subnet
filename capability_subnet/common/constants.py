@@ -435,10 +435,10 @@ ALLOWED_INCENTIVE_MODES: Final[tuple[str, ...]] = (
 
 #: Share of the payable emission the champion keeps under the graded mode.
 #:
-#: The throne is the prize and it is meant to be worth taking. At 0.95 the
-#: runners-up split what is left as information about how close they came, not
-#: as a living: a miner who wants emission has to win, not place.
-CHAMPION_BASE_SHARE: Final[float] = 0.95
+#: The throne is the prize and it is meant to be worth taking. At 0.90 the
+#: runners-up split what is left by rank as information about how close they
+#: came, not as a living: a miner who wants emission has to win, not place.
+CHAMPION_BASE_SHARE: Final[float] = 0.90
 
 #: How a non-champion's grade is composed. Quality dominates: a package that
 #: does not finish workflows is not made valuable by being cheap, or by being

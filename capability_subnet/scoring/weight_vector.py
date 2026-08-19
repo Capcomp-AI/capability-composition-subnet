@@ -325,14 +325,20 @@ def graded_contribution(
             )
         )
 
-    total_grade = sum(grade for _, _, grade in graded)
-    if graded and total_grade > 0.0:
-        for uid, hotkey, grade in graded:
+    count = len(graded)
+    if count > 0 and graded_pool > 0.0:
+        # Split by rank, not by grade: the runner-up takes the most and it tapers
+        # down the ranked field. Weights count, count-1, ..., 1 normalised to the
+        # graded pool, so a higher place always pays more than a lower one — by
+        # position, not by how the grades happened to cluster. `graded` is
+        # already sorted best-first, so index 0 is the runner-up.
+        denominator = count * (count + 1) / 2
+        for index, (uid, hotkey, _grade) in enumerate(graded):
             entries.append(
                 WeightEntry(
                     uid=uid,
                     hotkey=hotkey,
-                    weight=graded_pool * (grade / total_grade),
+                    weight=graded_pool * (count - index) / denominator,
                     role="contributor",
                 )
             )

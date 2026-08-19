@@ -232,7 +232,7 @@ Expect roughly 15 minutes of reconstruction per candidate that uses a trimming m
 |---|---|
 | `winner_take_all` | The throne takes the whole payable share |
 | `graded_top3` | 60/25/15 across the top three |
-| `graded_contribution` | 80% burns; the best measured package takes 95% of the remaining fifth and ranks 2–10 split the other 5% |
+| `graded_contribution` | 80% burns; the best measured package takes 90% of the remaining fifth and ranks 2–10 split the other 10% by rank |
 
 Under `graded_contribution` a run pays at most ten miners — the leader and
 nine graded runners-up — and burns anything nobody earned rather than promoting
@@ -241,7 +241,7 @@ it into the leader's share:
 | Recipient | Share of the run |
 |---|---|
 | Burn (subnet owner's UID) | 80% |
-| Best measured package | 19% |
+| Best measured package | 18% |
 | Graded runners-up, ranks 2–10 | 1% |
 
 Grades come from the four terms in the published contract: quality 50%,

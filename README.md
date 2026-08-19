@@ -108,13 +108,14 @@ Miners still waiting in the queue earn a small tapered share, so an unevaluated 
 
 Under `graded_contribution`, four fifths of every run burns to the subnet
 owner's UID and the remaining fifth is the miner pool. The best measured package
-takes 95% of that pool; the graded runners-up split the other 5%.
+takes 90% of that pool; the graded runners-up split the other 10% by rank, the
+runner-up most, tapering down the field.
 
 | Recipient | Share of the miner pool | Share of the run |
 |---|---|---|
 | Burn (subnet owner's UID) | — | 80% |
-| Best measured package | 95% | 19% |
-| Graded runners-up, ranks 2–10 | 5% | 1% |
+| Best measured package | 90% | 18% |
+| Graded runners-up, ranks 2–10 | 10%, by rank | 2% |
 
 At most ten miners are paid in one run: the leader and nine graded runners-up.
 A share nobody earned burns rather than being promoted into the leader's — a

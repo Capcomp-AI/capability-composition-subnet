@@ -183,9 +183,10 @@ def incentive_contract() -> dict[str, Any]:
         },
         "note": (
             "Four fifths of a window burns to the subnet owner's UID. The best "
-            "measured package takes 95% of the remaining fifth and the graded "
-            "runners-up split the other 5%, so a submission that moved the state of "
-            "the art without leading is still paid for what it contributed. At most "
+            "measured package takes 90% of the remaining fifth and the graded "
+            "runners-up split the other 10% by rank, so a submission that moved the "
+            "state of the art without leading is still paid for what it contributed. "
+            "At most "
             "ten miners are paid: the leader and nine graded runners-up. Grading is "
             "on quality, improvement, proximity and cost, and only candidates "
             "clearing every hard gate are graded. If nothing qualifies, the share is "
