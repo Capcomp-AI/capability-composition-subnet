@@ -116,7 +116,28 @@ def build_local_artifact(
     pool = snapshot or load_snapshot()
     source = SafetensorsAdapterSource(pool_dir)
     result = reconstruct(recipe, pool, source, output_dir=output_dir, device=device)
-    return result.artifact_sha256, result.size_bytes, Path(output_dir)
+    artifact_sha256, size_bytes = result.artifact_sha256, result.size_bytes
+    del result
+
+    # The merge allocated the base model and adapters on ``device`` to build the
+    # artifact, which is now written to ``output_dir``. Release that memory
+    # before returning: a validator serves the artifact through vLLM on the same
+    # card straight after, and vLLM sizes its KV cache against what is free. Left
+    # held, the reconstruction's few gigabytes are enough to make the runtime's
+    # engine core fail to start, which reads as every candidate failing to be
+    # measured.
+    if str(device).startswith("cuda"):
+        try:
+            import gc
+
+            import torch
+
+            gc.collect()
+            torch.cuda.empty_cache()
+        except Exception:  # pragma: no cover - a free that cannot run is not fatal
+            pass
+
+    return artifact_sha256, size_bytes, Path(output_dir)
 
 
 def evaluate_locally(
