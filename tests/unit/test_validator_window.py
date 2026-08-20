@@ -128,19 +128,19 @@ class TestOneBadSubmissionCannotTaxTheRest:
         assert sum(e.weight for e in out.weights.entries) == pytest.approx(1.0)
 
 
-class TestACopyCannotTakeTheSlotItCopied:
-    def test_an_indistinguishable_later_commitment_ranks_second(self, recipe_factory):
-        """Two scores closer than this validator's slice can resolve are one
-        measurement repeated, and the earlier commitment wins the tie."""
+class TestRankingIsByScoreAlone:
+    def test_a_higher_score_outranks_an_earlier_commitment(self, recipe_factory):
+        """Commit time gives no advantage. The higher measured score ranks first,
+        even when a lower-scoring submission committed earlier."""
         r = recipe_factory()
-        original = _candidate(1, r, first_block=100)
-        copy = _candidate(2, r, first_block=900)
+        early_lower = _candidate(1, r, first_block=100)
+        later_higher = _candidate(2, r, first_block=900)
         out = _run(
-            [copy, original],  # deliberately out of commitment order
+            [early_lower, later_higher],  # deliberately out of commitment order
             _scorer({"5HOT1": 0.5000, "5HOT2": 0.5001}),
         )
         weights = {e.uid: e.weight for e in out.weights.entries}
-        assert weights.get(1, 0) > weights.get(2, 0)
+        assert weights.get(2, 0) > weights.get(1, 0)
 
 
 class TestSuspicionNeverCostsAMiner:

@@ -172,9 +172,9 @@ Five independent bars, all of which must clear:
 
 **Base retention does not move with it.** A package that destroyed the base model's general ability is not deployable whatever it scored, so that gate stays hard in both modes.
 
-Turning bar 3 off opens a hole that bar 4 was quietly closing, and it is closed separately. Under a margin rule a copy of the leader could not displace it, because identical scores are not a margin. Under highest-score-wins a copy *ties* — and since no two evaluations of two distinct artifacts land on exactly the same number, a copy with one coefficient nudged takes the top slot roughly half the time on sampling noise alone. Recipes are public, so this is read-and-resubmit rather than a hypothetical.
+Ranking is by measured score alone: the higher qualified score ranks first, and commit time gives no advantage — an earlier submission is never advanced over a higher-scoring later one. An exact score tie, which two distinct artifacts effectively never produce, falls back to uid only to keep the order stable.
 
-So submissions closer together than the run can **resolve** are ranked as tied, and ties resolve to the earliest commitment. A copier commits later by construction, so it has to be measurably better — the same bar the margin enforced, expressed in the units the evidence actually supports. Indistinguishability is not transitive, so ranking groups maximal runs into equivalence classes rather than swapping pairs.
+The throne itself is copy-proof without ranking help. A challenger has to beat the strongest reference — the incumbent included — by an absolute end-to-end margin, and a copy of the champion cannot beat the thing it copied by any margin. So a read-and-resubmit copy can, at most, place ahead in the runner-up order on sampling noise; it can never take the crown.
 
 Bars 3 and 4 are separate. If the incumbent counted among the references, every successive champion would have to beat the previous one by a further margin, and since completion is bounded by one that bar walks upward until nothing can move it.
 
@@ -246,7 +246,7 @@ Recipes are public — they have to be, or nobody could verify an evaluation. So
 
 - **Earliest commit wins**, checked on the recipe digest at admission and again on the reconstructed artifact digest. Two differently-worded recipes that build the same bytes are the same package.
 - **One measurement per commitment.** Copying costs a run per attempt and buys nothing.
-- **Defender advantage.** A copy has to be *measurably* better, not merely higher. Under the strict contract that is the dethrone margin; under the default it is the tie rule — scores closer than the run can resolve are ranked equal and ties resolve to the earliest commitment, so a later copy cannot displace what it copied on sampling noise.
+- **Defender advantage.** The throne is held by a margin, in both contracts: a challenger must beat the strongest reference — the incumbent included — by an absolute end-to-end margin, and a copy cannot beat the thing it copied by any margin. Ranking itself is by score alone and gives an earlier commitment no edge, so a copy can at most place ahead in the runner-up order on sampling noise; it can never take the crown.
 
 The third point is what makes the first two sufficient. Even a copy nobody detected cannot win.
 
@@ -289,7 +289,7 @@ Quality carries 85%, efficiency 15% — a cheap package that does not finish the
 
 ## Who gets paid
 
-Ranking decides who leads — the dethrone rule under the strict contract, the tie-aware leaderboard by default. Either way it is far too blunt to also decide who gets *paid*, because almost every submission that is ever evaluated will fail to lead — and a commitment buys one measurement a run apart, so a miner cannot iterate on it the way a code-submitting miner can. Paying a miner who moved completion from 0.41 to 0.58 exactly what it pays one that submitted a soup of distractors leaves the second attempt no better informed than the first, in a network whose entire purpose is to learn which adapters compose.
+Ranking decides who leads — the dethrone rule under the strict contract, the highest-score leaderboard by default. Either way it is far too blunt to also decide who gets *paid*, because almost every submission that is ever evaluated will fail to lead — and a commitment buys one measurement a run apart, so a miner cannot iterate on it the way a code-submitting miner can. Paying a miner who moved completion from 0.41 to 0.58 exactly what it pays one that submitted a soup of distractors leaves the second attempt no better informed than the first, in a network whose entire purpose is to learn which adapters compose.
 
 So the top slot is winner-takes-most and everything below it is graded:
 

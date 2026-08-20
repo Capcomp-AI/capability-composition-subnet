@@ -38,10 +38,9 @@ class Candidate:
     uid: int
     hotkey: str
     recipe: Recipe
-    #: Block the commitment was made at. Carried because it is the tie-break:
-    #: when two submissions are closer than the window can resolve, the earlier
-    #: commitment ranks first, which is what stops a copy taking a slot from the
-    #: thing it copied.
+    #: Block the commitment was made at. Carried for the record and for audit;
+    #: it no longer affects ranking, which is by measured score alone. A copy is
+    #: kept off the throne by the champion margin, not by commit order.
     first_block: int = 0
 
 
@@ -240,11 +239,10 @@ def _weights_from(
     reward a recipe that does not reconstruct; charging the window for it would
     let one broken submission tax everybody else.
 
-    ``resolvable`` is this validator's own figure, not the network's. It measured
-    a slice of the window rather than all of it, so the gap it can honestly
-    separate is wider than the full draw's — and two candidates inside that gap
-    are one measurement repeated, which the ranking treats as a tie broken by
-    who committed first.
+    ``resolvable`` is this validator's own figure, not the network's, and is
+    carried on each submission for audit and for :func:`tied`. Ranking itself no
+    longer consults it: submissions are ordered by measured score alone, with no
+    advantage to whoever committed first.
     """
     by_hotkey = {c.hotkey: c for c in candidates}
     resolvable = minimum_detectable_effect(len(outcome.assignment))
