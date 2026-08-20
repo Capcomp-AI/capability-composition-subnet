@@ -536,6 +536,34 @@ DEFAULT_BURN_PERCENTAGE: Final[float] = 0.0
 # Sandbox execution
 # ---------------------------------------------------------------------------
 
+#: How many instances a candidate is asked at once while accuracy is measured.
+#:
+#: One at a time left the card decode-bound and idle between tokens of a single
+#: stream: measured on this corpus, sequential runs 15.89s an instance and
+#: continuous batching at 32 runs 1.08s — 14.7x, on identical hardware and
+#: identical greedy settings. A window that spent seven hours a package spends
+#: half an hour.
+#:
+#: Consensus-relevant, and not only for cadence. Batch composition changes
+#: kernel selection and reduction order, so a batched reply is not token-identical
+#: to a sequential one — measured, 1 of 48 replies matched. Every package in a
+#: window is therefore asked the same way, and the number is pinned so that two
+#: validators ask the same way as each other.
+SANDBOX_BATCH_CONCURRENCY: Final[int] = 32
+
+#: Instances at the head of each draw run one at a time, to time them.
+#:
+#: Latency is a scored term and a hard gate, and a request that queued behind
+#: thirty others has a wall clock that describes the batch rather than the
+#: package. Those rows are marked ``timed=False`` and ignored by the latency
+#: term and the p95 gate alone — they score normally everywhere else.
+#:
+#: A deterministic prefix rather than a random sample, so an auditor replaying a
+#: window knows exactly which rows carried the timing. Fifty is enough for a p95
+#: estimate and costs about thirteen minutes against a batched sweep of
+#: twenty-five.
+SANDBOX_LATENCY_SAMPLE: Final[int] = 50
+
 SANDBOX_TEMPERATURE: Final[float] = 0.0
 SANDBOX_TOP_P: Final[float] = 1.0
 

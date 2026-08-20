@@ -36,6 +36,24 @@ def valid_rows(results: list[InstanceResult]) -> list[InstanceResult]:
     return [row for row in results if row.is_valid_sample]
 
 
+def timed_rows(results: list[InstanceResult]) -> list[InstanceResult]:
+    """Valid rows whose wall clock is an uncontended measurement.
+
+    Accuracy is measured under continuous batching, where many instances are in
+    flight at once and a single request's wall clock reflects how full the batch
+    was rather than what the package costs to run. Those rows score normally and
+    are excluded from latency alone; a deterministic prefix of every draw is run
+    one at a time to supply the timing.
+
+    Falls back to every valid row when nothing is marked, which is what a
+    fully sequential run — and every trace written before the distinction
+    existed — looks like.
+    """
+    rows = valid_rows(results)
+    timed = [row for row in rows if row.timed]
+    return timed or rows
+
+
 def end_to_end_completion(results: list[InstanceResult]) -> float:
     """Fraction of instances completed correctly from start to finish."""
     rows = valid_rows(results)
@@ -152,7 +170,7 @@ def measure_resources(
 ) -> ResourceMeasurements:
     """Aggregate the per-instance measurements."""
     rows = valid_rows(results)
-    durations = sorted(row.wall_seconds for row in rows)
+    durations = sorted(row.wall_seconds for row in timed_rows(results))
 
     return ResourceMeasurements(
         adapter_mb=artifact_bytes / (1024 * 1024),
@@ -203,7 +221,7 @@ def aggregate_scores(
     balance = stage_balance(hidden_results, stages)
     ood = end_to_end_completion(ood_results)
 
-    durations = sorted(row.wall_seconds for row in rows)
+    durations = sorted(row.wall_seconds for row in timed_rows(hidden_results))
     latency = latency_efficiency(percentile(durations, 0.5), efficiency.reference_seconds)
     artifact = artifact_efficiency(efficiency.artifact_bytes, efficiency.peak_vram_gb)
     tokens = token_efficiency(hidden_results)

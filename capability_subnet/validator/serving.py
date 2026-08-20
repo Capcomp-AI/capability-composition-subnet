@@ -177,7 +177,10 @@ def build_command(
         "--kv-cache-dtype",
         "fp8",
         "--max-num-seqs",
-        "1",
+        # The server must admit at least as many sequences as the evaluator puts
+        # in flight, or continuous batching is throttled back to one at the
+        # runtime and the client just queues.
+        str(C.SANDBOX_BATCH_CONCURRENCY),
     ]
 
 

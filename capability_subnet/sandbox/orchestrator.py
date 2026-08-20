@@ -17,6 +17,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from capability_subnet.common import constants as C
 from capability_subnet.common.schemas import InstanceResult, StageResult
 from capability_subnet.common.trace import ExecutionTrace
 from capability_subnet.sandbox.agent_runner import measure_turns, run_agent_loop
@@ -155,8 +156,10 @@ def run_batch(
     config: SandboxConfig | None = None,
     on_result: Any = None,
     runner: Any = None,
+    concurrency: int = C.SANDBOX_BATCH_CONCURRENCY,
+    timed_prefix: int = C.SANDBOX_LATENCY_SAMPLE,
 ) -> list[SandboxOutcome]:
-    """Run a set of instances in sequence.
+    """Ask a package every instance in the draw, and time a prefix of them.
 
     ``runner`` is the workflow's own :func:`run_instance`, because workflows
     differ in how a package is *asked*, not only in what it is asked. Defaulting
@@ -164,22 +167,68 @@ def run_batch(
     the agent-loop workflow; anything driving a configured workflow must pass
     that workflow's runner, or it will ask every workflow the first one's way.
 
-    Sequential on purpose. The GPU serving one candidate is assigned to one
-    sandbox at a time, so overlapping instances would contend for it and make the
-    latency measurement — which is a scored quantity — meaningless. Concurrency
-    lives one level up, across candidates, not inside one candidate's run.
+    Two phases, because accuracy and latency want opposite things from the GPU.
+
+    The first ``timed_prefix`` instances run **one at a time**. Latency is a
+    scored term and a hard gate, and a request that queued behind thirty others
+    has a wall clock describing the batch rather than the package, so the timing
+    has to come from somewhere uncontended. A deterministic prefix rather than a
+    random sample, so an auditor replaying the window knows which rows carried
+    it.
+
+    Everything after that runs at ``concurrency``, and those rows are marked
+    ``timed=False``. They score exactly as they always did — only the latency
+    term and the p95 gate skip them. This is where the time goes: one at a time
+    the card is decode-bound and idle between tokens of a single stream, and
+    measured on this corpus batching at 32 is 14.7x faster.
+
+    Results come back in instance order regardless of completion order, because
+    a caller comparing two packages row by row must not see them permuted by
+    which request happened to finish first.
     """
-    outcomes: list[SandboxOutcome] = []
-    for index, instance in enumerate(instances, start=1):
-        outcome = (runner or run_instance)(instance, client, config=config)
-        outcomes.append(outcome)
+    from concurrent.futures import ThreadPoolExecutor
+
+    call = runner or run_instance
+    total = len(instances)
+    outcomes: list[SandboxOutcome | None] = [None] * total
+    completed = 0
+
+    def record(index: int, outcome: SandboxOutcome, timed: bool) -> None:
+        nonlocal completed
+        # The row keeps its wall clock either way; the flag says whether the
+        # number means anything about the package.
+        outcome.result.timed = timed
+        outcomes[index] = outcome
+        completed += 1
         if on_result is not None:
-            on_result(index, len(instances), outcome)
+            on_result(completed, total, outcome)
         log.debug(
-            "%s: %s (%.1fs, %d turns)",
-            instance.instance_id,
+            "%s: %s (%.1fs, %d turns%s)",
+            instances[index].instance_id,
             "success" if outcome.result.end_to_end_success else "failure",
             outcome.result.wall_seconds,
             outcome.result.turns_used,
+            "" if timed else ", batched",
         )
-    return outcomes
+
+    head = max(0, min(timed_prefix, total))
+    for index in range(head):
+        record(index, call(instances[index], client, config=config), True)
+
+    tail = list(range(head, total))
+    if tail:
+        workers = max(1, concurrency)
+        if workers == 1:
+            for index in tail:
+                record(index, call(instances[index], client, config=config), True)
+        else:
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                from concurrent.futures import as_completed
+
+                futures = {
+                    pool.submit(call, instances[i], client, config=config): i for i in tail
+                }
+                for future in as_completed(futures):
+                    record(futures[future], future.result(), False)
+
+    return [o for o in outcomes if o is not None]

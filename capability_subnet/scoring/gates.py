@@ -17,7 +17,7 @@ import statistics
 
 from capability_subnet.common import constants as C
 from capability_subnet.common.schemas import CandidateScores, GateVerdict, InstanceResult
-from capability_subnet.scoring.aggregate import percentile, valid_rows
+from capability_subnet.scoring.aggregate import percentile, timed_rows, valid_rows
 
 #: Gates whose failure says something about the *engine*, not the candidate.
 #:
@@ -172,7 +172,7 @@ def gate_peak_vram(peak_vram_gb: float | None, *, require_measurement: bool = Tr
 
 
 def gate_latency(hidden_results: list[InstanceResult]) -> GateVerdict:
-    durations = sorted(row.wall_seconds for row in valid_rows(hidden_results))
+    durations = sorted(row.wall_seconds for row in timed_rows(hidden_results))
     if not durations:
         # No scored run means no latency was observed. That is the engine
         # failing to gather evidence, not the candidate being slow, and it gets
