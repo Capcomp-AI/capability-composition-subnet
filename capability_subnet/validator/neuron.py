@@ -399,7 +399,6 @@ class ValidatorNeuron:
                     "stage_balance": round(scores.stage_balance, 6),
                     "ood": round(scores.ood, 6),
                     "retention": round(scores.retention, 6),
-                    "latency": round(scores.latency, 6),
                     "token_efficiency": round(scores.token_efficiency, 6),
                     "artifact_efficiency": round(scores.artifact_efficiency, 6),
                     "valid_samples": scores.valid_samples,
@@ -410,14 +409,13 @@ class ValidatorNeuron:
         for row in sorted(rows, key=lambda r: -r["qualified_score"]):
             if row["usable"]:
                 log.info(
-                    "  uid %-3s score %.4f  e2e %.3f ood %.3f ret %.3f lat %.3f tok %.3f  "
+                    "  uid %-3s score %.4f  e2e %.3f ood %.3f ret %.3f tok %.3f  "
                     "(%s/%s instances)",
                     row["uid"],
                     row["qualified_score"],
                     row["end_to_end"],
                     row["ood"],
                     row["retention"],
-                    row["latency"],
                     row["token_efficiency"],
                     row["valid_samples"],
                     row["total_samples"],

@@ -146,7 +146,6 @@ def measure_resources(
 
     return ResourceMeasurements(
         adapter_mb=artifact_bytes / (1024 * 1024),
-        p95_workflow_seconds=percentile(durations, 0.95),
         mean_workflow_seconds=statistics.fmean(durations) if durations else 0.0,
         input_tokens=sum(row.input_tokens for row in rows),
         output_tokens=sum(row.output_tokens for row in rows),
@@ -157,8 +156,8 @@ def measure_resources(
 def percentile(sorted_values: list[float], fraction: float) -> float:
     """Nearest-rank percentile of an already-sorted list.
 
-    Nearest-rank rather than interpolated: the latency gate is a promise about
-    an observed run, and interpolating invents a duration that never happened.
+    Nearest-rank rather than interpolated: a reported percentile is a statement
+    about an observed run, and interpolating invents a value that never happened.
     """
     if not sorted_values:
         return 0.0

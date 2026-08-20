@@ -140,7 +140,9 @@ def gate_artifact_size(artifact_bytes: int) -> GateVerdict:
 def gate_agent_limits(hidden_results: list[InstanceResult]) -> GateVerdict:
     rows = valid_rows(hidden_results)
     if not rows:
-        return gate("latency_unmeasured", False, "no completed instances to measure")
+        return gate(
+            "sample_sufficiency", False, "no completed instances to check against the limits"
+        )
 
     worst_turns = max(row.turns_used for row in rows)
     worst_tokens = max(row.output_tokens for row in rows)

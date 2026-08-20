@@ -38,7 +38,7 @@ def scores(**overrides) -> CandidateScores:
         "stage_balance": 0.90,
         "ood": 0.70,
         "retention": 1.00,
-        "latency": 1.00,
+        "token_efficiency": 1.00,
         "artifact_efficiency": 0.50,
     }
     values.update(overrides)
