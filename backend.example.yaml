@@ -173,8 +173,8 @@ serving_gpu_index: 0
 #
 # Note the fraction also decides peak memory, which is gated: on a large card
 # 0.78 can exceed the 24 GiB limit on its own, before any candidate is served.
-serving_max_model_len: 40960
-serving_gpu_memory_utilization: 0.5418
+serving_max_model_len: 8192
+serving_gpu_memory_utilization: 0.4168
 
 # The interpreter vLLM runs under. Empty uses the engine's own; set it when vLLM
 # has its own virtualenv, which is common because it pins torch tightly.

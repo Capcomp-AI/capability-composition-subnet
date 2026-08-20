@@ -44,15 +44,13 @@ You are not a relay. Before anything touches the chain your validator:
 | Disk | 120 GB — base model ~16 GB, adapter pool ~9 GB, artifacts and state |
 | Network | 100 Mbps |
 
-A candidate reserves a fixed **26 GiB** while it is served, so a card needs more
+A candidate reserves a fixed **20 GiB** while it is served, so a card needs more
 than that free to hold one. A 32 GB RTX 5090 exposes about 30.5 GiB and serves
-at 0.81 utilization; a card that cannot clear the 26 GiB reservation is refused
-at start-up rather than measuring a package it cannot fit. **32 GB is now a
-floor, not a recommendation** — a 24 GB card exposes about 21.7 GiB free and
-cannot host a measurement at all. The reservation is
+at 0.66 utilization; a card that cannot clear the 20 GiB reservation is refused
+at start-up rather than measuring a package it cannot fit. The reservation is
 absolute and the fraction is derived from whatever card you have, which is what
 keeps peak memory a property of the package rather than of your hardware — the
-same candidate peaks near 26.4 GiB on a 32 GB card, a 48 GB card and an 80 GB
+same candidate peaks near 20.9 GiB on a 32 GB card, a 48 GB card and an 80 GB
 card alike. A larger card therefore does not run more candidates; it runs the
 same one with a smaller fraction.
 
@@ -377,7 +375,7 @@ curl https://<engine-host>/health
 
 ## Requirements
 
-See [Hardware](#hardware) above: a validator needs a card of at least 32 GB, and as many as it can run.
+See [Hardware](#hardware) above: a validator needs 32 GB cards, and measures one candidate per card across every card it has.
 
 See [min_compute.yml](../min_compute.yml).
 

@@ -82,11 +82,7 @@ class TestTheReservationIsTheSameEverywhere:
     one refuses what the other passes for a reason that is not the miner's.
     """
 
-    # 24.0 is gone from this list on purpose. SERVING_RESERVED_GIB is 26 GiB
-    # now, so a 24 GB card cannot host a measurement at all and utilization_for
-    # refuses it rather than squeezing — which is what the validator floor
-    # moving to 32 GB means in code.
-    @pytest.mark.parametrize("total", [31.39, 47.4, 79.2])
+    @pytest.mark.parametrize("total", [24.0, 31.39, 47.4, 79.2])
     def test_the_same_absolute_memory_is_reserved_on_any_card(self, total):
         reserved = utilization_for(total) * total
         assert reserved == pytest.approx(C.SERVING_RESERVED_GIB, abs=1e-6)
