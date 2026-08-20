@@ -162,7 +162,19 @@ class Recipe(StrictModel):
         description="Digest of the frozen certified adapter snapshot.",
     )
     selected_adapters: list[str] = Field(
-        description="Adapter IDs drawn from the certified pool, in any order.",
+        # The bounds are declared on the field, not only in the validator below,
+        # so they reach the exported JSON Schema as minItems/maxItems. A field
+        # validator does not: the published contract carried the cap in prose
+        # while its machine-readable schema left the array unbounded, and a
+        # miner generating recipes against that schema was told nothing until
+        # the engine refused the commitment it had already paid to make.
+        min_length=C.MIN_SELECTED_ADAPTERS,
+        max_length=C.MAX_SELECTED_ADAPTERS,
+        description=(
+            f"Adapter IDs drawn from the certified pool, in any order. "
+            f"Between {C.MIN_SELECTED_ADAPTERS} and {C.MAX_SELECTED_ADAPTERS}, "
+            f"no duplicates."
+        ),
     )
     merge: MergeSpec
     global_weights: dict[str, float] = Field(

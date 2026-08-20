@@ -308,6 +308,10 @@ def _merge_site_delta_space(
         merged,
         recipe.compression.output_rank,
         clamp_quantile=recipe.compression.svd_clamp_quantile,
+        # Keyed on the recipe seed and this site, so the randomised sketch inside
+        # cannot depend on how many sites were factorised before it — the same
+        # rule every other stochastic step in this engine follows.
+        seed_parts=(recipe.merge.random_seed, site.name),
     )
     del merged
 

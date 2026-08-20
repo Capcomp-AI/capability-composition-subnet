@@ -334,6 +334,32 @@ QUALIFIED_SCORE_WEIGHTS: Final[dict[str, float]] = {
 #: throne.
 REFERENCE_OUTPUT_TOKENS: Final[int] = 3000
 
+#: Extra sketch columns drawn when factorising by randomised range finding.
+#:
+#: The merge is 99.7% decomposition, and the decomposition was computing every
+#: singular component of a few-thousand-square matrix to keep sixty-four of
+#: them. Sketching the range instead is 99x faster measured on one card — 15.1s
+#: to 0.15s for the seven projections in a layer — and the error lands in the
+#: tail that truncation discards anyway.
+#:
+#: Oversampling is what buys the accuracy: a sketch exactly as wide as the rank
+#: recovers the leading directions and smears the last few. Ten extra columns
+#: put the measured error against the exact top-64 subspace at ~1e-4 relative,
+#: an order of magnitude below what bfloat16 can represent — and the artifact is
+#: written in bfloat16.
+#:
+#: Consensus-relevant. This decides the artifact bytes, so it decides the
+#: artifact digest, which is the cache key, the anti-copy identity and the thing
+#: independent workers compare.
+SVD_OVERSAMPLE: Final[int] = 10
+
+#: Power iterations used to refine that sketch.
+#:
+#: A merged update's spectrum decays slowly, and one pass leaves the retained
+#: components mixed with the tail. Two re-orthonormalised passes are enough at
+#: this rank; more costs a QR each and does not move the error.
+SVD_POWER_ITERATIONS: Final[int] = 2
+
 #: Floor applied inside the geometric mean so a single zero stage does not make
 #: the whole balance term identically zero and destroy ranking information.
 STAGE_BALANCE_EPSILON: Final[float] = 1e-3

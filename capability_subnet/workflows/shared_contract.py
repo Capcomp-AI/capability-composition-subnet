@@ -45,7 +45,15 @@ def source_pool_contract(snapshot) -> dict[str, Any]:
         "canonical_rank": snapshot.registry.canonical_rank,
         "canonical_lora_alpha": snapshot.registry.canonical_lora_alpha,
         "target_modules": list(snapshot.registry.canonical_target_modules),
-        "adapters": list(snapshot.adapter_ids),
+        # Only what a recipe may actually name. Publishing every id in the
+        # registry included adapters that are present but not certified for
+        # selection, so the contract advertised a pool a third larger than the
+        # one the engine would accept from — and a recipe that used one was
+        # refused for naming an adapter the contract had listed.
+        "adapters": list(snapshot.registry.selectable_ids),
+        "unselectable": sorted(
+            set(snapshot.adapter_ids) - set(snapshot.registry.selectable_ids)
+        ),
         "distractors": list(snapshot.registry.distractors()),
     }
 

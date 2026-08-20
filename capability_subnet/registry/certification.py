@@ -46,6 +46,20 @@ class GateResult:
         return self.passed
 
 
+#: Gates that decide whether these tensors may be loaded at all.
+#:
+#: Kept apart from the capability gates because they answer a different question
+#: and gate different things — the module docstring says so, and until now the
+#: code did not: ``admitted`` required every gate, so an adapter that was
+#: perfectly safe to load but had never been *measured* was recorded as having
+#: failed structural admission. Four rank-converted adapters sat unselectable on
+#: that basis while being finite, correctly shaped and free of executable
+#: content.
+STRUCTURAL_GATES: frozenset[str] = frozenset(
+    {"exists", "security", "config", "base_revision", "shapes", "numerical", "license"}
+)
+
+
 @dataclass(frozen=True, slots=True)
 class CertificationOutcome:
     adapter_id: str
@@ -56,10 +70,27 @@ class CertificationOutcome:
     def failures(self) -> list[GateResult]:
         return [gate for gate in self.gates if not gate.passed]
 
+    @property
+    def structurally_admitted(self) -> bool:
+        """Whether the weights are safe to load, measurements aside.
+
+        This is what ``AdapterEntry.certified`` records and what selection is
+        gated on. Whether anyone has characterised the adapter is a separate
+        question, answered by :attr:`measured`.
+        """
+        return all(g.passed for g in self.gates if g.name in STRUCTURAL_GATES)
+
+    @property
+    def measured(self) -> bool:
+        """Whether the capability and conversion gates also passed."""
+        return all(g.passed for g in self.gates if g.name not in STRUCTURAL_GATES)
+
     def summary(self) -> str:
         if self.admitted:
             return f"{self.adapter_id}: admitted ({len(self.gates)} gates passed)"
         names = ", ".join(gate.name for gate in self.failures())
+        if self.structurally_admitted:
+            return f"{self.adapter_id}: loadable and selectable, not yet measured ({names})"
         return f"{self.adapter_id}: rejected (failed: {names})"
 
 
@@ -333,6 +364,12 @@ def certify_adapter(
     gates.append(check_conversion_recertified(converted_from_rank, recertified_after_conversion))
 
     admitted = all(gate.passed for gate in gates)
-    digest = sha256_file(adapter_path / "adapter_model.safetensors") if admitted else None
+    # Hash anything safe to load, not only the fully measured. The digest is the
+    # artifact's identity and the registry needs it to admit the adapter to the
+    # pool at all; withholding it from a structurally sound but unmeasured
+    # adapter is what kept four of them out of the pool entirely rather than
+    # merely out of the reference set.
+    structural = all(g.passed for g in gates if g.name in STRUCTURAL_GATES)
+    digest = sha256_file(adapter_path / "adapter_model.safetensors") if structural else None
 
     return CertificationOutcome(adapter_id, admitted, digest, tuple(gates))

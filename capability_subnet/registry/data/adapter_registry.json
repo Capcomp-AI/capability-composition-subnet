@@ -815,7 +815,7 @@
       "rank": 64,
       "lora_alpha": 64,
       "converted_from_rank": 256,
-      "certified": false,
+      "certified": true,
       "is_distractor": false,
       "certification": {
         "capability_score": null,
@@ -843,7 +843,7 @@
       "rank": 64,
       "lora_alpha": 64,
       "converted_from_rank": 256,
-      "certified": false,
+      "certified": true,
       "is_distractor": false,
       "certification": {
         "capability_score": null,
@@ -871,7 +871,7 @@
       "rank": 64,
       "lora_alpha": 64,
       "converted_from_rank": 128,
-      "certified": false,
+      "certified": true,
       "is_distractor": false,
       "certification": {
         "capability_score": null,
@@ -899,7 +899,7 @@
       "rank": 64,
       "lora_alpha": 64,
       "converted_from_rank": 128,
-      "certified": false,
+      "certified": true,
       "is_distractor": false,
       "certification": {
         "capability_score": null,
