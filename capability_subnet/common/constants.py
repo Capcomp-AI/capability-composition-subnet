@@ -275,16 +275,6 @@ MAX_ARTIFACT_BYTES: Final[int] = 500 * 1024 * 1024  # 500 MB
 # substituted the ceiling — so the engine scored a headroom term that no
 # validator reproduced. Deployment cost is now artifact size alone, which is a
 # property of the recipe and identical everywhere.
-#: p95 wall-clock for one instance, end to end. Lowered from 30s: latency is a
-#: dimension miners should be competing on, and a ceiling loose enough that
-#: nothing ever approaches it is not a gate, it is decoration.
-#:
-#: 25s is measured headroom, not a guess. A pinned 8B on one shared 4090 with
-#: CUDA graphs answers an instance in ~18s; the same card with graphs disabled
-#: took ~36s and failed at 30. An operator whose hardware cannot hold 25s should
-#: fix the serving stack before concluding the gate is wrong — that is what it is
-#: for.
-MAX_P95_WORKFLOW_SECONDS: Final[float] = 25.0
 MAX_AGENT_TURNS: Final[int] = 12
 MAX_OUTPUT_TOKENS: Final[int] = 8192
 
@@ -310,8 +300,27 @@ WEIGHT_END_TO_END: Final[float] = 0.55
 WEIGHT_STAGE_BALANCE: Final[float] = 0.15
 WEIGHT_OOD: Final[float] = 0.10
 WEIGHT_RETENTION: Final[float] = 0.05
-WEIGHT_LATENCY: Final[float] = 0.05
-WEIGHT_TOKEN_EFFICIENCY: Final[float] = 0.05
+# Latency is no longer scored, and its five points went to token efficiency
+# rather than to quality, so the documented 85/15 split is unchanged.
+#
+# The two were measuring the same quantity. Measured over 60 real arena
+# instances with the reasoning channel off, as production runs it: latency
+# spread 5.9x, output tokens spread 5.8x, seconds-per-token spread only 1.2x,
+# and the correlation between latency and tokens was 0.9992. The base model is
+# the base model — what varies is how much a package says, so the latency term
+# was token count with a constant of proportionality, counted a second time.
+#
+# Token efficiency is the better-formed of the pair. It is measured per
+# *completed* instance against a fixed budget, so a package cannot flatter it by
+# giving up early, and the budget does not drift with whoever holds the throne
+# the way a ratio against the incumbent's median does.
+#
+# It also cost the most to collect. Latency needed an uncontended clock, which
+# meant a sequential prefix of every draw — 50 instances at 13.9s against 1440
+# batched at 0.67s, so 38% of an evaluation was spent on 3.4% of the instances,
+# re-deriving with more noise something the token counter already reported
+# exactly.
+WEIGHT_TOKEN_EFFICIENCY: Final[float] = 0.10
 WEIGHT_ARTIFACT_EFFICIENCY: Final[float] = 0.05
 
 QUALIFIED_SCORE_WEIGHTS: Final[dict[str, float]] = {
@@ -319,7 +328,6 @@ QUALIFIED_SCORE_WEIGHTS: Final[dict[str, float]] = {
     "stage_balance": WEIGHT_STAGE_BALANCE,
     "ood": WEIGHT_OOD,
     "retention": WEIGHT_RETENTION,
-    "latency": WEIGHT_LATENCY,
     "token_efficiency": WEIGHT_TOKEN_EFFICIENCY,
     "artifact_efficiency": WEIGHT_ARTIFACT_EFFICIENCY,
 }
@@ -590,19 +598,6 @@ DEFAULT_BURN_PERCENTAGE: Final[float] = 0.0
 #: window is therefore asked the same way, and the number is pinned so that two
 #: validators ask the same way as each other.
 SANDBOX_BATCH_CONCURRENCY: Final[int] = 32
-
-#: Instances at the head of each draw run one at a time, to time them.
-#:
-#: Latency is a scored term and a hard gate, and a request that queued behind
-#: thirty others has a wall clock that describes the batch rather than the
-#: package. Those rows are marked ``timed=False`` and ignored by the latency
-#: term and the p95 gate alone — they score normally everywhere else.
-#:
-#: A deterministic prefix rather than a random sample, so an auditor replaying a
-#: window knows exactly which rows carried the timing. Fifty is enough for a p95
-#: estimate and costs about thirteen minutes against a batched sweep of
-#: twenty-five.
-SANDBOX_LATENCY_SAMPLE: Final[int] = 50
 
 SANDBOX_TEMPERATURE: Final[float] = 0.0
 SANDBOX_TOP_P: Final[float] = 1.0

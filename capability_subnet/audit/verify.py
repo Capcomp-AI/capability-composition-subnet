@@ -97,14 +97,15 @@ def recompute_qualified_score(report: EvaluationReport) -> float:
     components and its total is stating the same thing twice. If the two
     disagree, one of them was not produced by the published formula.
     """
+    # Driven off the published weight table rather than a hand-written sum. The
+    # hand-written one had drifted: it listed five terms and omitted
+    # token_efficiency, so an auditor recomputing a report disagreed with the
+    # engine by that term's whole weight — on the one code path whose job is to
+    # catch a score that does not follow from its own components.
     scores = report.scores
-    return (
-        C.WEIGHT_END_TO_END * scores.end_to_end
-        + C.WEIGHT_STAGE_BALANCE * scores.stage_balance
-        + C.WEIGHT_OOD * scores.ood
-        + C.WEIGHT_RETENTION * scores.retention
-        + C.WEIGHT_LATENCY * scores.latency
-        + C.WEIGHT_ARTIFACT_EFFICIENCY * scores.artifact_efficiency
+    return sum(
+        weight * getattr(scores, component, 0.0)
+        for component, weight in C.QUALIFIED_SCORE_WEIGHTS.items()
     )
 
 

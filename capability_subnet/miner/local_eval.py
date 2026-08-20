@@ -204,7 +204,7 @@ def evaluate_locally(
         [outcome.result for outcome in run_batch(ood, client, config=config)] if ood else []
     )
 
-    resources = measure_resources(hidden_results, artifact_bytes=artifact_bytes)
+    measure_resources(hidden_results, artifact_bytes=artifact_bytes)
 
     probe = run_probe(client, probe_items)
     retention = relative_retention(probe, base_probe) if base_probe is not None else 1.0
@@ -216,7 +216,6 @@ def evaluate_locally(
         retention=retention,
         efficiency=EfficiencyInputs(
             artifact_bytes=artifact_bytes,
-            reference_seconds=resources.mean_workflow_seconds,
         ),
     )
 

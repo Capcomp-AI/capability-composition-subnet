@@ -24,33 +24,11 @@ class EfficiencyInputs:
     """Measurements the efficiency components are derived from."""
 
     artifact_bytes: int = 0
-    #: Reference latency the candidate is compared against, in seconds. The
-    #: incumbent champion's median, so latency is scored relative to what the
-    #: network already achieves rather than against an arbitrary constant.
-    reference_seconds: float = 0.0
 
 
 def valid_rows(results: list[InstanceResult]) -> list[InstanceResult]:
     """Rows that may take part in scoring."""
     return [row for row in results if row.is_valid_sample]
-
-
-def timed_rows(results: list[InstanceResult]) -> list[InstanceResult]:
-    """Valid rows whose wall clock is an uncontended measurement.
-
-    Accuracy is measured under continuous batching, where many instances are in
-    flight at once and a single request's wall clock reflects how full the batch
-    was rather than what the package costs to run. Those rows score normally and
-    are excluded from latency alone; a deterministic prefix of every draw is run
-    one at a time to supply the timing.
-
-    Falls back to every valid row when nothing is marked, which is what a
-    fully sequential run — and every trace written before the distinction
-    existed — looks like.
-    """
-    rows = valid_rows(results)
-    timed = [row for row in rows if row.timed]
-    return timed or rows
 
 
 def end_to_end_completion(results: list[InstanceResult]) -> float:
@@ -120,15 +98,6 @@ def stage_balance(results: list[InstanceResult], stages: tuple[str, ...]) -> flo
     return math.exp(log_sum / len(means))
 
 
-def latency_efficiency(candidate_seconds: float, reference_seconds: float) -> float:
-    """How the candidate's workflow latency compares with the reference."""
-    if candidate_seconds <= 0.0:
-        return 0.0
-    if reference_seconds <= 0.0:
-        return 1.0
-    return min(1.0, reference_seconds / candidate_seconds)
-
-
 def token_efficiency(results: list[InstanceResult]) -> float:
     """Output tokens spent per *completed* instance, against a fixed budget.
 
@@ -173,7 +142,7 @@ def measure_resources(
 ) -> ResourceMeasurements:
     """Aggregate the per-instance measurements."""
     rows = valid_rows(results)
-    durations = sorted(row.wall_seconds for row in timed_rows(results))
+    durations = sorted(row.wall_seconds for row in rows)
 
     return ResourceMeasurements(
         adapter_mb=artifact_bytes / (1024 * 1024),
@@ -223,8 +192,6 @@ def aggregate_scores(
     balance = stage_balance(hidden_results, stages)
     ood = end_to_end_completion(ood_results)
 
-    durations = sorted(row.wall_seconds for row in timed_rows(hidden_results))
-    latency = latency_efficiency(percentile(durations, 0.5), efficiency.reference_seconds)
     artifact = artifact_efficiency(efficiency.artifact_bytes)
     tokens = token_efficiency(hidden_results)
 
@@ -233,7 +200,6 @@ def aggregate_scores(
         + C.WEIGHT_STAGE_BALANCE * balance
         + C.WEIGHT_OOD * ood
         + C.WEIGHT_RETENTION * retention
-        + C.WEIGHT_LATENCY * latency
         + C.WEIGHT_TOKEN_EFFICIENCY * tokens
         + C.WEIGHT_ARTIFACT_EFFICIENCY * artifact
     )
@@ -243,7 +209,6 @@ def aggregate_scores(
         stage_balance=balance,
         ood=ood,
         retention=retention,
-        latency=latency,
         token_efficiency=tokens,
         artifact_efficiency=artifact,
         qualified_score=min(1.0, qualified),

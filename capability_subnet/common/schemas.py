@@ -324,19 +324,6 @@ class InstanceResult(StrictModel):
     output_tokens: int = 0
     input_tokens: int = 0
     wall_seconds: float = 0.0
-    timed: bool = Field(
-        default=True,
-        description=(
-            "Whether ``wall_seconds`` is an uncontended measurement. False on a "
-            "row produced under continuous batching, where the request queued "
-            "behind others and its wall clock says more about the batch than "
-            "about the package. Such rows still carry full scoring weight — only "
-            "the latency term and the p95 gate ignore them. Defaults True so a "
-            "trace written before this field existed reads as timed, which is "
-            "what it was."
-        ),
-    )
-
     error: str | None = Field(
         default=None,
         description=(

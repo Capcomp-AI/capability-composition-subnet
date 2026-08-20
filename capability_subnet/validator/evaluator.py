@@ -147,7 +147,7 @@ def evaluate_candidate(
             for seed, result in zip(seeds, hidden_results, strict=False)
         }
 
-        resources = measure_resources(hidden_results, artifact_bytes=artifact_bytes)
+        measure_resources(hidden_results, artifact_bytes=artifact_bytes)
         probe = run_probe(client, build_probe(probe_seed if probe_seed is not None else 0))
         retention = relative_retention(probe, base_probe) if base_probe is not None else 1.0
 
@@ -158,7 +158,6 @@ def evaluate_candidate(
             retention=retention,
             efficiency=EfficiencyInputs(
                 artifact_bytes=artifact_bytes,
-                reference_seconds=resources.mean_workflow_seconds,
             ),
         )
 

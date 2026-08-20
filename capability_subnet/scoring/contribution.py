@@ -16,14 +16,14 @@ So the throne stays winner-takes-most, and everything below it is graded on four
 things the evaluation already measures:
 
 * **quality** — the qualified score, which already blends completion, stage
-  balance, out-of-distribution robustness, retention, latency, tokens and size;
+  balance, out-of-distribution robustness, retention, tokens and size;
 * **improvement** — how far the package moved past the strongest non-learned
   reference, which is the network's definition of "composition added value";
 * **proximity** — how close it came to the champion, which is what distinguishes
   a near miss from a wasted registration;
-* **cost** — token and latency efficiency, because two packages that finish the
-  same fraction of workflows are not equally valuable if one costs twice as much
-  to run.
+* **cost** — token efficiency, because two packages that finish the same
+  fraction of workflows are not equally valuable if one costs twice as much to
+  run.
 
 Nothing here can pay a package that failed a hard gate. Grading applies *within*
 the qualified set; it is not a consolation prize for producing something
@@ -91,13 +91,13 @@ def proximity_to_champion(candidate_e2e: float, champion_e2e: float | None) -> f
 def cost_efficiency(scores: CandidateScores) -> float:
     """The blended running cost of the finished package, in [0, 1].
 
-    Token spend and latency weighted equally. Both are already scored components;
-    they are re-blended here so that cost carries real weight in the *grade*
-    rather than the 10% it carries in the qualified score, where quality
-    correctly dominates. What a buyer pays per workflow run is a first-order
-    property of a deployable package, not a tiebreak.
+    Token spend alone, now that latency is not scored: the two correlated at
+    0.9992 on real instances, so blending them was averaging a quantity with
+    itself. What a buyer pays per workflow run is a first-order property of a
+    deployable package, not a tiebreak, which is why it is re-weighted here
+    against the share it carries in the qualified score.
     """
-    return 0.5 * scores.token_efficiency + 0.5 * scores.latency
+    return scores.token_efficiency
 
 
 def contribution_score(inputs: ContributionInputs) -> float:

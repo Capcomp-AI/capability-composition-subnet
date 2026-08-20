@@ -76,7 +76,6 @@ def hard_gates_contract(
     """
     return {
         "artifact_size_bytes": C.MAX_ARTIFACT_BYTES,
-        "p95_workflow_seconds": C.MAX_P95_WORKFLOW_SECONDS,
         "max_turns": C.MAX_AGENT_TURNS if max_turns is None else max_turns,
         "max_output_tokens": C.MAX_OUTPUT_TOKENS
         if max_output_tokens is None
@@ -91,8 +90,8 @@ def qualified_scoring_contract() -> dict[str, Any]:
     return {
         "weights": dict(C.QUALIFIED_SCORE_WEIGHTS),
         "formula": (
-            "Q = 0.60·end_to_end + 0.15·stage_balance + 0.10·ood + "
-            "0.05·retention + 0.05·latency + 0.05·artifact_efficiency"
+            "Q = 0.55·end_to_end + 0.15·stage_balance + 0.10·ood + "
+            "0.05·retention + 0.10·token_efficiency + 0.05·artifact_efficiency"
         ),
         "stage_balance": (
             "Geometric mean of the per-stage means. Rewards packages that are "
@@ -118,10 +117,13 @@ def ranking_contract() -> dict[str, Any]:
         "default_rule": "highest_score_wins",
         "rule": (
             "By default the highest score on the board is paid, whether or not it "
-            "cleared the strongest permanent reference. Scores closer together than "
-            "the window can resolve are ranked as tied and ties resolve to the "
-            "earliest commitment, so a copy of the leader cannot take its slot on "
-            "sampling noise — it has to be measurably better. References are "
+            "cleared the strongest permanent reference. Ranking is by measured "
+            "score alone: an earlier commitment is never advanced over a "
+            "higher-scoring later one, and an exact tie falls back to uid only so "
+            "the order is reproducible. What stops a copy taking the throne is the "
+            "comparator, not the sort — a challenger must beat the strongest "
+            "reference, the incumbent included, by an absolute end-to-end margin, "
+            "and a copy cannot beat what it copied by any margin. References are "
             "measured and published every window either way."
         ),
         "strict_rule": (

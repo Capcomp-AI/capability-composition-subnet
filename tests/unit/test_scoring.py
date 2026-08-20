@@ -17,7 +17,6 @@ from capability_subnet.scoring.aggregate import (
     aggregate_scores,
     artifact_efficiency,
     end_to_end_completion,
-    latency_efficiency,
     percentile,
     stage_balance,
     valid_rows,
@@ -78,11 +77,6 @@ class TestAggregation:
         )
         assert scores.retention == 0.5
 
-    def test_latency_efficiency_is_relative_and_capped(self):
-        assert latency_efficiency(10.0, 20.0) == 1.0  # faster than the reference
-        assert latency_efficiency(20.0, 10.0) == pytest.approx(0.5)
-        assert latency_efficiency(0.0, 10.0) == 0.0
-
     def test_artifact_efficiency_rewards_headroom_below_the_size_limit(self):
         """Size alone. Peak memory used to carry half of this and could not: it
         tracked the operator's reservation, so it was the same constant for
@@ -93,7 +87,7 @@ class TestAggregation:
 
     def test_percentile_uses_nearest_rank(self):
         # An interpolated percentile would report a duration that never occurred,
-        # and the latency gate is a promise about an observed run.
+        # and a reported percentile is a promise about an observed run.
         values = [1.0, 2.0, 3.0, 4.0, 100.0]
         assert percentile(values, 0.95) == 100.0
         assert percentile(values, 0.5) == 3.0
@@ -105,7 +99,7 @@ class TestAggregation:
             make_results(FULL, count=10, success_rate=1.0, prefix="ood"),
             STAGES,
             retention=1.0,
-            efficiency=EfficiencyInputs(artifact_bytes=0, reference_seconds=5.0),
+            efficiency=EfficiencyInputs(artifact_bytes=0),
         )
         # A perfect package on every component scores exactly 1.
         assert scores.qualified_score == pytest.approx(1.0)
@@ -118,7 +112,7 @@ class TestAggregation:
             [],
             STAGES,
             retention=1.0,
-            efficiency=EfficiencyInputs(artifact_bytes=0, reference_seconds=100.0),
+            efficiency=EfficiencyInputs(artifact_bytes=0),
         )
         costly_but_right = aggregate_scores(
             make_results(FULL, count=20, success_rate=1.0, seconds=30.0),
@@ -127,7 +121,6 @@ class TestAggregation:
             retention=1.0,
             efficiency=EfficiencyInputs(
                 artifact_bytes=C.MAX_ARTIFACT_BYTES,
-                reference_seconds=1.0,
             ),
         )
         assert costly_but_right.qualified_score > efficient_but_wrong.qualified_score
@@ -137,16 +130,6 @@ class TestGates:
     def test_artifact_size_gate(self):
         assert gates.gate_artifact_size(C.MAX_ARTIFACT_BYTES).passed
         assert not gates.gate_artifact_size(C.MAX_ARTIFACT_BYTES + 1).passed
-
-    def test_latency_gate_uses_the_worst_realistic_case(self):
-        fast = make_results(FULL, count=20, seconds=5.0)
-        slow = make_results(FULL, count=20, seconds=45.0)
-
-        assert gates.gate_latency(fast).passed
-        assert not gates.gate_latency(slow).passed
-
-    def test_latency_gate_fails_closed_with_no_measurements(self):
-        assert not gates.gate_latency([]).passed
 
     def test_safety_gate_admits_no_tolerance(self):
         clean = make_results(FULL, count=20, unsafe=0)

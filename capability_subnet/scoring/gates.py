@@ -17,7 +17,7 @@ import statistics
 
 from capability_subnet.common import constants as C
 from capability_subnet.common.schemas import CandidateScores, GateVerdict, InstanceResult
-from capability_subnet.scoring.aggregate import percentile, timed_rows, valid_rows
+from capability_subnet.scoring.aggregate import valid_rows
 
 #: Gates whose failure says something about the *engine*, not the candidate.
 #:
@@ -32,7 +32,7 @@ from capability_subnet.scoring.aggregate import percentile, timed_rows, valid_ro
 #: candidate for its own failures, so this set is consulted before any
 #: termination.
 INFRASTRUCTURE_GATES: frozenset[str] = frozenset(
-    {"sample_sufficiency", "latency_unmeasured", "reconstruction"}
+    {"sample_sufficiency", "reconstruction"}
 )
 
 
@@ -135,30 +135,6 @@ def gate_artifact_size(artifact_bytes: int) -> GateVerdict:
 # ---------------------------------------------------------------------------
 # Behavioural gates — need a completed evaluation
 # ---------------------------------------------------------------------------
-
-
-def gate_latency(hidden_results: list[InstanceResult]) -> GateVerdict:
-    durations = sorted(row.wall_seconds for row in timed_rows(hidden_results))
-    if not durations:
-        # No scored run means no latency was observed. That is the engine
-        # failing to gather evidence, not the candidate being slow, and it gets
-        # an infrastructure-named verdict so it cannot end a candidate's run.
-        return gate(
-            "latency_unmeasured",
-            False,
-            "no completed instances to measure latency from",
-            measured=0.0,
-            limit=C.MAX_P95_WORKFLOW_SECONDS,
-        )
-
-    p95 = percentile(durations, 0.95)
-    return gate(
-        "latency",
-        p95 <= C.MAX_P95_WORKFLOW_SECONDS,
-        f"p95 {p95:.1f}s against a {C.MAX_P95_WORKFLOW_SECONDS:.0f}s limit",
-        measured=p95,
-        limit=C.MAX_P95_WORKFLOW_SECONDS,
-    )
 
 
 def gate_agent_limits(hidden_results: list[InstanceResult]) -> GateVerdict:
