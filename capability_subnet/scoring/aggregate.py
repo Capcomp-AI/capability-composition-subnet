@@ -24,7 +24,6 @@ class EfficiencyInputs:
     """Measurements the efficiency components are derived from."""
 
     artifact_bytes: int = 0
-    peak_vram_gb: float = 0.0
     #: Reference latency the candidate is compared against, in seconds. The
     #: incumbent champion's median, so latency is scored relative to what the
     #: network already achieves rather than against an arbitrary constant.
@@ -154,19 +153,23 @@ def token_efficiency(results: list[InstanceResult]) -> float:
     return min(1.0, C.REFERENCE_OUTPUT_TOKENS / per_completion)
 
 
-def artifact_efficiency(artifact_bytes: int, peak_vram_gb: float) -> float:
-    """Deployment cost, as an equal blend of artifact size and peak memory.
+def artifact_efficiency(artifact_bytes: int) -> float:
+    """Deployment cost, as headroom below the artifact size limit.
 
-    Both terms are expressed as headroom below the hard gate, so a package that
-    sits at the limit scores zero on this component while still passing the gate.
+    Size alone. Peak GPU memory used to carry half of this term and could not:
+    vLLM reserves its pool up front, so the measurement tracked the operator's
+    reservation rather than the package and came out the same constant for every
+    candidate. Averaging a real signal with a constant halved the real signal.
+
+    Size is the part that varies — 41.6 MB at rank 8 to 499.5 MB at rank 96, an
+    order of magnitude — and it is a property of the recipe, so every validator
+    computes it identically without measuring anything.
     """
-    size_term = 1.0 - min(1.0, artifact_bytes / C.MAX_ARTIFACT_BYTES)
-    vram_term = 1.0 - min(1.0, peak_vram_gb / C.MAX_PEAK_VRAM_GB)
-    return 0.5 * size_term + 0.5 * vram_term
+    return 1.0 - min(1.0, artifact_bytes / C.MAX_ARTIFACT_BYTES)
 
 
 def measure_resources(
-    results: list[InstanceResult], *, artifact_bytes: int, peak_vram_gb: float
+    results: list[InstanceResult], *, artifact_bytes: int
 ) -> ResourceMeasurements:
     """Aggregate the per-instance measurements."""
     rows = valid_rows(results)
@@ -174,7 +177,6 @@ def measure_resources(
 
     return ResourceMeasurements(
         adapter_mb=artifact_bytes / (1024 * 1024),
-        peak_vram_gb=peak_vram_gb,
         p95_workflow_seconds=percentile(durations, 0.95),
         mean_workflow_seconds=statistics.fmean(durations) if durations else 0.0,
         input_tokens=sum(row.input_tokens for row in rows),
@@ -223,7 +225,7 @@ def aggregate_scores(
 
     durations = sorted(row.wall_seconds for row in timed_rows(hidden_results))
     latency = latency_efficiency(percentile(durations, 0.5), efficiency.reference_seconds)
-    artifact = artifact_efficiency(efficiency.artifact_bytes, efficiency.peak_vram_gb)
+    artifact = artifact_efficiency(efficiency.artifact_bytes)
     tokens = token_efficiency(hidden_results)
 
     qualified = (

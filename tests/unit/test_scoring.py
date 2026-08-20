@@ -74,7 +74,7 @@ class TestAggregation:
             [],
             STAGES,
             retention=0.5,
-            efficiency=EfficiencyInputs(artifact_bytes=0, peak_vram_gb=0.0),
+            efficiency=EfficiencyInputs(artifact_bytes=0),
         )
         assert scores.retention == 0.5
 
@@ -83,12 +83,13 @@ class TestAggregation:
         assert latency_efficiency(20.0, 10.0) == pytest.approx(0.5)
         assert latency_efficiency(0.0, 10.0) == 0.0
 
-    def test_artifact_efficiency_rewards_headroom_below_the_gate(self):
-        assert artifact_efficiency(0, 0.0) == pytest.approx(1.0)
-        assert artifact_efficiency(C.MAX_ARTIFACT_BYTES, C.MAX_PEAK_VRAM_GB) == 0.0
-        assert artifact_efficiency(
-            C.MAX_ARTIFACT_BYTES // 2, C.MAX_PEAK_VRAM_GB / 2
-        ) == pytest.approx(0.5)
+    def test_artifact_efficiency_rewards_headroom_below_the_size_limit(self):
+        """Size alone. Peak memory used to carry half of this and could not: it
+        tracked the operator's reservation, so it was the same constant for
+        every candidate and halved the one term that actually varies."""
+        assert artifact_efficiency(0) == pytest.approx(1.0)
+        assert artifact_efficiency(C.MAX_ARTIFACT_BYTES) == 0.0
+        assert artifact_efficiency(C.MAX_ARTIFACT_BYTES // 2) == pytest.approx(0.5)
 
     def test_percentile_uses_nearest_rank(self):
         # An interpolated percentile would report a duration that never occurred,
@@ -104,7 +105,7 @@ class TestAggregation:
             make_results(FULL, count=10, success_rate=1.0, prefix="ood"),
             STAGES,
             retention=1.0,
-            efficiency=EfficiencyInputs(artifact_bytes=0, peak_vram_gb=0.0, reference_seconds=5.0),
+            efficiency=EfficiencyInputs(artifact_bytes=0, reference_seconds=5.0),
         )
         # A perfect package on every component scores exactly 1.
         assert scores.qualified_score == pytest.approx(1.0)
@@ -117,9 +118,7 @@ class TestAggregation:
             [],
             STAGES,
             retention=1.0,
-            efficiency=EfficiencyInputs(
-                artifact_bytes=0, peak_vram_gb=0.0, reference_seconds=100.0
-            ),
+            efficiency=EfficiencyInputs(artifact_bytes=0, reference_seconds=100.0),
         )
         costly_but_right = aggregate_scores(
             make_results(FULL, count=20, success_rate=1.0, seconds=30.0),
@@ -128,7 +127,6 @@ class TestAggregation:
             retention=1.0,
             efficiency=EfficiencyInputs(
                 artifact_bytes=C.MAX_ARTIFACT_BYTES,
-                peak_vram_gb=C.MAX_PEAK_VRAM_GB,
                 reference_seconds=1.0,
             ),
         )

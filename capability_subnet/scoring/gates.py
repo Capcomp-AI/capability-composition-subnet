@@ -32,7 +32,7 @@ from capability_subnet.scoring.aggregate import percentile, timed_rows, valid_ro
 #: candidate for its own failures, so this set is consulted before any
 #: termination.
 INFRASTRUCTURE_GATES: frozenset[str] = frozenset(
-    {"sample_sufficiency", "peak_vram_unmeasured", "latency_unmeasured", "reconstruction"}
+    {"sample_sufficiency", "latency_unmeasured", "reconstruction"}
 )
 
 
@@ -135,40 +135,6 @@ def gate_artifact_size(artifact_bytes: int) -> GateVerdict:
 # ---------------------------------------------------------------------------
 # Behavioural gates — need a completed evaluation
 # ---------------------------------------------------------------------------
-
-
-def gate_peak_vram(peak_vram_gb: float | None, *, require_measurement: bool = True) -> GateVerdict:
-    """Peak memory against the deployment limit.
-
-    Args:
-        peak_vram_gb: the measurement, or ``None`` if the counter was unreadable.
-        require_measurement: whether an unmeasured value fails. True on any host
-            that is supposed to have a GPU — a package needing 40 GB must not
-            pass a 24 GB gate because the counter was broken. False only for
-            CPU-only development, where there is no GPU to measure and the gate
-            is not meaningful in the first place.
-    """
-    if peak_vram_gb is None:
-        # Named apart from the real limit check so the scheduler can tell "this
-        # package needs too much memory" from "this host could not tell us".
-        # Both block a crowning; only the first may end a candidate's run.
-        return gate(
-            "peak_vram_unmeasured",
-            not require_measurement,
-            "peak GPU memory could not be measured on this host"
-            + ("; refusing to certify the resource limit" if require_measurement else ""),
-            measured=None,
-            limit=C.MAX_PEAK_VRAM_GB,
-        )
-
-    passed = peak_vram_gb <= C.MAX_PEAK_VRAM_GB
-    return gate(
-        "peak_vram",
-        passed,
-        f"{peak_vram_gb:.1f} GB against a {C.MAX_PEAK_VRAM_GB:.0f} GB limit",
-        measured=peak_vram_gb,
-        limit=C.MAX_PEAK_VRAM_GB,
-    )
 
 
 def gate_latency(hidden_results: list[InstanceResult]) -> GateVerdict:

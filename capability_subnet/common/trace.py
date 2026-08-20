@@ -73,7 +73,6 @@ class ExecutionTrace:
     input_tokens: int = 0
     output_tokens: int = 0
     wall_seconds: float = 0.0
-    peak_vram_gb: float = 0.0
 
     #: Set when the harness itself failed. A trace with this set is excluded from
     #: scoring rather than counted as a model failure — flaky infrastructure must

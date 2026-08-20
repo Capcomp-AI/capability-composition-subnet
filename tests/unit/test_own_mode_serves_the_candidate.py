@@ -87,10 +87,6 @@ class TestTheReservationIsTheSameEverywhere:
         reserved = utilization_for(total) * total
         assert reserved == pytest.approx(C.SERVING_RESERVED_GIB, abs=1e-6)
 
-    @pytest.mark.parametrize("total", [31.39, 47.4, 79.2])
-    def test_the_reservation_leaves_the_gate_reachable(self, total):
-        assert utilization_for(total) * total < C.MAX_PEAK_VRAM_GB
-
     def test_a_card_too_small_is_refused_rather_than_squeezed(self):
         """Serving a package that does not fit would measure the card."""
         with pytest.raises(ServingError, match="rather than the package"):

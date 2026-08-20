@@ -40,10 +40,6 @@ class SandboxConfig:
     #: PostgreSQL DSN for the hidden snapshot. Without one the snapshot is served
     #: from an in-memory SQLite database, which is what local runs use.
     postgres_dsn: str | None = None
-    #: Peak GPU memory observed while serving this candidate, reported by the
-    #: executor. ``None`` when the counter was unavailable — carried through as
-    #: None so nothing downstream mistakes "unmeasured" for "used nothing".
-    peak_vram_gb: float | None = None
 
 
 @dataclass(slots=True)
@@ -78,7 +74,6 @@ def run_instance(
         instance_id=instance.instance_id,
         instance_seed=instance.seed,
         split=instance.split,
-        peak_vram_gb=config.peak_vram_gb or 0.0,
     )
 
     database = None

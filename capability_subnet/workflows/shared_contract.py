@@ -68,7 +68,6 @@ def hard_gates_contract(
     """
     return {
         "artifact_size_bytes": C.MAX_ARTIFACT_BYTES,
-        "peak_vram_gb": C.MAX_PEAK_VRAM_GB,
         "p95_workflow_seconds": C.MAX_P95_WORKFLOW_SECONDS,
         "max_turns": C.MAX_AGENT_TURNS if max_turns is None else max_turns,
         "max_output_tokens": C.MAX_OUTPUT_TOKENS

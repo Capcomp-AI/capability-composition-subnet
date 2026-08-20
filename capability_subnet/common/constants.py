@@ -218,19 +218,16 @@ MAX_SELECTED_ADAPTERS: Final[int] = 10
 
 #: Absolute GPU memory a candidate's runtime may reserve, in GiB.
 #:
-#: Pinned rather than left to each host because ``peak_vram`` is a *gate*, and a
-#: gate has to mean the same thing everywhere. vLLM reserves a fraction of the
-#: whole card, so the same candidate measures 25.4 GiB on a validator running
-#: 0.78 of a 32 GB card and 22.9 GiB on one running 0.70 — one refuses it, the
-#: other passes it, for a reason that has nothing to do with the miner. Fixing
-#: the absolute reservation and deriving the fraction from the card makes the
-#: measurement a property of the package again.
+#: Pinned rather than left to each host so that every candidate is served the
+#: same way on every card. vLLM reserves a fraction of the whole device, so a
+#: fraction fixed by the operator would mean a package got more room on a bigger
+#: card and less on a smaller one; fixing the absolute reservation and deriving
+#: the fraction from the card keeps the serving conditions identical everywhere.
 #:
-#: 20 GiB: about 15.3 GiB of weights, the KV cache for one sequence at the
-#: canonical context, and the ~0.9 GiB a runtime carries on top. Measured at
-#: SERVING_MAX_MODEL_LEN it leaves 29,552 tokens of KV — 3.61x what one
-#: full-length sequence uses — and peaks at 18.3 GiB, under MAX_PEAK_VRAM_GB
-#: with room that does not depend on the card it ran on.
+#: 20 GiB: about 15.3 GiB of weights, the KV cache, and the ~0.9 GiB a runtime
+#: carries on top. Measured at SERVING_MAX_MODEL_LEN it leaves 29,552 tokens of
+#: KV — 3.61x what one full-length sequence uses, which is what pays for
+#: SANDBOX_BATCH_CONCURRENCY — and peaks at about 21 GiB.
 #:
 #: It also has to fit on a card somebody owns. A 24 GB card exposes about 22.0
 #: GiB and roughly 21.7 GiB of that is free once the driver context is resident,
@@ -264,14 +261,20 @@ SERVING_MAX_MODEL_LEN: Final[int] = 8192
 
 MAX_ARTIFACT_BYTES: Final[int] = 500 * 1024 * 1024  # 500 MB
 
-#: Peak GPU memory a candidate may use, in GiB. The deployment promise: a
-#: package that clears this runs on one card of this size.
-#:
-#: Moves with SERVING_RESERVED_GIB and must: peak is set by the reservation, not
-#: by this limit, so raising the ceiling alone would give no candidate a byte
-#: more memory while inflating the VRAM term of ``artifact_efficiency``, which
-#: scores headroom as 1 - peak/this.
-MAX_PEAK_VRAM_GB: Final[float] = 24.0
+# Peak GPU memory is deliberately not gated or scored.
+#
+# vLLM reserves SERVING_RESERVED_GIB up front, so peak tracks the reservation
+# and not the package: measured, every candidate lands at 20.9-21.1 GiB whatever
+# it merged. The largest adapter the artifact cap admits — rank 96, 499.5 MB —
+# adds 0.325 GiB, against roughly 3 GiB of headroom, so no recipe could reach a
+# ceiling even in principle. As a gate it always passed; as a score term it was
+# the same constant for every candidate, diluting artifact_efficiency by half
+# against a size term that genuinely varies twelvefold across the allowed ranks.
+#
+# It also disagreed across the network. Validators never measured it — they
+# substituted the ceiling — so the engine scored a headroom term that no
+# validator reproduced. Deployment cost is now artifact size alone, which is a
+# property of the recipe and identical everywhere.
 #: p95 wall-clock for one instance, end to end. Lowered from 30s: latency is a
 #: dimension miners should be competing on, and a ceiling loose enough that
 #: nothing ever approaches it is not a gate, it is decoration.
@@ -400,9 +403,18 @@ BOOTSTRAP_CONFIDENCE: Final[float] = 0.95
 #: Blocks per evaluation window. At 12s blocks this is roughly 72 hours. Hidden
 #: instances are resampled and the champion re-measured once per window.
 #:
-#: Lengthened from 7200 to pay for DEFAULT_HIDDEN_INSTANCES at 1350, which is
-#: what a 0.03 bar costs. Cadence is the price: about one window every three days
-#: rather than one a day.
+#: The work no longer needs three days. This was tripled from 7200 to pay for
+#: 1350 instances at 13.9s each — about 5.6 hours a package, and 45 hours of
+#: references before a challenger was touched. Continuous batching and a
+#: four-card fleet took the same 1350 instances to roughly half an hour a
+#: package and the whole reference schedule to about an hour, so most of the
+#: window is now idle.
+#:
+#: Shortening it back to 7200 is therefore a cadence decision that is available,
+#: not one that has been taken — and it cannot be taken quietly. The window id
+#: is the block divided by this, so at the time of writing block 8886140 is
+#: window 411 at 21600 and window 1234 at 7200: every run renumbers, and a
+#: console, a store and a set of published reports all key off that number.
 #:
 #: Not a free parameter on a running deployment: the window id is the block
 #: divided by this, and the beacon is drawn from the window's own opening block,
@@ -421,11 +433,13 @@ DEFAULT_WINDOW_BLOCKS: Final[int] = 21600
 #: engine refuses a configuration where the two contradict each other.
 #:
 #: The resolvable edge falls with the square root of this, so each halving of the
-#: bar costs four times the evaluation. Seven reference packages over 1450
-#: instances is close to 51 hours, which is why DEFAULT_WINDOW_BLOCKS had to grow
-#: with it — the schedule preflight allows a window to spend three quarters of
-#: itself on references, and a window that cannot finish its own schedule never
-#: reaches a challenger at all.
+#: bar costs four times the evaluation. That arithmetic is unchanged; what
+#: changed is the wall clock behind it. Seven reference packages over 1450
+#: instances was close to 51 hours one instance at a time, and is about an hour
+#: batched across four cards. The schedule preflight still allows a window to
+#: spend three quarters of itself on references, and a window that cannot finish
+#: its own schedule never reaches a challenger at all — that check simply has a
+#: great deal more room in it now.
 DEFAULT_HIDDEN_INSTANCES: Final[int] = 1350
 
 #: Additional out-of-distribution instances drawn per window.

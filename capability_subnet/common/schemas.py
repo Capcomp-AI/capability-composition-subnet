@@ -348,7 +348,6 @@ class ResourceMeasurements(StrictModel):
     """Measured deployment cost of one candidate package."""
 
     adapter_mb: float = 0.0
-    peak_vram_gb: float = 0.0
     p95_workflow_seconds: float = 0.0
     mean_workflow_seconds: float = 0.0
     input_tokens: int = 0

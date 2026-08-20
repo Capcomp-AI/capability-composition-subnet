@@ -11,8 +11,9 @@ So the adapter is applied by starting a runtime for it and stopping the runtime
 afterwards. One candidate, one process, no shared state between them.
 
 Reserving memory in absolute terms rather than as a fraction of the card is what
-keeps ``peak_vram`` comparable: the gate is a statement about the package, and a
-fraction of the card is a statement about the validator.
+keeps the serving conditions identical across validators: a fraction would give
+a package more room on a bigger card, and a candidate answering with a larger KV
+cache than its peers is not being asked the same question.
 """
 
 from __future__ import annotations
@@ -101,8 +102,8 @@ def utilization_for(total_gib: float, reserved_gib: float = C.SERVING_RESERVED_G
 
     vLLM takes a fraction of the whole device, so the fraction that holds a
     package steady is different on every card size. Deriving it from the card
-    keeps what is reserved — and therefore what ``peak_vram`` measures — the
-    same everywhere.
+    keeps what is reserved — and therefore the KV cache a candidate answers
+    with — the same everywhere.
     """
     if total_gib <= 0.0:
         raise ValueError("total_gib must be positive")
