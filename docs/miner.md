@@ -267,7 +267,7 @@ The full evaluation report is published at `/reports` — every gate verdict, ev
 |---|---|
 | Building and validating recipes | Any machine |
 | Reconstructing an artifact | ~32 GB RAM. A GPU is optional and ~30x faster on the trimming methods. |
-| Evaluating locally | A GPU that fits the base model in bfloat16 (24 GB+) |
+| Evaluating locally | A GPU that can hold the 26 GiB serving reservation (32 GB+) |
 | Searching seriously | As much as you want to spend — this is where competition happens |
 
 See [min_compute.yml](../min_compute.yml) for detail.
@@ -494,7 +494,7 @@ Any failure zeroes the candidate.
 | Numerical | No NaN or infinity |
 | Security | No executable miner content |
 | Artifact size | ≤ 500 MB |
-| Peak VRAM | ≤ 24 GB |
+| Peak VRAM | ≤ 32 GB |
 | Latency | p95 workflow ≤ 30 s |
 | Agent limits | ≤ 12 turns, ≤ 8192 output tokens |
 | Safety | Zero critical unsafe actions |

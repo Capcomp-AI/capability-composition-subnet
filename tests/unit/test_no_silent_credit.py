@@ -19,14 +19,16 @@ class TestUnmeasuredVramIsNotABonus:
     def test_zero_would_have_paid_more_than_a_real_measurement(self):
         """The bug this defends against, stated as arithmetic."""
         unmeasured_as_zero = artifact_efficiency(ARTIFACT, 0.0)
-        really_measured = artifact_efficiency(ARTIFACT, 23.84)
+        # Just under the gate, derived rather than hardcoded: the limit moved
+        # from 24 to 32 GiB and a literal silently stopped being "near it".
+        really_measured = artifact_efficiency(ARTIFACT, C.MAX_PEAK_VRAM_GB - 0.16)
         assert unmeasured_as_zero > really_measured * 3
 
     def test_the_limit_is_the_honest_stand_in(self):
         """Scoring an unmeasured package at the limit puts it at or below what a
         real measurement earns, so nothing is gained by not measuring."""
         unmeasured = artifact_efficiency(ARTIFACT, C.MAX_PEAK_VRAM_GB)
-        for plausible in (18.0, 20.5, 23.84):
+        for plausible in (18.0, 20.5, C.MAX_PEAK_VRAM_GB - 0.16):
             assert unmeasured <= artifact_efficiency(ARTIFACT, plausible)
 
     def test_the_evaluator_uses_the_limit_when_nothing_was_measured(self):

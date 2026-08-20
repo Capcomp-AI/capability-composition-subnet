@@ -208,12 +208,12 @@ Then read the guide for your role:
 |---|---|---|
 | **Miner** | [docs/miner.md](docs/miner.md) | Any hardware. A GPU only if you want to evaluate locally. |
 | **Pool operator** | [`scripts/import_public_adapters.py`](scripts/import_public_adapters.py) | Materialises the certified pool from its pinned upstream sources. |
-| **Validator** | [docs/validator.md](docs/validator.md) | A **48 GB GPU**. Validators measure every candidate themselves. |
+| **Validator** | [docs/validator.md](docs/validator.md) | **32 GB+ GPUs**, as many as you have — one candidate per card, in parallel. Validators measure every candidate themselves. |
 | **Subnet owner** | [docs/owner.md](docs/owner.md) | Publishes the pool. The engine and console are optional. |
 
 ## How validators decide
 
-Every number a validator submits comes from work it did. It reads the commitments on chain, fetches each recipe, reconstructs the merged adapter on its own hardware, serves it through its own endpoint, and scores it against instances it regenerates from a seed derived from a block hash. It trusts nobody. It needs a 48 GB card.
+Every number a validator submits comes from work it did. It reads the commitments on chain, fetches each recipe, reconstructs the merged adapter on its own hardware, serves it through its own endpoint, and scores it against instances it regenerates from a seed derived from a block hash. It trusts nobody. It needs at least one 32 GB card, and measures one candidate per card in parallel across every card it has.
 
 Validators are not required to agree on artifact bytes — six of the seven merge methods run an SVD, and an SVD is not bitwise reproducible across devices — so they are compared on outcomes rather than on hashes.
 
@@ -268,7 +268,7 @@ A company does not buy "a translation adapter" or "a SQL adapter". It buys a sys
 
 **The router stops existing.** A routed system pays something on every request deciding where to send it — tokens if the decision is made by a model, a hop and a service if by a classifier. A merged package answers directly. On a million requests a month with an LLM router at ~260 tokens per decision, that is ~260M tokens spent producing no answers. *Illustrative arithmetic on stated assumptions, not a measurement — substitute your own numbers.*
 
-**The footprint stops depending on how many skills you offer.** One file under 524 MB on one 24 GB card. No adapter set to keep resident, no swap on a cold skill, no per-skill capacity planning.
+**The footprint stops depending on how many skills you offer.** One file under 524 MB on one 32 GB card, served at the base model's full 40,960-token context. No adapter set to keep resident, no swap on a cold skill, no per-skill capacity planning.
 
 **One artifact is one thing to certify.** Regulated buyers approve artifacts, not architectures. A reproducible, content-addressed file with a published evaluation record is a shorter conversation than seven adapters, a router and its training set.
 

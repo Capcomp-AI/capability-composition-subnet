@@ -237,7 +237,9 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
             "Comma-separated CUDA devices to measure on, e.g. "
             "'cuda:0,cuda:1,cuda:2,cuda:3'. One candidate is measured per device "
             "at a time, because a served package reserves almost the whole card. "
-            "Empty uses --neuron.device alone."
+            "Empty measures on every CUDA device this host has, which is almost "
+            "always what you want: cards are the unit of parallelism and a run's "
+            "throughput is the card count."
         ),
     )
     parser.add_argument(

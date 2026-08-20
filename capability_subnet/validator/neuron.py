@@ -186,9 +186,10 @@ class ValidatorNeuron:
         bind = urlsplit(self.config.serve_url or "http://127.0.0.1:8000")
         base_port = bind.port or 8000
         configured = str(getattr(self.config, "devices", "") or "").strip()
-        devices = [d.strip() for d in configured.split(",") if d.strip()] or [
-            str(getattr(self.config, "device", "cuda"))
-        ]
+        if configured:
+            devices = [d.strip() for d in configured.split(",") if d.strip()]
+        else:
+            devices = self._all_cuda_devices()
 
         slots: queue.Queue[tuple[str, int]] = queue.Queue()
         for index, device in enumerate(devices):
@@ -199,6 +200,30 @@ class ValidatorNeuron:
             ", ".join(f"{d}@{base_port + i}" for i, d in enumerate(devices)),
         )
         return slots
+
+    @staticmethod
+    def _all_cuda_devices() -> list[str]:
+        """Every CUDA device on this host, as the default measuring fleet.
+
+        Cards are the unit of parallelism: one candidate per card, so a run's
+        throughput is the card count. Defaulting to one device left three
+        quarters of a four-card host idle unless the operator knew to pass
+        --neuron.devices, and the symptom was not an error — just a validator
+        that took four times as long and fell behind the run it is meant to
+        decide.
+
+        Falls back to the single configured device if torch cannot enumerate
+        them, which is the same behaviour as before rather than a new failure.
+        """
+        try:
+            import torch
+
+            count = torch.cuda.device_count()
+        except Exception:  # noqa: BLE001 - no torch, no CUDA, no driver
+            count = 0
+        if count <= 0:
+            return ["cuda"]
+        return [f"cuda:{index}" for index in range(count)]
 
     @contextmanager
     def _slot(self) -> Iterator[tuple[str, int]]:

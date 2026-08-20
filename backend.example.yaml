@@ -36,12 +36,16 @@ recipe_dir: ""            # empty: <state_dir>/recipes
 # ---------------------------------------------------------------------------
 # Windows
 # ---------------------------------------------------------------------------
-# 7200 blocks is roughly 24 hours at 12-second blocks. Shorter windows re-measure
+# 21600 blocks is roughly 72 hours at 12-second blocks. These three must equal the
+# protocol constants exactly — validators derive the window from the constants, so
+# an engine that differs measures a different window and its numbers are not
+# comparable to anyone's. The settings validator refuses to start on a mismatch.
+# Shorter windows re-measure
 # the references more often, which costs GPU time; longer ones give a champion
 # more time on one instance draw.
-window_blocks: 7200
-hidden_instances: 400
-ood_instances: 30
+window_blocks: 21600
+hidden_instances: 1350
+ood_instances: 100
 
 # The secret root every window's hidden draw is derived from. Anyone who knows
 # it can predict every future hidden instance, so it must be generated once,
@@ -116,7 +120,7 @@ axis_margin: 0.02             # absolute margin to count as dominant on an axis
 axis_tolerance: 0.01          # relative band that still counts as not worse
 min_dominant_axes: 1
 min_axis_samples: 20          # fewer paired samples than this counts as worse
-end_to_end_margin: 0.06       # absolute completion margin over the strongest reference
+end_to_end_margin: 0.03       # absolute completion margin over the strongest reference
 strict_pareto: false          # true requires dominance on every axis
 
 # ---------------------------------------------------------------------------
@@ -169,8 +173,8 @@ serving_gpu_index: 0
 #
 # Note the fraction also decides peak memory, which is gated: on a large card
 # 0.78 can exceed the 24 GiB limit on its own, before any candidate is served.
-serving_max_model_len: 4096
-serving_gpu_memory_utilization: 0.78
+serving_max_model_len: 40960
+serving_gpu_memory_utilization: 0.5418
 
 # The interpreter vLLM runs under. Empty uses the engine's own; set it when vLLM
 # has its own virtualenv, which is common because it pins torch tightly.

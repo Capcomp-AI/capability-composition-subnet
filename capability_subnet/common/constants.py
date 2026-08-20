@@ -226,27 +226,57 @@ MAX_SELECTED_ADAPTERS: Final[int] = 10
 #: the absolute reservation and deriving the fraction from the card makes the
 #: measurement a property of the package again.
 #:
-#: 20 GiB: about 15.3 GiB of weights, the KV cache for one sequence at the
-#: canonical context, and the ~0.9 GiB a runtime carries on top — landing under
-#: MAX_PEAK_VRAM_GB with room that does not depend on the card it ran on.
+#: 26 GiB, raised from 20. The old figure sized the KV cache for a 4096-token
+#: window, and that window was too small to run the workflow the gates already
+#: allowed: MAX_OUTPUT_TOKENS permits 8192 output tokens and MAX_AGENT_TURNS
+#: permits twelve turns, neither of which fits a 4096-token context alongside a
+#: prompt and accumulated tool results. A candidate could therefore be failed
+#: for a truncation the contract said was legal.
 #:
-#: It also has to fit on a card somebody owns. A 24 GB card exposes about 22.0
-#: GiB and roughly 21.7 GiB of that is free once the driver context is resident,
-#: so a 22 GiB reservation is refused by the runtime at start-up — measured, not
-#: predicted: vLLM answers "free memory (21.65/22.04 GiB) is less than desired
-#: utilization (0.9984, 22.0 GiB)" and exits. Every candidate then records a
-#: serving failure, which scores every miner zero for the validator's hardware.
-#: At 20 GiB the same card serves at 0.907 utilization and peaks near 20.9 GiB,
-#: still under the gate.
-SERVING_RESERVED_GIB: Final[float] = 20.0
+#: The number is measured, not chosen. At 20 GiB vLLM reports 2.03 GiB of KV
+#: cache against the 2.81 GiB one full-length sequence needs, and refuses to
+#: start: "the estimated maximum model length is 29552". At 26 GiB the same
+#: model serves SERVING_MAX_MODEL_LEN with 146,736 tokens of KV — 3.58x what one
+#: sequence uses — and peaks at 26.39 GiB.
+#:
+#: It also has to fit on a card somebody owns, and this is what moved the
+#: validator floor to 32 GB. A 32 GB card exposes about 30.5 GiB, so a 26 GiB
+#: reservation runs at 0.81 utilization with room for the driver context. A
+#: 24 GB card can no longer host a measurement at all: it exposes about 22.0 GiB
+#: and roughly 21.7 GiB is free once the driver context is resident, so the
+#: runtime refuses at start-up and every candidate records a serving failure —
+#: which scores every miner zero for the validator's hardware.
+SERVING_RESERVED_GIB: Final[float] = 26.0
 
 #: Context length every candidate is served at. Part of the measurement: a
 #: package judged at a longer context is answering an easier question about its
-#: own memory use.
-SERVING_MAX_MODEL_LEN: Final[int] = 4096
+#: own memory use — so it is pinned, and pinned at the pinned base model's own
+#: limit rather than below it.
+#:
+#: 40960 is Qwen3-8B's ``max_position_embeddings``. Raised from 4096, which
+#: contradicted the agent contract: twelve turns at up to 8192 output tokens
+#: cannot fit a 4096-token window, so an instance could exhaust the window and
+#: be scored as a failure the candidate did not cause. Serving at the model's
+#: full context removes the truncation entirely rather than moving it.
+#:
+#: Costs nothing in concurrency here because a candidate is served at one
+#: sequence: only one window's KV is ever live.
+SERVING_MAX_MODEL_LEN: Final[int] = 40960
 
 MAX_ARTIFACT_BYTES: Final[int] = 500 * 1024 * 1024  # 500 MB
-MAX_PEAK_VRAM_GB: Final[float] = 24.0
+
+#: Peak GPU memory a candidate may use, in GiB. The deployment promise: a
+#: package that clears this runs on one card of this size.
+#:
+#: 32, raised from 24 with SERVING_RESERVED_GIB. The two move together and must:
+#: peak is set by the reservation, not by this limit, so raising the ceiling
+#: alone would give no candidate a byte more memory while inflating the VRAM
+#: term of ``artifact_efficiency``, which scores headroom as 1 - peak/this.
+#:
+#: A 26 GiB reservation peaks at 26.39 GiB measured, leaving 5.6 GiB under the
+#: gate. The product target moves with it, from "runs on a 24 GB card" to "runs
+#: on a 32 GB card", which is the real cost of serving the full context.
+MAX_PEAK_VRAM_GB: Final[float] = 32.0
 #: p95 wall-clock for one instance, end to end. Lowered from 30s: latency is a
 #: dimension miners should be competing on, and a ceiling loose enough that
 #: nothing ever approaches it is not a gate, it is decoration.

@@ -25,7 +25,7 @@ This is a one-off per arena version. Re-running it is cheap: an adapter already 
 
 The engine runs runs, serves candidates, and publishes signed reports and a signed weight vector.
 
-Nothing on the network depends on it. Validators measure for themselves, so no weight anyone sets comes from here — which is the point, and also why this is optional. Run it if you want a reference set of published numbers to compare validators against, a console for the subnet, or a disclosure feed that third parties can replay without a GPU. It needs its own 48 GB card and the same serving toolchain a validator needs.
+Nothing on the network depends on it. Validators measure for themselves, so no weight anyone sets comes from here — which is the point, and also why this is optional. Run it if you want a reference set of published numbers to compare validators against, a console for the subnet, or a disclosure feed that third parties can replay without a GPU. It needs its own 32 GB+ card and the same serving toolchain a validator needs.
 
 ```bash
 capability-backend --config backend.yaml
@@ -74,8 +74,8 @@ end_to_end_margin: 0.06       # 400 instances resolve ~0.054
 
 base_model_path: /var/lib/capsub/base-model/Qwen3-8B
 serving_gpu_uuid: "GPU-<uuid>"
-serving_max_model_len: 4096
-serving_gpu_memory_utilization: 0.45   # 48 GB card; see the formula below
+serving_max_model_len: 40960
+serving_gpu_memory_utilization: 0.5418  # 48 GB card; see the formula below
 serving_python: /opt/vllm/bin/python
 serving_extra_args: "--kv-cache-dtype fp8 --max-num-seqs 1"
 
@@ -109,11 +109,12 @@ A candidate's peak is gated at 24 GiB, so the fraction follows from the card:
 
 | Card | Fraction | Resulting peak |
 |---|---|---|
-| 48 GB | 0.45 | ~21–22.5 GiB |
-| 32 GB | 0.70 | ~22.9 GiB |
-| 24 GB | 0.78 | ~19.6 GiB |
+| 80 GB | 0.33 | ~26.4 GiB |
+| 48 GB | 0.54 | ~26.4 GiB |
+| 32 GB | 0.81 | ~26.4 GiB |
+| 24 GB | — | too small; refused at start-up |
 
-The model needs about 15.3 GiB of weights and about 0.3 GiB of KV cache for 4096 context at one sequence. A larger card needs a *smaller* fraction, not a larger one.
+The model needs about 15.3 GiB of weights and about 2.8 GiB of KV cache for the full 40,960 context at one sequence. A larger card needs a *smaller* fraction, not a larger one — the reservation is absolute, so peak lands near 26.4 GiB on every card that can hold it.
 
 ---
 
