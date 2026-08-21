@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from capability_subnet.common import constants as C
 from capability_subnet.common.hashing import canonical_json_bytes, normalise_digest, sha256_bytes
@@ -425,7 +425,7 @@ class ComparatorOutcome(StrictModel):
     #: margin because they answer different questions and decay differently.
     champion_margin_required: float = C.DEFAULT_CHAMPION_MARGIN
     champion_margin_observed: float = 0.0
-    #: The smallest difference this window's sample size could have resolved.
+    #: The smallest difference this run's sample size could have resolved.
     #: Published so a reader can tell a package that genuinely lost from one the
     #: engine never had the evidence to judge — the two look identical in every
     #: other field of a report.
@@ -444,7 +444,12 @@ class EvaluationReport(StrictModel):
 
     report_version: int = 1
     workflow_id: str = C.DEFAULT_WORKFLOW_ID
-    window_id: int
+    #: Named ``run_id`` until runs and runs were unified under one word.
+    #: The old spelling is still accepted on the way in, because a disclosure
+    #: exists to be re-read years later by someone checking a closed run — a
+    #: record that stops parsing when the code is renamed is not evidence of
+    #: anything. Written out under the new name only; the alias is for reading.
+    run_id: int = Field(validation_alias=AliasChoices("run_id", "window_id"))
     evaluated_at_block: int
 
     miner_hotkey: str
@@ -527,7 +532,12 @@ class WeightVector(StrictModel):
     """
 
     workflow_id: str = C.DEFAULT_WORKFLOW_ID
-    window_id: int
+    #: Named ``run_id`` until runs and runs were unified under one word.
+    #: The old spelling is still accepted on the way in, because a disclosure
+    #: exists to be re-read years later by someone checking a closed run — a
+    #: record that stops parsing when the code is renamed is not evidence of
+    #: anything. Written out under the new name only; the alias is for reading.
+    run_id: int = Field(validation_alias=AliasChoices("run_id", "window_id"))
     computed_at_block: int
     mode: Literal["winner_take_all", "graded_top3", "graded_contribution"] = (
         C.MODE_GRADED_CONTRIBUTION
@@ -570,7 +580,7 @@ class WeightVector(StrictModel):
 
 
 class DisclosedInstance(StrictModel):
-    """One instance from a closed window, published so it can be re-scored."""
+    """One instance from a closed run, published so it can be re-scored."""
 
     instance_id: str
     instance_seed: int
@@ -584,17 +594,17 @@ class DisclosedInstance(StrictModel):
     trace: dict[str, Any] = Field(default_factory=dict)
 
 
-class WindowDisclosure(StrictModel):
-    """What a closed window makes public.
+class RunDisclosure(StrictModel):
+    """What a closed run makes public.
 
-    Hidden instances are drawn fresh every window and never reused, so a closed
-    window's instances have no further value as a secret — and considerable
+    Hidden instances are drawn fresh every run and never reused, so a closed
+    run's instances have no further value as a secret — and considerable
     value as evidence. Publishing them lets anyone regenerate the exact problems
     a candidate faced and re-run the deterministic scorer over its stored trace,
     which turns "the engine says this candidate scored 0.8" into something that
     can be checked without a GPU.
 
-    Only closed windows are ever disclosed. Publishing the current window would
+    Only closed runs are ever disclosed. Publishing the current run would
     hand its challenger the test it is sitting.
     """
 
@@ -604,32 +614,37 @@ class WindowDisclosure(StrictModel):
     #: would regenerate the wrong instances and score them against the wrong
     #: scorer — silently, since both would succeed.
     workflow_id: str
-    window_id: int
+    #: Named ``run_id`` until runs and runs were unified under one word.
+    #: The old spelling is still accepted on the way in, because a disclosure
+    #: exists to be re-read years later by someone checking a closed run — a
+    #: record that stops parsing when the code is renamed is not evidence of
+    #: anything. Written out under the new name only; the alias is for reading.
+    run_id: int = Field(validation_alias=AliasChoices("run_id", "window_id"))
     closed_at_block: int
 
-    #: Blocks per window at the time this window ran. Recorded because the window
+    #: Blocks per run at the time this run ran. Recorded because the run
     #: id is the block divided by it and the beacon is the hash of the block the
-    #: window opened at, so without it a reader cannot work out which block a past
+    #: run opened at, so without it a reader cannot work out which block a past
     #: beacon should have come from — and therefore cannot check that it did.
-    #: Defaulting to the *current* setting would silently re-derive old windows
+    #: Defaulting to the *current* setting would silently re-derive old runs
     #: against a new length, which is exactly the check this is meant to support.
     #: 0 means a disclosure written before this field existed.
-    window_blocks: int = 0
+    run_blocks: int = 0
 
-    #: Every hidden and out-of-distribution seed the window drew. Disclosing all
+    #: Every hidden and out-of-distribution seed the run drew. Disclosing all
     #: of them rather than a subset is deliberate: a subset the engine chose
     #: could be the subset it scored honestly.
     hidden_seeds: list[int] = Field(default_factory=list)
     ood_seeds: list[int] = Field(default_factory=list)
 
-    #: The public value this window's draw was bound to — the hash of the block
+    #: The public value this run's draw was bound to — the hash of the block
     #: it opened at. Published so the draw can be checked against the chain
     #: instead of taken on trust: the seeds derive from it, and the operator does
     #: not choose it.
     beacon: str = ""
-    #: Hash of the operator's seed root, identical in every window of a
+    #: Hash of the operator's seed root, identical in every run of a
     #: deployment. It reveals nothing about the root and binds the operator to
-    #: one: a value that moves between windows is the draw being changed, in
+    #: one: a value that moves between runs is the draw being changed, in
     #: public.
     root_commitment: str = ""
 
@@ -655,7 +670,7 @@ class ChampionRecord(StrictModel):
     recipe_sha256: str | None = None
     artifact_sha256: str | None = None
     crowned_at_block: int = 0
-    crowned_at_window: int = 0
+    crowned_at_run: int = 0
     successful_defenses: int = 0
     is_reference: bool = Field(
         default=False,

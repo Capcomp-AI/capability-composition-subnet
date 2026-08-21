@@ -129,7 +129,7 @@ def main(argv: list[str] | None = None) -> int:
         recipe = draw_recipe(rng, snapshot)
 
         # Never submit a recipe that fails this. Admission runs the same checks
-        # and a rejected commitment costs a window.
+        # and a rejected commitment costs a run.
         problems = check_recipe(recipe, snapshot)
         if problems:
             print(f"  {attempt:3d}  invalid: {problems[0]}")

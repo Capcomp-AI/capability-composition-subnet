@@ -130,7 +130,7 @@ def test_the_validator_reaches_the_chain_without_the_tensor_stack():
 def test_the_auditor_can_replay_without_the_tensor_stack():
     """Replay re-runs the deterministic scorer over published traces.
 
-    It reconstructs nothing, so anyone with a laptop can check a closed window.
+    It reconstructs nothing, so anyone with a laptop can check a closed run.
     That is the property that makes the published record meaningful to someone
     who is not the operator, and it disappears the moment replay needs a GPU.
     """
@@ -188,10 +188,10 @@ class TestNothingIsKeyedByWhicheverWorkflowIsDefault:
         configured when it is replayed."""
         import pytest
 
-        from capability_subnet.common.schemas import WindowDisclosure
+        from capability_subnet.common.schemas import RunDisclosure
 
         with pytest.raises(Exception):  # noqa: B017 - pydantic's own validation error
-            WindowDisclosure(window_id=1, closed_at_block=1)
+            RunDisclosure(run_id=1, closed_at_block=1)
 
     def test_every_workflow_publishes_the_protocol_facts_a_miner_needs(self):
         """A contract without the base model or the pool is not one a miner can
@@ -206,7 +206,7 @@ class TestNothingIsKeyedByWhicheverWorkflowIsDefault:
             "stages",
             "hard_gates",
             "champion_challenge",
-            "windows",
+            "runs",
             "incentive",
         }
         for workflow_id in available_workflows():
@@ -379,7 +379,7 @@ class TestTheDeclaredDependenciesAreEnough:
         return names
 
     def test_the_default_workflow_can_draw_an_instance_on_a_base_install(self):
-        """A validator installs the base package and re-scores a closed window,
+        """A validator installs the base package and re-scores a closed run,
         which regenerates every instance. Anything that path imports has to be a
         base dependency, not an extra."""
         declared = self._declared()

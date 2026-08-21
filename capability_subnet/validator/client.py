@@ -72,17 +72,17 @@ class BackendClient:
     def health(self) -> dict:
         return self._get("/health")
 
-    def window_blocks(self) -> int | None:
-        """The engine's configured window length.
+    def run_blocks(self) -> int | None:
+        """The engine's configured run length.
 
-        Staleness is measured in windows, so computing it from a compiled-in
-        default would be wrong for any deployment that tuned the window — either
+        Staleness is measured in runs, so computing it from a compiled-in
+        default would be wrong for any deployment that tuned the run — either
         accepting vectors far past their useful life, or rejecting fresh ones.
         Returns ``None`` if the engine does not report it, and the caller then
         declines to judge staleness rather than guessing.
         """
         try:
-            value = self.health().get("window_blocks")
+            value = self.health().get("run_blocks")
         except BackendUnavailable:
             return None
         try:
@@ -123,19 +123,19 @@ class BackendClient:
     def fetch_champion(self) -> dict:
         return self._get("/champion")
 
-    def fetch_disclosure(self, window_id: int):
-        """The published instances and traces for one closed window.
+    def fetch_disclosure(self, run_id: int):
+        """The published instances and traces for one closed run.
 
         Raises:
-            BackendUnavailable: if the window is not disclosed or the payload is
+            BackendUnavailable: if the run is not disclosed or the payload is
                 not a valid disclosure.
             SignatureError: if it is not signed by a trusted operator.
         """
-        from capability_subnet.common.schemas import WindowDisclosure
+        from capability_subnet.common.schemas import RunDisclosure
 
-        payload = self._get(f"/windows/{window_id}/disclosure")
+        payload = self._get(f"/runs/{run_id}/disclosure")
         try:
-            disclosure = WindowDisclosure.model_validate(payload)
+            disclosure = RunDisclosure.model_validate(payload)
         except Exception as exc:  # noqa: BLE001
             raise BackendUnavailable(f"malformed disclosure: {exc}") from exc
 
@@ -148,8 +148,8 @@ def validate_vector(
     *,
     metagraph_size: int,
     hotkeys: list[str],
-    current_window: int | None,
-    max_stale_windows: int,
+    current_run: int | None,
+    max_stale_runs: int,
     burn_uid: int,
 ) -> list[ValidationProblem]:
     """Check a fetched vector against the chain the validator can see.
@@ -186,26 +186,26 @@ def validate_vector(
             )
         )
 
-    if current_window is None:
-        # The engine did not report its window length, so staleness cannot be
+    if current_run is None:
+        # The engine did not report its run length, so staleness cannot be
         # computed. Say so rather than assuming freshness — a validator that
         # silently skipped this check would keep paying a champion through an
         # engine outage, which is the exact failure the check exists for.
         problems.append(
             ValidationProblem(
                 "staleness_unknown",
-                "the engine did not report its window length, so the vector's "
+                "the engine did not report its run length, so the vector's "
                 "freshness cannot be established",
             )
         )
     else:
-        staleness = current_window - vector.window_id
-        if staleness > max_stale_windows:
+        staleness = current_run - vector.run_id
+        if staleness > max_stale_runs:
             problems.append(
                 ValidationProblem(
                     "stale",
-                    f"the vector is {staleness} windows behind the chain head, above the "
-                    f"{max_stale_windows}-window tolerance. The engine may have stalled.",
+                    f"the vector is {staleness} runs behind the chain head, above the "
+                    f"{max_stale_runs}-run tolerance. The engine may have stalled.",
                 )
             )
 
@@ -229,8 +229,8 @@ def validate_vector(
     return problems
 
 
-def spot_check_window(client: BackendClient, window_id: int) -> tuple[bool, str]:
-    """Re-score a closed window from its own published traces.
+def spot_check_run(client: BackendClient, run_id: int) -> tuple[bool, str]:
+    """Re-score a closed run from its own published traces.
 
     This is the check that turns "the operator says so" into something a
     validator can answer for itself. Instance generation is a pure function of
@@ -245,42 +245,42 @@ def spot_check_window(client: BackendClient, window_id: int) -> tuple[bool, str]
 
     Returns:
         ``(ok, detail)``. ``ok`` is False only when the engine's own published
-        record contradicts itself — a window that has not been disclosed yet, or
+        record contradicts itself — a run that has not been disclosed yet, or
         an engine that cannot be reached, is not evidence of dishonesty and does
         not fail the check.
     """
     from capability_subnet.audit.replay import replay_disclosure
 
     try:
-        disclosure = client.fetch_disclosure(window_id)
+        disclosure = client.fetch_disclosure(run_id)
     except SignatureError as exc:
-        return False, f"the disclosure for window {window_id} is not attributable: {exc}"
+        return False, f"the disclosure for run {run_id} is not attributable: {exc}"
     except BackendUnavailable as exc:
         # Not yet disclosed, or the engine is unreachable. Neither is a finding.
-        log.info("skipping the spot check for window %d: %s", window_id, exc)
-        return True, f"window {window_id} is not available to re-score"
+        log.info("skipping the spot check for run %d: %s", run_id, exc)
+        return True, f"run {run_id} is not available to re-score"
 
     outcome, result = replay_disclosure(disclosure)
 
     if outcome.disagreed:
         return False, (
-            f"window {window_id} does not re-score to its published result: "
+            f"run {run_id} does not re-score to its published result: "
             f"{outcome.summary()}. First disagreement: {outcome.disagreed[0]}"
         )
     if not result.ok:
-        return False, f"window {window_id} failed replay verification: {result.summary()}"
+        return False, f"run {run_id} failed replay verification: {result.summary()}"
 
-    return True, f"window {window_id}: {outcome.summary()}"
+    return True, f"run {run_id}: {outcome.summary()}"
 
 
 def check_draw_was_not_re_rolled(
-    client: BackendClient, window_id: int, *, windows: int = 5
+    client: BackendClient, run_id: int, *, runs: int = 5
 ) -> tuple[bool, str]:
-    """Whether recent windows all derive from one seed root.
+    """Whether recent runs all derive from one seed root.
 
-    Replaying a single window cannot ask this: it checks that the instances match
+    Replaying a single run cannot ask this: it checks that the instances match
     the seeds, not where the seeds came from. Seeds derive from a root only the
-    operator holds, so a root that changes between windows is the operator
+    operator holds, so a root that changes between runs is the operator
     re-rolling which problems candidates face — and one disclosure never shows it.
 
     Bounds rather than closes the attack. Nothing reveals the root, so a constant
@@ -288,23 +288,23 @@ def check_draw_was_not_re_rolled(
     one value and keep it. Pair it with the beacon check, which does compare
     against the chain.
 
-    A window that is missing or unreachable is skipped rather than failed, on the
+    A run that is missing or unreachable is skipped rather than failed, on the
     same policy as the rest of the validator: an outage must not read as fraud.
     """
     from capability_subnet.audit.replay import commitments_agree
 
     collected = []
-    for candidate in range(max(0, window_id - windows + 1), window_id + 1):
+    for candidate in range(max(0, run_id - runs + 1), run_id + 1):
         try:
             collected.append(client.fetch_disclosure(candidate))
         except (BackendUnavailable, SignatureError):
             continue
 
     if len(collected) < 2:
-        return True, "not enough disclosed windows to compare seed roots"
+        return True, "not enough disclosed runs to compare seed roots"
 
     agreed, detail = commitments_agree(collected)
-    if not agreed and "no window published" in detail:
+    if not agreed and "no run published" in detail:
         # An operator who publishes nothing is not caught here; that is the
         # limitation, and it is a warning rather than a refusal to pay.
         return True, detail
@@ -337,6 +337,6 @@ __all__ = [
     "ValidationProblem",
     "check_draw_was_not_re_rolled",
     "safe_fallback",
-    "spot_check_window",
+    "spot_check_run",
     "validate_vector",
 ]

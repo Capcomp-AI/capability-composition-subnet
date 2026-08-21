@@ -43,9 +43,9 @@ from capability_subnet.common.chain import (
     MetagraphView,
     current_block,
     fetch_metagraph,
-    measured_in_window,
+    measured_in_run,
     submit_weights,
-    window_id_for_block,
+    run_id_for_block,
 )
 from capability_subnet.common.config import build_config
 from capability_subnet.common.logging import setup_logging
@@ -55,7 +55,7 @@ log = logging.getLogger(__name__)
 
 
 class BurnTargetUnavailable(Exception):
-    """Raised when there is no owner UID to route a refused window's share to."""
+    """Raised when there is no owner UID to route a refused run's share to."""
 
 
 class ValidatorNeuron:
@@ -80,7 +80,7 @@ class ValidatorNeuron:
 
         # Unconditional. There is no mode this validator can fall back to, so a
         # host that cannot measure a candidate must find that out here rather
-        # than discover it one window later having scored every miner zero.
+        # than discover it one run later having scored every miner zero.
         self._preflight_own_evaluation()
 
         self.uid = self._resolve_uid()
@@ -138,7 +138,7 @@ class ValidatorNeuron:
                 f"--neuron.device is {device!r}. A validator rebuilds every submission "
                 "locally, and the trimming methods run roughly thirty times slower on a CPU — "
                 "a queue that takes minutes per candidate on a GPU takes most of a day, so a "
-                "CPU validator would fall behind the window it is meant to decide. Set a CUDA "
+                "CPU validator would fall behind the run it is meant to decide. Set a CUDA "
                 "device; there is no mode that measures without one."
             )
         else:
@@ -148,7 +148,7 @@ class ValidatorNeuron:
                 if not torch.cuda.is_available():
                     problems.append(
                         f"--neuron.device is {device!r} but torch reports no CUDA device on this "
-                        "host, so every reconstruction would fail once the window opened."
+                        "host, so every reconstruction would fail once the run opened."
                     )
             except ImportError:
                 # The merge-stack check below already reports this, and saying it
@@ -252,7 +252,7 @@ class ValidatorNeuron:
             log.warning("metagraph resync failed; continuing with the cached view", exc_info=True)
 
     def burn_uid(self) -> int:
-        """Where a refused window's emission goes.
+        """Where a refused run's emission goes.
 
         The subnet owner's UID, resolved from the metagraph every pass. UID 0 is
         not a burn address — it belongs to whichever neuron registered into the
@@ -274,7 +274,7 @@ class ValidatorNeuron:
         return (block - self.last_weight_block) >= self.config.weight_interval
 
     def step(self) -> None:
-        """One pass: measure this window here, then set weights from it."""
+        """One pass: measure this run here, then set weights from it."""
         block = current_block(self.subtensor)
         if not self.should_set_weights(block):
             return
@@ -283,18 +283,18 @@ class ValidatorNeuron:
         self._step_own(block)
 
     def _step_own(self, block: int) -> None:
-        """Measure this window here, and set weights from what was measured.
+        """Measure this run here, and set weights from what was measured.
 
-        The operator-free path. Nothing is fetched from anybody: the window comes
+        The operator-free path. Nothing is fetched from anybody: the run comes
         from the chain's own block hash, the candidates come from commitments,
         and the numbers come from this host's GPU.
         """
         from capability_subnet.common.chain import block_beacon, read_commitments
-        from capability_subnet.validator.window import Candidate, run_window
+        from capability_subnet.validator.run import Candidate, evaluate_run
 
-        window_blocks = C.DEFAULT_WINDOW_BLOCKS
-        window_id = window_id_for_block(block, window_blocks)
-        opened_at = window_id * window_blocks
+        run_blocks = C.DEFAULT_RUN_BLOCKS
+        run_id = run_id_for_block(block, run_blocks)
+        opened_at = run_id * run_blocks
 
         try:
             beacon = block_beacon(self.subtensor, opened_at)
@@ -307,23 +307,23 @@ class ValidatorNeuron:
 
         eligible = []
         for commitment in read_commitments(self.subtensor, self.config.netuid):
-            # Only what stood at the moment the window opened. A commitment made
+            # Only what stood at the moment the run opened. A commitment made
             # after the beacon existed was made by someone who could already see
             # the instances.
             if commitment.block > opened_at:
                 continue
-            # And only what was committed in the window that just closed.
-            if not measured_in_window(commitment.block, window_id, window_blocks):
+            # And only what was committed in the run that just closed.
+            if not measured_in_run(commitment.block, run_id, run_blocks):
                 continue
             eligible.append(commitment)
 
-        limit = int(getattr(self.config, "max_candidates_per_window", 0) or 0)
+        limit = int(getattr(self.config, "max_candidates_per_run", 0) or 0)
         if 0 < limit < len(eligible):
             # read_commitments returns commit order, so this keeps the earliest
             # and says so. A silent truncation reads as "measured everything".
             log.warning(
                 "%d candidates eligible, measuring the first %d by commit order; "
-                "%d will not be measured or paid this window",
+                "%d will not be measured or paid this run",
                 len(eligible),
                 limit,
                 len(eligible) - limit,
@@ -347,9 +347,9 @@ class ValidatorNeuron:
                 )
             )
 
-        outcome = run_window(
+        outcome = evaluate_run(
             candidates,
-            window_id=window_id,
+            run_id=run_id,
             beacon=beacon,
             hotkey=self.wallet.hotkey.ss58_address,
             block=block,
@@ -364,16 +364,16 @@ class ValidatorNeuron:
             log.warning("peer %s looks inconsistent: %s", who, why)
 
         log.info(
-            "window %s: measured %s of %s candidates on %s instances",
-            window_id,
+            "run %s: measured %s of %s candidates on %s instances",
+            run_id,
             len(outcome.usable),
             len(candidates),
             len(outcome.assignment),
         )
-        self._report(outcome, candidates, window_id)
+        self._report(outcome, candidates, run_id)
         self._submit(outcome.weights, block)
 
-    def _report(self, outcome, candidates: list, window_id: int) -> None:
+    def _report(self, outcome, candidates: list, run_id: int) -> None:
         """Record what each candidate scored, and why.
 
         The weight vector says what a miner was paid; on its own it never says
@@ -434,10 +434,10 @@ class ValidatorNeuron:
         # Written as well as logged: a log rotates, and this is the evidence a
         # miner would ask for weeks later.
         try:
-            directory = Path(self.config.full_path) / "windows"
+            directory = Path(self.config.full_path) / "runs"
             directory.mkdir(parents=True, exist_ok=True)
             payload = {
-                "window_id": window_id,
+                "run_id": run_id,
                 "netuid": self.config.netuid,
                 "validator_hotkey": self.wallet.hotkey.ss58_address,
                 "instances": len(outcome.assignment),
@@ -451,9 +451,9 @@ class ValidatorNeuron:
                     else []
                 ),
             }
-            (directory / f"window-{window_id}.json").write_text(json.dumps(payload, indent=2))
-        except Exception:  # noqa: BLE001 - reporting must never stop the window
-            log.warning("could not write the window report", exc_info=True)
+            (directory / f"run-{run_id}.json").write_text(json.dumps(payload, indent=2))
+        except Exception:  # noqa: BLE001 - reporting must never stop the run
+            log.warning("could not write the run report", exc_info=True)
 
     def _uid_of(self, hotkey: str) -> int | None:
         try:
@@ -472,7 +472,7 @@ class ValidatorNeuron:
             return None
 
     def _measure_base(self, assignment, sample):
-        """Measure the permanent reference on this window's draw.
+        """Measure the permanent reference on this run's draw.
 
         The base model with no adapter attached, on the same instances and the
         same probe the candidates face.
@@ -490,7 +490,7 @@ class ValidatorNeuron:
         from capability_subnet.scoring.aggregate import EfficiencyInputs, aggregate_scores
         from capability_subnet.validator.evaluator import measure_base_model
         from capability_subnet.validator.serving import BASE_MODEL, serve_candidate
-        from capability_subnet.validator.window import BaseMeasurement
+        from capability_subnet.validator.run import BaseMeasurement
         from capability_subnet.workflows import get_workflow
 
         if not self.config.serve_url:
@@ -611,7 +611,7 @@ class ValidatorNeuron:
                 candidate_id=candidate.hotkey,
                 # --neuron.device was declared and read by nothing, so every
                 # validator merged on the CPU whatever it configured. The trimming
-                # methods are ~30x slower there, paid once per candidate per window.
+                # methods are ~30x slower there, paid once per candidate per run.
                 device=device,
             )
 
@@ -627,11 +627,11 @@ class ValidatorNeuron:
 
         vector = WeightVector(
             workflow_id=self.config.workflow_id,
-            window_id=window_id_for_block(block, C.DEFAULT_WINDOW_BLOCKS),
+            run_id=run_id_for_block(block, C.DEFAULT_RUN_BLOCKS),
             computed_at_block=block,
             entries=[WeightEntry(uid=burn_uid, hotkey="", weight=1.0, role="burn")],
         )
-        log.warning("burning this window's share to uid %d: %s", burn_uid, reason)
+        log.warning("burning this run's share to uid %d: %s", burn_uid, reason)
         self._submit(safe_fallback(burn_uid, vector), block)
 
     def _submit(self, vector, block: int) -> None:

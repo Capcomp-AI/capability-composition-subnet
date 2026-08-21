@@ -14,7 +14,7 @@ from __future__ import annotations
 import pytest
 
 from capability_subnet.audit.verify import (
-    audit_window,
+    audit_run,
     recompute_qualified_score,
     verify_report,
     verify_weight_vector,
@@ -45,7 +45,7 @@ def scores(**overrides) -> CandidateScores:
     payload = CandidateScores(**values)
     payload.qualified_score = recompute_qualified_score(
         EvaluationReport(
-            window_id=0,
+            run_id=0,
             evaluated_at_block=0,
             miner_hotkey="",
             candidate_id="",
@@ -105,7 +105,7 @@ def comparator(**overrides) -> ComparatorOutcome:
 
 def report(**overrides) -> EvaluationReport:
     values = {
-        "window_id": 12,
+        "run_id": 12,
         "evaluated_at_block": 90_000,
         "miner_hotkey": "5Challenger",
         "miner_uid": 7,
@@ -285,7 +285,7 @@ class TestScopeAndAttribution:
 class TestWeightVectors:
     def _vector(self, **overrides) -> WeightVector:
         values = {
-            "window_id": 12,
+            "run_id": 12,
             "computed_at_block": 90_000,
             "entries": [WeightEntry(uid=7, hotkey="5Challenger", weight=1.0)],
             "champion_hotkey": "5Challenger",
@@ -353,19 +353,19 @@ class TestWeightVectors:
         assert not any(f.code in ("reference_paid", "multiple_recipients") for f in result.errors)
 
 
-class TestWholeWindow:
-    def test_a_consistent_window_passes(self):
-        result = audit_window([report()], None, trusted_signers=None)
+class TestWholeRun:
+    def test_a_consistent_run_passes(self):
+        result = audit_run([report()], None, trusted_signers=None)
         assert [f.code for f in result.errors] == ["unsigned"]
         assert result.reports_checked == 1
 
-    def test_two_dethrones_in_one_window_is_flagged(self):
+    def test_two_dethrones_in_one_run_is_flagged(self):
         second = report(miner_hotkey="5Second", candidate_id="5Second")
-        result = audit_window([report(), second], None)
+        result = audit_run([report(), second], None)
         assert any(f.code == "multiple_dethrones" for f in result.warnings)
 
     def test_the_summary_reports_what_was_checked(self):
-        result = audit_window([report(), report()], None)
+        result = audit_run([report(), report()], None)
         assert "2 report(s) checked" in result.summary()
 
 
@@ -378,7 +378,7 @@ class TestGradedContributionVectors:
 
         defaults = dict(
             workflow_id=C.DEFAULT_WORKFLOW_ID,
-            window_id=1,
+            run_id=1,
             computed_at_block=100,
             mode=C.MODE_GRADED_CONTRIBUTION,
         )

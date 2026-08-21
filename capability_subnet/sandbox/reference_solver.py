@@ -62,7 +62,7 @@ def analyze(readings, threshold):
 """
 
 #: Passes the visible case by conflating the run length with the count. On the
-#: visible window those two happen to differ, so this is caught immediately — the
+#: visible run those two happen to differ, so this is caught immediately — the
 #: point is that it is *plausible* code, not obviously broken code.
 BROKEN_CODE = """
 def analyze(readings, threshold):

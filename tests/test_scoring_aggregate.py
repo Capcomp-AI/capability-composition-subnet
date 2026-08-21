@@ -62,11 +62,11 @@ class TestTheFloorGateSeparatesBrokenFromMerelyHard:
     The unmerged base model answers 18.8% of instances and is under 0.5 on nine
     axes of eleven; the equal-weight linear merge of twelve adapters emits
     repeated fragments and whitespace. A floor derived as half the pass threshold
-    terminated both, so nothing could ever be crowned and every window burned its
+    terminated both, so nothing could ever be crowned and every run burned its
     whole emission.
     """
 
-    #: reference:base_model, window 5150 — coherent, and hard problems are hard.
+    #: reference:base_model, run 5150 — coherent, and hard problems are hard.
     BASE = {
         "arrow_maze": 0.000,
         "boolean_expressions": 0.333,

@@ -1,4 +1,4 @@
-"""Re-scoring a closed window catches a doctored result.
+"""Re-scoring a closed run catches a doctored result.
 
 The disclosure mechanism only earns its keep if it detects the thing it exists
 to detect. These tests run a real instance through the real sandbox, take the
@@ -18,7 +18,7 @@ from capability_subnet.audit.replay import (
     trace_from_dict,
     verify_disclosure,
 )
-from capability_subnet.common.schemas import DisclosedInstance, WindowDisclosure
+from capability_subnet.common.schemas import DisclosedInstance, RunDisclosure
 from capability_subnet.sandbox.orchestrator import run_instance
 from capability_subnet.sandbox.reference_solver import ReferenceSolverClient
 from capability_subnet.testing import MAINTENANCE_WORKFLOW_ID
@@ -35,7 +35,7 @@ def scored_run():
     return instance, outcome.trace, outcome.result
 
 
-def disclosure_for(instance, trace, result, **overrides) -> WindowDisclosure:
+def disclosure_for(instance, trace, result, **overrides) -> RunDisclosure:
     entry = DisclosedInstance(
         instance_id=instance.instance_id,
         instance_seed=instance.seed,
@@ -51,14 +51,14 @@ def disclosure_for(instance, trace, result, **overrides) -> WindowDisclosure:
         # Stated explicitly: a disclosure names its own workflow, and this helper
         # builds a maintenance run.
         "workflow_id": MAINTENANCE_WORKFLOW_ID,
-        "window_id": 7,
+        "run_id": 7,
         "closed_at_block": 50_400,
         "hidden_seeds": [instance.seed],
         "ood_seeds": [],
         "instances": [entry],
     }
     payload.update(overrides)
-    return WindowDisclosure(**payload)
+    return RunDisclosure(**payload)
 
 
 class TestAnHonestDisclosureReplays:
@@ -139,7 +139,7 @@ class TestDoctoredResultsAreCaught:
         assert any("unsafe" in f.detail for f in audit.errors)
 
     def test_a_seed_outside_the_declared_draw_is_caught(self, scored_run):
-        # Scoring a candidate on an instance the window never claims to have
+        # Scoring a candidate on an instance the run never claims to have
         # drawn — an easier problem, quietly substituted.
         instance, trace, result = scored_run
         outcome, audit = replay_disclosure(
@@ -181,7 +181,7 @@ class TestAttribution:
         assert disclosure.signable_bytes() == before
 
 
-class TestTheValidatorRefusesToPayForAFabricatedWindow:
+class TestTheValidatorRefusesToPayForAFabricatedRun:
     """The spot check is what makes a validator a verifier rather than a relay.
 
     Replay was already correct and already exposed over the API; nothing
@@ -200,53 +200,53 @@ class TestTheValidatorRefusesToPayForAFabricatedWindow:
         """
 
         class _Client:
-            def fetch_disclosure(self, window_id):
+            def fetch_disclosure(self, run_id):
                 if disclosure is None:
                     from capability_subnet.validator.client import BackendUnavailable
 
-                    raise BackendUnavailable(f"window {window_id} is not disclosed")
+                    raise BackendUnavailable(f"run {run_id} is not disclosed")
                 return disclosure
 
         return _Client()
 
-    def test_an_honest_window_passes(self, scored_run):
-        from capability_subnet.validator.client import spot_check_window
+    def test_an_honest_run_passes(self, scored_run):
+        from capability_subnet.validator.client import spot_check_run
 
         instance, trace, result = scored_run
-        ok, detail = spot_check_window(
-            self._client(disclosure_for(instance, trace, result)), window_id=7
+        ok, detail = spot_check_run(
+            self._client(disclosure_for(instance, trace, result)), run_id=7
         )
         assert ok, detail
         assert "re-scored to the same result" in detail
 
-    def test_a_window_whose_scores_do_not_follow_from_its_traces_is_refused(self, scored_run):
+    def test_a_run_whose_scores_do_not_follow_from_its_traces_is_refused(self, scored_run):
         """The failure the whole published record exists to make detectable."""
-        from capability_subnet.validator.client import spot_check_window
+        from capability_subnet.validator.client import spot_check_run
 
         instance, trace, result = scored_run
         doctored = result.model_copy(deep=True)
         doctored.end_to_end_success = not result.end_to_end_success
 
-        ok, detail = spot_check_window(
+        ok, detail = spot_check_run(
             self._client(
                 disclosure_for(instance, trace, result, entry={"claimed_result": doctored})
             ),
-            window_id=7,
+            run_id=7,
         )
         assert not ok
         assert "does not re-score" in detail
 
-    def test_an_undisclosed_window_is_not_treated_as_dishonesty(self, scored_run):
+    def test_an_undisclosed_run_is_not_treated_as_dishonesty(self, scored_run):
         """Absence of a disclosure is absence of evidence.
 
-        A window the engine has not published yet, or an engine briefly
+        A run the engine has not published yet, or an engine briefly
         unreachable, must not cost the champion its emission — that would turn
         an ordinary outage into a punishment and give validators an incentive to
         race the disclosure.
         """
-        from capability_subnet.validator.client import spot_check_window
+        from capability_subnet.validator.client import spot_check_run
 
-        ok, detail = spot_check_window(self._client(None), window_id=7)
+        ok, detail = spot_check_run(self._client(None), run_id=7)
         assert ok
         assert "not available" in detail
 

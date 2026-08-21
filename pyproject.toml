@@ -24,7 +24,7 @@ classifiers = [
 
 # The base install is what a *delegated* validator needs, and nothing more: it
 # reconstructs nothing, serves nothing and scores nothing — it fetches a signed
-# vector, verifies it, replays a closed window from published traces, and sets
+# vector, verifies it, replays a closed run from published traces, and sets
 # weights. Declaring torch here made that install 1.7 GB of tensor library that
 # validator never imports, against a documented 20 GB VPS.
 #
@@ -47,7 +47,7 @@ dependencies = [
   "PyYAML>=6.0",
   "rich>=13.0",
   # The default workflow draws its instances from two pinned corpora, and a
-  # validator regenerates those instances to re-score a closed window. Without
+  # validator regenerates those instances to re-score a closed run. Without
   # these it can fetch a disclosure and then fail to check it — which is the one
   # thing a validator exists to do. Far smaller than the tensor stack, and not
   # optional for anyone who verifies.

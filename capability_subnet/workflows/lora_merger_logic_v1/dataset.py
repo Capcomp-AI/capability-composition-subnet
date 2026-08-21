@@ -2,10 +2,10 @@
 
 A generated workflow is a pure function of its seed, so an auditor regenerates
 the exact problem from the seed alone. A fixed corpus offers less: the *items* are
-public, and what the secret seed protects is only which of them a window draws.
+public, and what the secret seed protects is only which of them a run draws.
 
-Three things narrow that gap. Selection is stratified, so a window cannot be
-dominated by whichever family a miner studied. A quarter of every window is scored
+Three things narrow that gap. Selection is stratified, so a run cannot be
+dominated by whichever family a miner studied. A quarter of every run is scored
 by **executing** the candidate's program, where recognising a memorised problem
 does not help unless the code runs. And general capability is probed separately,
 so a package tuned onto this corpus at the cost of everything else is caught by
@@ -129,8 +129,8 @@ def load_code() -> tuple[CorpusItem, ...]:
     """Execution-verified programs, sorted for determinism.
 
     Only the first shards are read. The corpus runs to tens of thousands of
-    problems and a window samples a few hundred; loading all of it would cost
-    minutes of every engine start for items no window will draw.
+    problems and a run samples a few hundred; loading all of it would cost
+    minutes of every engine start for items no run will draw.
     """
     from huggingface_hub import HfApi, hf_hub_download
 
@@ -223,7 +223,7 @@ def select(seed: int) -> CorpusItem:
     """The item this seed denotes.
 
     The seed decides the corpus first, then the family, then the item. Deciding
-    the corpus first is what makes the code share a stable fraction of a window
+    the corpus first is what makes the code share a stable fraction of a run
     rather than an accident of how many logic families happen to be loaded.
     """
     rng = random.Random(seed)

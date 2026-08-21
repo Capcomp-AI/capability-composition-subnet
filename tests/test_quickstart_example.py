@@ -74,6 +74,6 @@ def test_it_prints_a_commitment_that_fits(tmp_path):
 
 
 def test_it_says_the_placeholder_ranking_is_not_a_measurement(tmp_path):
-    """A miner who mistakes the offline heuristic for a score wastes a window."""
+    """A miner who mistakes the offline heuristic for a score wastes a run."""
     result = _run("--tries", "2", "--seed", "3", "--out", str(tmp_path / "r.json"))
     assert "not by measurement" in result.stdout

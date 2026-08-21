@@ -61,18 +61,18 @@ same one with a smaller fraction.
 
 **Why four cards.** Not the reference schedule — batched serving finishes the
 eight reference packages in about 3.7 hours on a single card, well inside a
-72-hour window. It is challenger throughput at the cadence this network is
+72-hour run. It is challenger throughput at the cadence this network is
 moving to. At the current rate a validator covers roughly 106 challengers per
-3-day window on one card and 448 on four; shorten the window to a day and one
+3-day run on one card and 448 on four; shorten the run to a day and one
 card covers 30, against the 29 commitments the network already carries. Four
-cards is what keeps a short window viable while the miner count grows.
+cards is what keeps a short run viable while the miner count grows.
 
 **Why the CPU and RAM are higher than they look.** Reconstruction is pinned to a
 single torch thread — byte-identical merges across machines require it — so each
 merge saturates exactly one core and no more. The engine runs merges for
 upcoming candidates while the fleet serves the current batch, so a 4-card
 validator has up to four merges and four servers in flight at once, each merge
-holding 1–4 GB resident. Cores, not clock speed, are what shorten a window.
+holding 1–4 GB resident. Cores, not clock speed, are what shorten a run.
 
 Cards are the unit of parallelism. Each one measures a whole candidate at a
 time, so eight cards measure eight candidates at once and the run's throughput
@@ -87,7 +87,7 @@ and each would measure the other's footprint as its own.
 
 One card still works and is still honest; it measures fewer candidates per
 run. A validator that cannot finish its queue should bound it with
-`--neuron.max_candidates_per_window` rather than fall behind silently.
+`--neuron.max_candidates_per_run` rather than fall behind silently.
 
 Point the validator at the cards with `--neuron.devices`:
 
@@ -243,7 +243,7 @@ Expect roughly 15 minutes of reconstruction per candidate that uses a trimming m
 | `--neuron.base_model_path` | *empty* | Local copy of the pinned base model. **Required.** |
 | `--neuron.serving_python` | *empty* | Interpreter that starts each candidate's runtime |
 | `--neuron.devices` | *empty* | Cards to measure on, comma-separated. Empty uses `--neuron.device` alone |
-| `--neuron.max_candidates_per_window` | `0` | Stop after this many candidates, in commit order. `0` measures everything eligible |
+| `--neuron.max_candidates_per_run` | `0` | Stop after this many candidates, in commit order. `0` measures everything eligible |
 | `--incentive_mode` | `graded_contribution` | How the measured field becomes weights |
 
 ### Incentive mode
@@ -301,7 +301,7 @@ curl https://<engine-host>/champion
 curl https://<engine-host>/reports/<report-sha256>
 
 # Every evaluation in a run
-curl "https://<engine-host>/reports?window_id=<n>"
+curl "https://<engine-host>/reports?run_id=<n>"
 ```
 
 A report states the recipe digest, the artifact digest, the evaluator image digest, every hard-gate verdict, every per-axis comparator verdict, the paired bootstrap bound, and the reason for the decision. If you have the published recipe and the certified pool, you can rebuild the artifact and confirm its digest matches:

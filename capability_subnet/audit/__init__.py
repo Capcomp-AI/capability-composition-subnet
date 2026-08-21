@@ -9,7 +9,7 @@ beyond a readable API.
 from capability_subnet.audit.verify import (
     AuditResult,
     Finding,
-    audit_window,
+    audit_run,
     recompute_qualified_score,
     verify_report,
     verify_weight_vector,
@@ -18,7 +18,7 @@ from capability_subnet.audit.verify import (
 __all__ = [
     "AuditResult",
     "Finding",
-    "audit_window",
+    "audit_run",
     "recompute_qualified_score",
     "verify_report",
     "verify_weight_vector",

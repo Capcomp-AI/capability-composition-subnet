@@ -17,18 +17,18 @@ from capability_subnet.audit.replay import (
     commitments_agree,
 )
 from capability_subnet.audit.verify import AuditResult
-from capability_subnet.common.schemas import WindowDisclosure
-from capability_subnet.scoring.sampler import draw_window, root_commitment
+from capability_subnet.common.schemas import RunDisclosure
+from capability_subnet.scoring.sampler import draw_run, root_commitment
 
 ROOT = 918273645
 
 
-def disclosure(window_id: int, *, root: int = ROOT, beacon: str = "0xblock") -> WindowDisclosure:
-    sample = draw_window(window_id, root=root, hidden_count=4, ood_count=1, beacon=beacon)
-    return WindowDisclosure(
+def disclosure(run_id: int, *, root: int = ROOT, beacon: str = "0xblock") -> RunDisclosure:
+    sample = draw_run(run_id, root=root, hidden_count=4, ood_count=1, beacon=beacon)
+    return RunDisclosure(
         workflow_id="lora_merger_logic_v1",
-        window_id=window_id,
-        closed_at_block=window_id * 100,
+        run_id=run_id,
+        closed_at_block=run_id * 100,
         hidden_seeds=list(sample.hidden_seeds),
         ood_seeds=list(sample.ood_seeds),
         beacon=sample.beacon,
@@ -40,12 +40,12 @@ class TestGrindingTheRootIsVisible:
     def test_a_different_root_gives_a_different_draw(self):
         """The attack itself: the operator has a free hand over which problems a
         candidate sees, and every seed it produces is genuine."""
-        honest = draw_window(9, root=ROOT, hidden_count=8, ood_count=2, beacon="0xb")
-        ground = draw_window(9, root=ROOT + 1, hidden_count=8, ood_count=2, beacon="0xb")
+        honest = draw_run(9, root=ROOT, hidden_count=8, ood_count=2, beacon="0xb")
+        ground = draw_run(9, root=ROOT + 1, hidden_count=8, ood_count=2, beacon="0xb")
         assert honest.hidden_seeds != ground.hidden_seeds
 
-    def test_re_rooting_between_windows_is_caught(self):
-        """What makes it detectable. One root produces every window, so a
+    def test_re_rooting_between_runs_is_caught(self):
+        """What makes it detectable. One root produces every run, so a
         commitment that moves is the operator changing the draw in public."""
         run = [disclosure(1), disclosure(2), disclosure(3, root=ROOT + 1)]
         agreed, detail = commitments_agree(run)
@@ -62,7 +62,7 @@ class TestGrindingTheRootIsVisible:
         assert str(ROOT) not in commitment
         assert commitment.startswith("sha256:")
 
-    def test_a_window_missing_its_commitment_cannot_be_vouched_for(self):
+    def test_a_run_missing_its_commitment_cannot_be_vouched_for(self):
         run = [disclosure(1), disclosure(2)]
         run[1].root_commitment = ""
         agreed, detail = commitments_agree(run)
@@ -72,21 +72,21 @@ class TestGrindingTheRootIsVisible:
 
 class TestTheDrawIsBoundToSomethingTheOperatorDoesNotChoose:
     def test_the_beacon_changes_the_draw(self):
-        """Even holding the root fixed, the operator cannot precompute a window:
-        the block hash is not theirs and is not known until the window opens."""
-        a = draw_window(4, root=ROOT, hidden_count=6, ood_count=1, beacon="0xaaa")
-        b = draw_window(4, root=ROOT, hidden_count=6, ood_count=1, beacon="0xbbb")
+        """Even holding the root fixed, the operator cannot precompute a run:
+        the block hash is not theirs and is not known until the run opens."""
+        a = draw_run(4, root=ROOT, hidden_count=6, ood_count=1, beacon="0xaaa")
+        b = draw_run(4, root=ROOT, hidden_count=6, ood_count=1, beacon="0xbbb")
         assert a.hidden_seeds != b.hidden_seeds
         assert a.probe_seed != b.probe_seed
 
     def test_the_draw_stays_reproducible_for_a_replay(self):
-        """Binding must not cost reproducibility — a disputed window has to
+        """Binding must not cost reproducibility — a disputed run has to
         regenerate exactly."""
-        first = draw_window(4, root=ROOT, hidden_count=6, ood_count=1, beacon="0xaaa")
-        again = draw_window(4, root=ROOT, hidden_count=6, ood_count=1, beacon="0xaaa")
+        first = draw_run(4, root=ROOT, hidden_count=6, ood_count=1, beacon="0xaaa")
+        again = draw_run(4, root=ROOT, hidden_count=6, ood_count=1, beacon="0xaaa")
         assert first == again
 
-    def test_an_unbound_window_is_flagged_rather_than_trusted(self):
+    def test_an_unbound_run_is_flagged_rather_than_trusted(self):
         naked = disclosure(1)
         naked.beacon = ""
         naked.root_commitment = ""
@@ -96,7 +96,7 @@ class TestTheDrawIsBoundToSomethingTheOperatorDoesNotChoose:
         assert "unbound_draw" in codes
         assert "unbound_seed_root" in codes
 
-    def test_a_bound_window_raises_nothing(self):
+    def test_a_bound_run_raises_nothing(self):
         result = AuditResult()
         check_draw_is_bound(disclosure(1), result)
         assert not [f for f in result.findings if f.code.startswith("unbound")]
@@ -104,7 +104,7 @@ class TestTheDrawIsBoundToSomethingTheOperatorDoesNotChoose:
     def test_the_probe_seed_is_independent_of_the_instance_seeds(self):
         """Learning the retention probe must not reveal the hidden draw: they
         share a root but not a label."""
-        sample = draw_window(4, root=ROOT, hidden_count=6, ood_count=1, beacon="0xaaa")
+        sample = draw_run(4, root=ROOT, hidden_count=6, ood_count=1, beacon="0xaaa")
         assert sample.probe_seed not in sample.hidden_seeds
         assert sample.probe_seed not in sample.ood_seeds
 
@@ -177,7 +177,7 @@ class TestTheBindingIsCheckedAndNotJustPublished:
         lying = disclosure(3)
         lying.beacon = "0xwhatever-i-like"
         result = AuditResult()
-        ok, detail = verify_beacon_against_chain(lying, Chain(), window_blocks=100, result=result)
+        ok, detail = verify_beacon_against_chain(lying, Chain(), run_blocks=100, result=result)
         assert not ok
         assert "fabricated_beacon" in {f.code for f in result.findings}
         assert "not bound to the block it says" in detail
@@ -191,7 +191,7 @@ class TestTheBindingIsCheckedAndNotJustPublished:
 
         honest = disclosure(3)
         honest.beacon = "0xagreed"
-        ok, _ = verify_beacon_against_chain(honest, Chain(), window_blocks=100)
+        ok, _ = verify_beacon_against_chain(honest, Chain(), run_blocks=100)
         assert ok
 
     def test_an_unreachable_chain_is_not_treated_as_fraud(self):
@@ -203,7 +203,7 @@ class TestTheBindingIsCheckedAndNotJustPublished:
             def block_info(self, block):
                 raise ConnectionError("no endpoint")
 
-        ok, detail = verify_beacon_against_chain(disclosure(3), Down(), window_blocks=100)
+        ok, detail = verify_beacon_against_chain(disclosure(3), Down(), run_blocks=100)
         assert ok
         assert "not checked" in detail
 
@@ -212,18 +212,18 @@ class TestTheBindingIsCheckedAndNotJustPublished:
 
         This used to assert the validator called ``check_draw_was_not_re_rolled``,
         because the draw came from a root one operator held and a root that moved
-        between windows was that operator re-rolling which problems candidates
-        faced. A validator now derives the window itself from the hash of the
+        between runs was that operator re-rolling which problems candidates
+        faced. A validator now derives the run itself from the hash of the
         block it opened at, and the sample commits to nothing — so there is no
         root to move, and grinding is not defended against, it is absent.
         """
-        from capability_subnet.scoring.sampler import draw_window_open
+        from capability_subnet.scoring.sampler import draw_run_open
 
-        sample = draw_window_open(7, beacon="0x" + "ab" * 32, hidden_count=8, ood_count=2)
+        sample = draw_run_open(7, beacon="0x" + "ab" * 32, hidden_count=8, ood_count=2)
         assert sample.root_commitment == "", "an open draw must hold nothing to commit to"
 
-        # And the same block always yields the same window, for everyone.
-        again = draw_window_open(7, beacon="0x" + "ab" * 32, hidden_count=8, ood_count=2)
+        # And the same block always yields the same run, for everyone.
+        again = draw_run_open(7, beacon="0x" + "ab" * 32, hidden_count=8, ood_count=2)
         assert sample.hidden_seeds == again.hidden_seeds
 
     def test_the_contract_carries_a_real_commitment(self):
@@ -234,4 +234,4 @@ class TestTheBindingIsCheckedAndNotJustPublished:
         contract = get_workflow("lora_merger_logic_v1").build_contract(
             seed_root_commitment=root_commitment(4242)
         )
-        assert contract["windows"]["seed_root_commitment"] == root_commitment(4242)
+        assert contract["runs"]["seed_root_commitment"] == root_commitment(4242)

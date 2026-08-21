@@ -20,7 +20,7 @@ the divergence itself.
 
 The band is a network parameter, not a fact of nature. The default below is
 deliberately conservative and should be replaced with a measured value: run
-``observed_discordance`` across validators on real hardware for a few windows
+``observed_discordance`` across validators on real hardware for a few runs
 and set the band from the distribution. A band guessed too tight punishes honest
 diversity, which is worse than one guessed too loose — a loose band still costs
 a cheating validator everything the moment it disagrees on a *result*, because

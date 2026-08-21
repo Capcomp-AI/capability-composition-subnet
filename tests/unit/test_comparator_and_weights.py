@@ -236,13 +236,13 @@ class TestWeightVector:
         return ChampionRecord(**payload)
 
     def test_the_champion_takes_the_whole_share(self):
-        vector = winner_take_all(self._champion(), window_id=1, block=100)
+        vector = winner_take_all(self._champion(), run_id=1, block=100)
         assert vector.entries == [vector.entries[0]]
         assert vector.entries[0].uid == 7
         assert vector.entries[0].weight == pytest.approx(1.0)
 
     def test_an_empty_throne_burns(self):
-        vector = winner_take_all(None, window_id=1, block=100)
+        vector = winner_take_all(None, run_id=1, block=100)
         assert vector.entries[0].uid == C.BURN_UID
         assert vector.entries[0].role == "burn"
 
@@ -253,13 +253,13 @@ class TestWeightVector:
         champion = self._champion(
             candidate_id=ref.BASE_MODEL, hotkey="5Operator", uid=3, is_reference=True
         )
-        vector = winner_take_all(champion, window_id=1, block=100)
+        vector = winner_take_all(champion, run_id=1, block=100)
 
         assert vector.entries[0].role == "burn"
         assert vector.champion_hotkey is None
 
     def test_the_burn_valve_splits_the_share(self):
-        vector = winner_take_all(self._champion(), window_id=1, block=100, burn_percentage=0.25)
+        vector = winner_take_all(self._champion(), run_id=1, block=100, burn_percentage=0.25)
         by_uid = {entry.uid: entry.weight for entry in vector.entries}
         assert by_uid[7] == pytest.approx(0.75)
         assert by_uid[C.BURN_UID] == pytest.approx(0.25)
@@ -268,7 +268,7 @@ class TestWeightVector:
         # The chain rejects a repeated UID, so the two entries must merge.
         vector = winner_take_all(
             self._champion(uid=C.BURN_UID),
-            window_id=1,
+            run_id=1,
             block=100,
             burn_percentage=0.3,
         )
@@ -277,35 +277,35 @@ class TestWeightVector:
         assert sum(entry.weight for entry in vector.entries) == pytest.approx(1.0)
 
     def test_graded_mode_uses_the_published_split(self):
-        vector = graded_top3([(1, "5A"), (2, "5B"), (3, "5C")], window_id=1, block=100)
+        vector = graded_top3([(1, "5A"), (2, "5B"), (3, "5C")], run_id=1, block=100)
         by_uid = {entry.uid: entry.weight for entry in vector.entries}
         assert by_uid[1] == pytest.approx(0.60)
         assert by_uid[2] == pytest.approx(0.25)
         assert by_uid[3] == pytest.approx(0.15)
 
     def test_unfilled_graded_ranks_burn_rather_than_promoting_anyone(self):
-        vector = graded_top3([(1, "5A")], window_id=1, block=100)
+        vector = graded_top3([(1, "5A")], run_id=1, block=100)
         by_uid = {entry.uid: entry.weight for entry in vector.entries}
 
         assert by_uid[1] == pytest.approx(0.60)
         assert by_uid[C.BURN_UID] == pytest.approx(0.40)
 
     def test_graded_mode_with_nobody_qualified_burns_everything(self):
-        vector = graded_top3([], window_id=1, block=100)
+        vector = graded_top3([], run_id=1, block=100)
         assert vector.entries[0].uid == C.BURN_UID
         assert vector.entries[0].weight == pytest.approx(1.0)
 
     def test_every_vector_sums_to_one(self):
         for vector in (
-            winner_take_all(self._champion(), window_id=1, block=1),
-            winner_take_all(None, window_id=1, block=1),
-            winner_take_all(self._champion(), window_id=1, block=1, burn_percentage=0.37),
-            graded_top3([(1, "a"), (2, "b")], window_id=1, block=1),
+            winner_take_all(self._champion(), run_id=1, block=1),
+            winner_take_all(None, run_id=1, block=1),
+            winner_take_all(self._champion(), run_id=1, block=1, burn_percentage=0.37),
+            graded_top3([(1, "a"), (2, "b")], run_id=1, block=1),
         ):
             assert sum(entry.weight for entry in vector.entries) == pytest.approx(1.0)
 
     def test_a_validator_may_burn_more_but_the_vector_stays_normalised(self):
-        published = winner_take_all(self._champion(), window_id=1, block=1)
+        published = winner_take_all(self._champion(), run_id=1, block=1)
         adjusted = apply_validator_burn(published, 0.5, C.BURN_UID)
 
         by_uid = {entry.uid: entry.weight for entry in adjusted.entries}
@@ -314,11 +314,11 @@ class TestWeightVector:
         assert sum(by_uid.values()) == pytest.approx(1.0)
 
     def test_zero_extra_burn_leaves_the_vector_untouched(self):
-        published = winner_take_all(self._champion(), window_id=1, block=1)
+        published = winner_take_all(self._champion(), run_id=1, block=1)
         assert apply_validator_burn(published, 0.0, C.BURN_UID) is published
 
     def test_uid_and_weight_lists_stay_aligned(self):
-        vector = graded_top3([(4, "5A"), (9, "5B")], window_id=1, block=1, burn_percentage=0.1)
+        vector = graded_top3([(4, "5A"), (9, "5B")], run_id=1, block=1, burn_percentage=0.1)
         uids, weights = vector.as_uid_weight_lists()
         assert len(uids) == len(weights)
         assert sum(weights) == pytest.approx(1.0)

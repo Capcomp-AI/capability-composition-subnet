@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from capability_subnet.scoring.sampler import draw_window_open
+from capability_subnet.scoring.sampler import draw_run_open
 from capability_subnet.validator.agreement import (
     DEFAULT_DISCORDANCE_BAND,
     compare,
@@ -29,35 +29,35 @@ OTHER_BEACON = "0x" + "cd" * 32
 
 
 class TestTheDrawNeedsNobodysSecret:
-    def test_two_strangers_derive_the_same_window(self):
+    def test_two_strangers_derive_the_same_run(self):
         """The whole point: no operator, no shared secret, same instances."""
-        a = draw_window_open(1080, beacon=BEACON, hidden_count=40, ood_count=10)
-        b = draw_window_open(1080, beacon=BEACON, hidden_count=40, ood_count=10)
+        a = draw_run_open(1080, beacon=BEACON, hidden_count=40, ood_count=10)
+        b = draw_run_open(1080, beacon=BEACON, hidden_count=40, ood_count=10)
         assert a.hidden_seeds == b.hidden_seeds
         assert a.ood_seeds == b.ood_seeds
         assert a.probe_seed == b.probe_seed
 
     def test_it_commits_to_nothing_because_it_holds_nothing(self):
         assert (
-            draw_window_open(1080, beacon=BEACON, hidden_count=5, ood_count=1).root_commitment == ""
+            draw_run_open(1080, beacon=BEACON, hidden_count=5, ood_count=1).root_commitment == ""
         )
 
-    def test_a_different_block_is_a_different_window(self):
-        """A miner who has seen one window learns nothing about the next."""
-        a = draw_window_open(1080, beacon=BEACON, hidden_count=40, ood_count=10)
-        b = draw_window_open(1080, beacon=OTHER_BEACON, hidden_count=40, ood_count=10)
+    def test_a_different_block_is_a_different_run(self):
+        """A miner who has seen one run learns nothing about the next."""
+        a = draw_run_open(1080, beacon=BEACON, hidden_count=40, ood_count=10)
+        b = draw_run_open(1080, beacon=OTHER_BEACON, hidden_count=40, ood_count=10)
         assert set(a.hidden_seeds).isdisjoint(b.hidden_seeds)
 
     def test_hidden_and_ood_do_not_collide(self):
-        s = draw_window_open(1080, beacon=BEACON, hidden_count=40, ood_count=10)
+        s = draw_run_open(1080, beacon=BEACON, hidden_count=40, ood_count=10)
         assert set(s.hidden_seeds).isdisjoint(s.ood_seeds)
         assert len(set(s.hidden_seeds)) == 40
 
     def test_an_empty_beacon_is_refused(self):
         """With no secret to fall back on, an empty beacon is one fixed draw
-        for every window of every deployment."""
+        for every run of every deployment."""
         with pytest.raises(ValueError, match="beacon"):
-            draw_window_open(1080, beacon="", hidden_count=5, ood_count=1)
+            draw_run_open(1080, beacon="", hidden_count=5, ood_count=1)
 
 
 class TestAssignmentIsPublicAndUnshoppable:
@@ -83,7 +83,7 @@ class TestAssignmentIsPublicAndUnshoppable:
         a = assign(self.SEEDS, hotkey="5AAA", beacon=BEACON)
         assert set(a.core).isdisjoint(a.tail)
 
-    def test_an_assignment_stays_inside_the_window(self):
+    def test_an_assignment_stays_inside_the_run(self):
         a = assign(self.SEEDS, hotkey="5AAA", beacon=BEACON)
         assert set(a.seeds) <= set(self.SEEDS)
 
@@ -103,7 +103,7 @@ class TestAssignmentIsPublicAndUnshoppable:
         with pytest.raises(ValueError):
             assign(self.SEEDS, hotkey="5AAA", beacon=BEACON, core_fraction=0.0)
 
-    def test_it_survives_a_window_smaller_than_the_fractions(self):
+    def test_it_survives_a_run_smaller_than_the_fractions(self):
         tiny = assign((1, 2), hotkey="5AAA", beacon=BEACON)
         assert len(tiny.core) >= 1
         assert set(tiny.seeds) <= {1, 2}

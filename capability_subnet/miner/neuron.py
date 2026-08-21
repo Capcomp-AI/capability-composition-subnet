@@ -24,7 +24,7 @@ from capability_subnet.common import constants as C
 from capability_subnet.common.chain import (
     fetch_metagraph,
     is_registered,
-    window_id_for_block,
+    run_id_for_block,
     write_commitment,
 )
 from capability_subnet.common.commitments import CommitmentError, encode_commitment
@@ -151,10 +151,10 @@ class MinerNeuron:
             if existing.payload.recipe_sha256 == digest:
                 log.info("this recipe is already committed; nothing to do")
                 return 0
-            window_blocks = C.DEFAULT_WINDOW_BLOCKS
-            existing_run = window_id_for_block(existing.block, window_blocks)
+            run_blocks = C.DEFAULT_RUN_BLOCKS
+            existing_run = run_id_for_block(existing.block, run_blocks)
             current_run = (
-                window_id_for_block(current_block, window_blocks)
+                run_id_for_block(current_block, run_blocks)
                 if current_block is not None
                 else existing_run
             )

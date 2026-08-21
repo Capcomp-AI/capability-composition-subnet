@@ -29,25 +29,25 @@ adapter_pool_dir: pool         # where the certified adapters are materialised
 report_dir: state/reports
 
 # The engine's own verified copy of every admitted recipe. A champion is
-# re-measured every window, so this must outlive the miner's own pointer — a
+# re-measured every run, so this must outlive the miner's own pointer — a
 # champion whose host goes down must not silently stop defending.
 recipe_dir: ""            # empty: <state_dir>/recipes
 
 # ---------------------------------------------------------------------------
-# Windows
+# Runs
 # ---------------------------------------------------------------------------
 # 21600 blocks is roughly 72 hours at 12-second blocks. These three must equal the
-# protocol constants exactly — validators derive the window from the constants, so
-# an engine that differs measures a different window and its numbers are not
+# protocol constants exactly — validators derive the run from the constants, so
+# an engine that differs measures a different run and its numbers are not
 # comparable to anyone's. The settings validator refuses to start on a mismatch.
-# Shorter windows re-measure
+# Shorter runs re-measure
 # the references more often, which costs GPU time; longer ones give a champion
 # more time on one instance draw.
-window_blocks: 21600
+run_blocks: 21600
 hidden_instances: 1350
 ood_instances: 100
 
-# The secret root every window's hidden draw is derived from. Anyone who knows
+# The secret root every run's hidden draw is derived from. Anyone who knows
 # it can predict every future hidden instance, so it must be generated once,
 # kept out of version control, and never shared. CHANGE ME:
 #   python3 -c "import secrets; print(secrets.randbits(63))"
@@ -97,7 +97,7 @@ reconstruction_workers: 2
 # 24 GB limit, so every candidate would clear the memory gate unchecked. Set it
 # false only for CPU-only development, where there is no GPU to measure.
 
-# Traces retained per candidate per window, for later disclosure. Once a window
+# Traces retained per candidate per run, for later disclosure. Once a run
 # closes, its seeds and these traces are published so anyone can regenerate the
 # instances and re-score them without a GPU. Retained by instance identifier
 # rather than by score, so the engine cannot keep only its flattering runs.
@@ -115,7 +115,7 @@ disclosure_traces: 10
 # crowned, and every verdict looks like an ordinary loss. 1350 hidden instances
 # resolve about 0.024, so the margin sits above it. Raising the margin or
 # lowering the instances is safe; lowering the margin needs more instances, and
-# more instances need a longer window — preflight checks both and says which.
+# more instances need a longer run — preflight checks both and says which.
 axis_margin: 0.02             # absolute margin to count as dominant on an axis
 axis_tolerance: 0.01          # relative band that still counts as not worse
 min_dominant_axes: 1

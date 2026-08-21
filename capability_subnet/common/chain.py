@@ -297,11 +297,11 @@ def current_block(subtensor: bt.Subtensor) -> int:
 
 
 def block_beacon(subtensor: bt.Subtensor, block: int) -> str:
-    """The hash of ``block``, to bind a window's instance draw to.
+    """The hash of ``block``, to bind a run's instance draw to.
 
     Instance seeds derive from a root only the operator holds. Mixing in a block
     hash takes the choice of draw away from them: the value is public, it is not
-    theirs to pick, and it does not exist until the window opens — so a draw
+    theirs to pick, and it does not exist until the run opens — so a draw
     cannot be selected after seeing a candidate.
 
     Returns an empty string when the endpoint cannot supply it. That is a real
@@ -359,23 +359,23 @@ def _block_hash_via_rpc(subtensor: bt.Subtensor, block: int) -> str:
         return ""
 
 
-def window_id_for_block(block: int, window_blocks: int) -> int:
-    """Map a block height to its evaluation window index."""
-    if window_blocks <= 0:
-        raise ValueError("window_blocks must be positive")
-    return block // window_blocks
+def run_id_for_block(block: int, run_blocks: int) -> int:
+    """Map a block height to its evaluation run index."""
+    if run_blocks <= 0:
+        raise ValueError("run_blocks must be positive")
+    return block // run_blocks
 
 
-def measured_in_window(commitment_block: int, window_id: int, window_blocks: int) -> bool:
-    """Whether a commitment is the business of this window.
+def measured_in_run(commitment_block: int, run_id: int, run_blocks: int) -> bool:
+    """Whether a commitment is the business of this run.
 
-    A commitment is measured once, in the window after the one it was made in.
+    A commitment is measured once, in the run after the one it was made in.
     Two things follow, and both matter more than they look:
 
     * a miner earns from one measurement and commits again to earn again, so the
-      floor between attempts is a whole window — long enough that iterating on a
+      floor between attempts is a whole run — long enough that iterating on a
       copied recipe costs more than searching properly;
-    * a window measures its new arrivals rather than every commitment ever made,
+    * a run measures its new arrivals rather than every commitment ever made,
       which is the difference between work that grows with the churn and work
       that grows with the size of the subnet.
 
@@ -386,31 +386,31 @@ def measured_in_window(commitment_block: int, window_id: int, window_blocks: int
     to disagree about.
 
     Raises:
-        ValueError: if ``window_blocks`` is not positive.
+        ValueError: if ``run_blocks`` is not positive.
     """
-    if window_blocks <= 0:
-        raise ValueError("window_blocks must be positive")
-    return commitment_block // window_blocks == window_id - 1
+    if run_blocks <= 0:
+        raise ValueError("run_blocks must be positive")
+    return commitment_block // run_blocks == run_id - 1
 
 
 @dataclass(frozen=True, slots=True)
-class WindowPosition:
-    """Where a block sits inside its evaluation window.
+class RunPosition:
+    """Where a block sits inside its evaluation run.
 
-    Derived from the block height and the window length alone, so anyone holding
+    Derived from the block height and the run length alone, so anyone holding
     a chain connection can compute it — a miner deciding whether it is worth
     committing now, a dashboard with no engine behind it, a validator reporting
     what it is working on. Nothing here consults an engine, because in the
     default arrangement each validator evaluates for itself and there is no
     central engine to ask.
 
-    What it deliberately does not claim is a *phase*. Windows are continuous:
+    What it deliberately does not claim is a *phase*. Runs are continuous:
     there is no submission cut-off after which the arena stops accepting
     commitments and starts evaluating. A commitment is admitted when it is seen,
-    and where a window is in its own span is the only position that exists.
+    and where a run is in its own span is the only position that exists.
     """
 
-    window_id: int
+    run_id: int
     opened_block: int
     closes_block: int
     blocks_elapsed: int
@@ -418,34 +418,34 @@ class WindowPosition:
 
     @property
     def progress(self) -> float:
-        """Fraction of the window elapsed, in ``[0, 1)``."""
+        """Fraction of the run elapsed, in ``[0, 1)``."""
         span = self.closes_block - self.opened_block
         return self.blocks_elapsed / span if span else 0.0
 
     def seconds_remaining(self, block_seconds: float = 12.0) -> float:
-        """Wall-clock left in the window, at the chain's nominal block time."""
+        """Wall-clock left in the run, at the chain's nominal block time."""
         return self.blocks_remaining * block_seconds
 
 
-def window_position(block: int, window_blocks: int) -> WindowPosition:
-    """Locate ``block`` within its evaluation window.
+def run_position(block: int, run_blocks: int) -> RunPosition:
+    """Locate ``block`` within its evaluation run.
 
     Raises:
-        ValueError: if ``window_blocks`` is not positive, or ``block`` is
+        ValueError: if ``run_blocks`` is not positive, or ``block`` is
             negative — both of which would otherwise produce a position that
             looks meaningful and is not.
     """
-    if window_blocks <= 0:
-        raise ValueError("window_blocks must be positive")
+    if run_blocks <= 0:
+        raise ValueError("run_blocks must be positive")
     if block < 0:
         raise ValueError("block must not be negative")
 
-    window_id = window_id_for_block(block, window_blocks)
-    opened = window_id * window_blocks
-    return WindowPosition(
-        window_id=window_id,
+    run_id = run_id_for_block(block, run_blocks)
+    opened = run_id * run_blocks
+    return RunPosition(
+        run_id=run_id,
         opened_block=opened,
-        closes_block=opened + window_blocks,
+        closes_block=opened + run_blocks,
         blocks_elapsed=block - opened,
-        blocks_remaining=opened + window_blocks - block,
+        blocks_remaining=opened + run_blocks - block,
     )

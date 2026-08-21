@@ -14,11 +14,11 @@ a run if it is misunderstood:
 from __future__ import annotations
 
 from capability_subnet.common import constants as C
-from capability_subnet.common.chain import measured_in_window, window_id_for_block
+from capability_subnet.common.chain import measured_in_run, run_id_for_block
 
 RUN = 411
-WINDOW = C.DEFAULT_WINDOW_BLOCKS
-START = RUN * WINDOW
+RUN = C.DEFAULT_RUN_BLOCKS
+START = RUN * RUN
 
 
 class TestOnlyTheLastSubmissionIsMeasured:
@@ -30,19 +30,19 @@ class TestOnlyTheLastSubmissionIsMeasured:
         commits inside a run, exactly one recipe stands at the end of it and
         exactly one measurement follows.
         """
-        attempts = [START + 10, START + WINDOW // 2, START + WINDOW - 50]
+        attempts = [START + 10, START + RUN // 2, START + RUN - 50]
 
         measured_in = {
-            window_id_for_block(block, WINDOW) + 1 for block in attempts
+            run_id_for_block(block, RUN) + 1 for block in attempts
         }
         assert measured_in == {RUN + 1}, "attempts in one run must share one measurement"
 
     def test_the_final_attempt_is_measured_in_the_next_run(self):
-        final = START + WINDOW - 50
+        final = START + RUN - 50
 
-        assert not measured_in_window(final, RUN, WINDOW), "not in the run it was made in"
-        assert measured_in_window(final, RUN + 1, WINDOW), "measured in the run after"
-        assert not measured_in_window(final, RUN + 2, WINDOW), "and never again"
+        assert not measured_in_run(final, RUN, RUN), "not in the run it was made in"
+        assert measured_in_run(final, RUN + 1, RUN), "measured in the run after"
+        assert not measured_in_run(final, RUN + 2, RUN), "and never again"
 
 
 class TestReplacingAQueuedSubmissionCostsARun:
@@ -56,15 +56,15 @@ class TestReplacingAQueuedSubmissionCostsARun:
         was about to be judged.
         """
         queued = START + 100
-        assert measured_in_window(queued, RUN + 1, WINDOW)
+        assert measured_in_run(queued, RUN + 1, RUN)
 
-        replaced = (RUN + 1) * WINDOW + 100
-        assert not measured_in_window(replaced, RUN + 1, WINDOW), (
+        replaced = (RUN + 1) * RUN + 100
+        assert not measured_in_run(replaced, RUN + 1, RUN), (
             "the queued measurement survived a replacement, which it must not"
         )
-        assert measured_in_window(replaced, RUN + 2, WINDOW)
+        assert measured_in_run(replaced, RUN + 2, RUN)
 
     def test_leaving_a_queued_submission_alone_earns_in_the_next_run(self):
         """The other half of the same rule, so the guidance is unambiguous."""
         queued = START + 100
-        assert measured_in_window(queued, RUN + 1, WINDOW)
+        assert measured_in_run(queued, RUN + 1, RUN)

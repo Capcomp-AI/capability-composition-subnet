@@ -1,4 +1,4 @@
-"""A whole window, decided by a validator with nothing above it.
+"""A whole run, decided by a validator with nothing above it.
 
 No signed vector, no allow-list, no operator. What is defended here is that the
 validator reaches a weight vector from its own measurements, that one broken
@@ -13,7 +13,7 @@ import pytest
 from capability_subnet.common.schemas import CandidateScores, GateVerdict
 from capability_subnet.validator.evaluator import CandidateEvaluation
 from capability_subnet.scoring.retention import ProbeOutcome
-from capability_subnet.validator.window import BaseMeasurement, Candidate, run_window
+from capability_subnet.validator.run import BaseMeasurement, Candidate, evaluate_run
 
 BEACON = "0x" + "ab" * 32
 
@@ -22,7 +22,7 @@ def _candidate(uid: int, recipe, *, first_block: int = 100) -> Candidate:
     return Candidate(uid=uid, hotkey=f"5HOT{uid}", recipe=recipe, first_block=first_block)
 
 
-#: A candidate that cleared everything. These tests are about how a window
+#: A candidate that cleared everything. These tests are about how a run
 #: turns measurements into weights, not about the gates — but an evaluation
 #: carrying no verdicts is deliberately unusable, so a stub has to say it
 #: passed rather than say nothing.
@@ -61,9 +61,9 @@ def _base(end_to_end: float = 0.0) -> BaseMeasurement:
 
 
 def _run(candidates, measure, *, measure_base=None, **kw):
-    return run_window(
+    return evaluate_run(
         candidates,
-        window_id=1080,
+        run_id=1080,
         beacon=BEACON,
         hotkey="5SELF",
         block=7_000_000,
@@ -84,9 +84,9 @@ class TestTheValidatorDecidesForItself:
         )
         assert out.weights is not None
         paid = {e.uid: e.weight for e in out.weights.entries if e.weight > 0}
-        assert paid, "a window with measurable candidates must pay somebody"
+        assert paid, "a run with measurable candidates must pay somebody"
 
-    def test_it_derives_the_window_without_being_told(self, recipe_factory):
+    def test_it_derives_the_run_without_being_told(self, recipe_factory):
         """No operator hands it seeds — the beacon is the whole input."""
         r = recipe_factory()
         out = _run([_candidate(1, r)], _scorer({"5HOT1": 0.4}))
@@ -97,9 +97,9 @@ class TestTheValidatorDecidesForItself:
     def test_two_validators_on_one_beacon_share_a_core(self, recipe_factory):
         r = recipe_factory()
         a = _run([_candidate(1, r)], _scorer({"5HOT1": 0.4}))
-        b = run_window(
+        b = evaluate_run(
             [_candidate(1, r)],
-            window_id=1080,
+            run_id=1080,
             beacon=BEACON,
             hotkey="5OTHER",
             block=7_000_000,
@@ -137,7 +137,7 @@ class TestOneBadSubmissionCannotTaxTheRest:
         assert weights.get(1, 0) > 0
         assert weights.get(2, 0) == 0
 
-    def test_a_window_where_nothing_measures_still_produces_a_vector(self, recipe_factory):
+    def test_a_run_where_nothing_measures_still_produces_a_vector(self, recipe_factory):
         r = recipe_factory()
 
         def measure(candidate, inputs):
@@ -255,14 +255,14 @@ class TestMeasuringCandidatesInParallel:
         assert "could not serve it" in (failed.error or "")
 
 
-class TestTheWindowMeasuresWhatItClaimsTo:
+class TestTheRunMeasuresWhatItClaimsTo:
     """The scored terms are wired to something that measures them.
 
     Each of these covers a term that was silently absent from the default
     validator path: the out-of-distribution draw was extracted and never passed
     on, retention defaulted to 1.0 with no base probe to compare against, the
     reference defaulted to zero so "improvement" meant "score", and `usable`
-    asked only whether the host had crashed. A window can be wrong in all four
+    asked only whether the host had crashed. A run can be wrong in all four
     ways at once without a single error in a log, which is why they are pinned
     here rather than left to review.
     """
@@ -288,13 +288,13 @@ class TestTheWindowMeasuresWhatItClaimsTo:
         assert seen["probe"].correct == 36
         assert out.reference_e2e == 0.42
 
-    def test_a_window_cannot_run_without_a_reference(self, recipe_factory):
-        """No bar, no window. It used to default to zero and carry on."""
+    def test_a_run_cannot_run_without_a_reference(self, recipe_factory):
+        """No bar, no run. It used to default to zero and carry on."""
         r = recipe_factory()
         with pytest.raises(TypeError, match="measure_base"):
-            run_window(
+            evaluate_run(
                 [_candidate(1, r)],
-                window_id=1080,
+                run_id=1080,
                 beacon=BEACON,
                 hotkey="5SELF",
                 block=7_000_000,
@@ -325,7 +325,7 @@ class TestTheWindowMeasuresWhatItClaimsTo:
         out = _run([_candidate(1, r)], measure)
 
         assert seen["probe_seed"] == out.sample.probe_seed
-        assert seen["probe_seed"] != 0, "a zero probe seed is the same probe every window"
+        assert seen["probe_seed"] != 0, "a zero probe seed is the same probe every run"
 
     def test_a_candidate_that_fails_a_gate_does_not_compete(self, recipe_factory):
         r = recipe_factory()

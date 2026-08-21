@@ -26,7 +26,7 @@ class Submission:
     #: audits read it, but it no longer affects the order — ranking is by score
     #: alone and gives no advantage to an earlier commitment.
     first_block: int
-    #: What the window could resolve when this was measured. Kept for ``tied``
+    #: What the run could resolve when this was measured. Kept for ``tied``
     #: and for audit, but no longer used to order submissions.
     resolvable: float = 0.0
 

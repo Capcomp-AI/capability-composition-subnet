@@ -9,7 +9,7 @@ Observed doing exactly that: the engine had published no vector yet, `/weights`
 answered 404, and three validators sat silent for a day with the previous run's
 weights still standing. That failure came from the delegated mode, which is gone;
 the property it taught is not, because a validator measuring for itself has its
-own way to be unable to proceed — it cannot read the block its window opened at,
+own way to be unable to proceed — it cannot read the block its run opened at,
 and therefore has no draw.
 """
 
@@ -17,7 +17,7 @@ from __future__ import annotations
 
 
 class TestAnUnreadableBeaconBurnsRatherThanReturning:
-    def test_a_beacon_that_cannot_be_read_burns_this_window(self, monkeypatch):
+    def test_a_beacon_that_cannot_be_read_burns_this_run(self, monkeypatch):
         import capability_subnet.validator.neuron as module
 
         burned: list[str] = []

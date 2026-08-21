@@ -113,7 +113,7 @@ def utilization_for(total_gib: float, reserved_gib: float = C.SERVING_RESERVED_G
     # driver context is resident before anything is loaded, so a card whose
     # total merely exceeds the reservation can still be unable to hold it. The
     # runtime discovers that at start-up and refuses, once per candidate, and
-    # the window records it as a reconstruction failure — which reads as every
+    # the run records it as a reconstruction failure — which reads as every
     # miner scoring zero for a fault that belongs to this host.
     usable_gib = total_gib - DRIVER_CONTEXT_GIB
     if reserved_gib >= usable_gib:

@@ -39,7 +39,7 @@ def generate_instance(seed: int, *, split: str = "hidden") -> LogicInstance:
     """The instance this seed denotes.
 
     Deterministic in the seed and the pinned revision, which is what lets an
-    auditor replay a closed window: the published seed regenerates the exact
+    auditor replay a closed run: the published seed regenerates the exact
     problem the candidate was given.
 
     ``split`` names which draw an instance came from and does not change the

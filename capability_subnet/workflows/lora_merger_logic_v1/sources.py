@@ -6,10 +6,10 @@
   scored by running the candidate's program. Exact match asks whether an answer
   looks right; execution asks whether the code works.
 
-Both are public, so a window draws from ~3,193 logic items and ~2,944 code
+Both are public, so a run draws from ~3,193 logic items and ~2,944 code
 problems that a miner can read. The defence is not corpus size: recipes are
-scored on held-out draws per window, retention is probed separately, and closed
-windows are re-scorable from published traces.
+scored on held-out draws per run, retention is probed separately, and closed
+runs are re-scorable from published traces.
 
 Each source is pinned to a revision, so a score can say what it was measured on.
 """
@@ -62,7 +62,7 @@ DIFFICULTY_BAND = (0.20, 0.80)
 #: excluded: an axis every package fails carries no information.
 CODE_DIFFICULTIES: frozenset[str] = frozenset({"introductory", "interview"})
 
-#: Logic families a window draws from, in a fixed order so two engines given the
+#: Logic families a run draws from, in a fixed order so two engines given the
 #: same seed draw the same instance.
 LOGIC_FAMILIES: tuple[str, ...] = (
     "word_sorting",
@@ -80,7 +80,7 @@ LOGIC_FAMILIES: tuple[str, ...] = (
 #: The axis execution-verified programs are scored on.
 CODE_FAMILY = "code_execution"
 
-#: Every axis a window can score, in a fixed order. Defined here rather than in
+#: Every axis a run can score, in a fixed order. Defined here rather than in
 #: the package's ``__init__`` so the contract module can read it without a
 #: circular import.
 #:
@@ -120,6 +120,6 @@ STAGE_FLOORS: dict[str, float] = {stage: 0.0 for stage in STAGES} | {"format_com
 #: retained cases travel with the instance and a replay scores the same prefix.
 MAX_CASES_PER_PROBLEM = 32
 
-#: Share of a window's instances drawn from the code corpus. Execution is the
+#: Share of a run's instances drawn from the code corpus. Execution is the
 #: stronger signal and also the slower one, being a subprocess per test case.
 CODE_FRACTION = 0.25

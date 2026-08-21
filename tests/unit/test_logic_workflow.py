@@ -83,7 +83,7 @@ class TestInstancesAreReproducibleFromTheirSeed:
         assert len(questions) > 15
 
     def test_the_draw_is_spread_across_families(self, logic):
-        """Stratified, so a window cannot be dominated by whichever family the
+        """Stratified, so a run cannot be dominated by whichever family the
         corpus happens to be densest in — or a miner happened to tune on."""
         families = {logic.generate_instance(s).task for s in range(500, 600)}
         assert len(families) >= 5
@@ -96,7 +96,7 @@ class TestInstancesAreReproducibleFromTheirSeed:
             assert instance.answer.strip() or instance.cases
 
     def test_both_corpora_are_drawn_from(self, logic):
-        """A window that reached only one corpus would quietly drop an axis and
+        """A run that reached only one corpus would quietly drop an axis and
         the execution guarantee with it."""
         sources = [logic.generate_instance(s).source for s in range(400)]
         share = sources.count("code") / len(sources)

@@ -10,7 +10,7 @@ stake — agree to write it.
 Two rules govern every vector produced here:
 
 * a permanent reference holding the throne earns nothing. The share burns.
-* unfilled shares burn rather than being redistributed. "Best of a bad window"
+* unfilled shares burn rather than being redistributed. "Best of a bad run"
   is not a thing this network pays for.
 """
 
@@ -42,7 +42,7 @@ def survival_tail(
     emission, lowest first, so a miner holding exactly zero is the one the chain
     evicts when a slot is needed — and under a pure winner-take-all split that is
     every challenger still waiting in the queue. The engine evaluates roughly one
-    challenger per window, so a miner can easily wait days for its single
+    challenger per run, so a miner can easily wait days for its single
     evaluation; being pruned during that wait means the network loses the
     submission it was about to judge, and the queue drains itself.
 
@@ -72,7 +72,7 @@ def survival_tail(
 def winner_take_all(
     champion: ChampionRecord | None,
     *,
-    window_id: int,
+    run_id: int,
     block: int,
     burn_percentage: float = 0.0,
     burn_uid: int = C.BURN_UID,
@@ -150,7 +150,7 @@ def winner_take_all(
 
     return WeightVector(
         workflow_id=workflow_id,
-        window_id=window_id,
+        run_id=run_id,
         computed_at_block=block,
         mode=C.MODE_WINNER_TAKE_ALL,
         burn_percentage=burn_percentage,
@@ -163,7 +163,7 @@ def winner_take_all(
 def graded_top3(
     ranked: list[tuple[int, str]],
     *,
-    window_id: int,
+    run_id: int,
     block: int,
     burn_percentage: float = 0.0,
     burn_uid: int = C.BURN_UID,
@@ -202,7 +202,7 @@ def graded_top3(
 
     return WeightVector(
         workflow_id=workflow_id,
-        window_id=window_id,
+        run_id=run_id,
         computed_at_block=block,
         mode=C.MODE_GRADED_TOP3,
         burn_percentage=burn_percentage,
@@ -215,7 +215,7 @@ def graded_contribution(
     champion: ChampionRecord | None,
     contributors: list[tuple[int, str, float]],
     *,
-    window_id: int,
+    run_id: int,
     block: int,
     champion_base_share: float = C.CHAMPION_BASE_SHARE,
     burn_percentage: float = 0.0,
@@ -276,16 +276,16 @@ def graded_contribution(
 
     # The leader's share is set aside whether or not anyone holds the throne.
     #
-    # With a champion it goes to them. Without one, half the window burns and the
+    # With a champion it goes to them. Without one, half the run burns and the
     # best measured package leads what remains, on the same terms a champion
-    # leads the whole. So a leaderless window pays its best miner roughly half
-    # what a crowned window pays its champion: the field is still ranked and
+    # leads the whole. So a leaderless run pays its best miner roughly half
+    # what a crowned run pays its champion: the field is still ranked and
     # still paid, and the throne is still the thing worth taking.
     #
     # The share is never handed to the runners-up intact. Doing that would pay
-    # *more* in exactly the windows where the field was weakest — measured
+    # *more* in exactly the runs where the field was weakest — measured
     # before that was fixed, a single contributor took 0.80 of a leaderless
-    # window against 0.36 of a contested one, which is the incentive pointing
+    # run against 0.36 of a contested one, which is the incentive pointing
     # backwards.
     if payable:
         champion_share = payable_pool * champion_base_share
@@ -311,7 +311,7 @@ def graded_contribution(
     leader: tuple[int, str, float] | None = None
     if not payable and graded:
         # `graded` is already sorted by grade, so the head is the best measured
-        # package in the window. It leads in the throne's absence.
+        # package in the run. It leads in the throne's absence.
         leader, graded = graded[0], graded[1:]
         entries.append(
             WeightEntry(
@@ -344,7 +344,7 @@ def graded_contribution(
             )
     else:
         # Nobody left to share it. Burn rather than promoting the leader into it:
-        # a window with one qualified package is not a bigger achievement.
+        # a run with one qualified package is not a bigger achievement.
         burned += graded_pool
 
     if burned > 0.0:
@@ -354,8 +354,8 @@ def graded_contribution(
         entries.append(burn_entry(1.0, burn_uid))
 
     log.info(
-        "graded window %d: champion=%s, %d contributor(s), %.3f burned",
-        window_id,
+        "graded run %d: champion=%s, %d contributor(s), %.3f burned",
+        run_id,
         champion_hotkey[:12] if champion_hotkey else "none",
         len(graded),
         burned,
@@ -363,7 +363,7 @@ def graded_contribution(
 
     return WeightVector(
         workflow_id=workflow_id,
-        window_id=window_id,
+        run_id=run_id,
         computed_at_block=block,
         mode=C.MODE_GRADED_CONTRIBUTION,
         burn_percentage=burn_percentage,

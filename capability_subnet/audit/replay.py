@@ -1,8 +1,8 @@
-"""Re-scoring a closed window from its disclosure.
+"""Re-scoring a closed run from its disclosure.
 
 The strongest check anyone outside the engine can run, and it needs no GPU.
 
-Hidden instances are drawn fresh every window and never reused, so once a window
+Hidden instances are drawn fresh every run and never reused, so once a run
 closes its instances have no value as a secret and considerable value as
 evidence. The engine publishes their seeds together with the traces it scored.
 An auditor then regenerates each instance from its seed — instance generation is
@@ -27,7 +27,7 @@ import logging
 from dataclasses import dataclass, field
 
 from capability_subnet.audit.verify import SCORE_TOLERANCE, AuditResult
-from capability_subnet.common.schemas import InstanceResult, WindowDisclosure
+from capability_subnet.common.schemas import InstanceResult, RunDisclosure
 from capability_subnet.common.trace import ExecutionTrace, SqlSubmission, ToolCall
 from capability_subnet.workflows import get_workflow
 
@@ -36,7 +36,7 @@ log = logging.getLogger(__name__)
 
 @dataclass(slots=True)
 class ReplayOutcome:
-    """What re-scoring one window produced."""
+    """What re-scoring one run produced."""
 
     checked: int = 0
     agreed: int = 0
@@ -140,10 +140,10 @@ def _compare(claimed: InstanceResult, rescored: InstanceResult) -> list[str]:
     return problems
 
 
-def check_draw_is_bound(disclosure: WindowDisclosure, result: AuditResult) -> None:
-    """Whether this window's draw carries the fields that let it be checked.
+def check_draw_is_bound(disclosure: RunDisclosure, result: AuditResult) -> None:
+    """Whether this run's draw carries the fields that let it be checked.
 
-    Replaying a window proves the published instances match the published seeds.
+    Replaying a run proves the published instances match the published seeds.
     It says nothing about where the *seeds* came from — and seeds derive from a
     root only the operator holds. An operator free to try roots until the draw
     suited a candidate they had already seen would pass every other check here.
@@ -155,7 +155,7 @@ def check_draw_is_bound(disclosure: WindowDisclosure, result: AuditResult) -> No
     * :func:`verify_beacon_against_chain` compares the beacon with the real block
       hash, which a fabricated one fails. That is the check with teeth, and it
       needs a chain connection.
-    * :func:`commitments_agree` compares the commitment across a run of windows,
+    * :func:`commitments_agree` compares the commitment across a run of runs,
       which catches a root that moved. It cannot catch a constant fake, because
       nothing reveals the root — so it bounds the attack to "one root chosen
       before any candidate existed" rather than eliminating it.
@@ -167,32 +167,32 @@ def check_draw_is_bound(disclosure: WindowDisclosure, result: AuditResult) -> No
         result.add(
             "unbound_seed_root",
             "warning",
-            "this window publishes no commitment to the operator's seed root, so "
-            "the instance draw cannot be shown to be the same root as other windows",
-            f"window {disclosure.window_id}",
+            "this run publishes no commitment to the operator's seed root, so "
+            "the instance draw cannot be shown to be the same root as other runs",
+            f"run {disclosure.run_id}",
         )
     if not disclosure.beacon:
         result.add(
             "unbound_draw",
             "warning",
-            "this window's draw is not bound to a public beacon, so it rests "
+            "this run's draw is not bound to a public beacon, so it rests "
             "entirely on the operator's secret root and cannot be shown to be "
             "unchosen",
-            f"window {disclosure.window_id}",
+            f"run {disclosure.run_id}",
         )
 
 
 def verify_beacon_against_chain(
-    disclosure: WindowDisclosure,
+    disclosure: RunDisclosure,
     subtensor,
     *,
-    window_blocks: int,
+    run_blocks: int,
     result: AuditResult | None = None,
 ) -> tuple[bool, str]:
-    """Compare a window's published beacon with the block hash it claims.
+    """Compare a run's published beacon with the block hash it claims.
 
     The check that gives the binding teeth. The beacon is supposed to be the hash
-    of the block the window opened at — a value the operator does not choose. Only
+    of the block the run opened at — a value the operator does not choose. Only
     reading that block off the chain distinguishes a real beacon from an invented
     one, and until this runs, "the draw is bound" is the operator's word.
 
@@ -203,35 +203,35 @@ def verify_beacon_against_chain(
     from capability_subnet.common.chain import block_beacon
 
     if not disclosure.beacon:
-        detail = f"window {disclosure.window_id} published no beacon to check"
+        detail = f"run {disclosure.run_id} published no beacon to check"
         if result is not None:
-            result.add("unbound_draw", "warning", detail, f"window {disclosure.window_id}")
+            result.add("unbound_draw", "warning", detail, f"run {disclosure.run_id}")
         return False, detail
 
-    opened_at = disclosure.window_id * window_blocks
+    opened_at = disclosure.run_id * run_blocks
     actual = block_beacon(subtensor, opened_at)
     if not actual:
         return True, f"block {opened_at} unreadable; beacon not checked"
 
     if actual != disclosure.beacon:
         detail = (
-            f"window {disclosure.window_id} claims beacon {disclosure.beacon[:18]} "
+            f"run {disclosure.run_id} claims beacon {disclosure.beacon[:18]} "
             f"but block {opened_at} hashes to {actual[:18]}; the draw was not bound "
             "to the block it says it was"
         )
         if result is not None:
-            result.add("fabricated_beacon", "error", detail, f"window {disclosure.window_id}")
+            result.add("fabricated_beacon", "error", detail, f"run {disclosure.run_id}")
         return False, detail
 
     return True, f"beacon matches block {opened_at}"
 
 
-def commitments_agree(disclosures: list[WindowDisclosure]) -> tuple[bool, str]:
-    """Whether a run of windows all derive from one seed root.
+def commitments_agree(disclosures: list[RunDisclosure]) -> tuple[bool, str]:
+    """Whether a run of runs all derive from one seed root.
 
     The check a single disclosure cannot make. One commitment proves nothing; the
-    same commitment across every window a deployment has published is what says
-    the operator has not been re-rolling the draw between windows.
+    same commitment across every run a deployment has published is what says
+    the operator has not been re-rolling the draw between runs.
 
     What it does *not* prove: that the commitment corresponds to the root actually
     used. Nothing reveals the root, so a constant fabricated string passes. This
@@ -240,20 +240,20 @@ def commitments_agree(disclosures: list[WindowDisclosure]) -> tuple[bool, str]:
     """
     seen = {d.root_commitment for d in disclosures if d.root_commitment}
     if not seen:
-        return False, "no window published a seed-root commitment"
+        return False, "no run published a seed-root commitment"
     if len(seen) > 1:
         return False, (
             f"{len(seen)} different seed-root commitments across "
-            f"{len(disclosures)} windows; the draw was re-rooted"
+            f"{len(disclosures)} runs; the draw was re-rooted"
         )
-    missing = [d.window_id for d in disclosures if not d.root_commitment]
+    missing = [d.run_id for d in disclosures if not d.root_commitment]
     if missing:
-        return False, f"windows {missing} published no commitment"
-    return True, f"one seed root across {len(disclosures)} windows"
+        return False, f"runs {missing} published no commitment"
+    return True, f"one seed root across {len(disclosures)} runs"
 
 
 def replay_disclosure(
-    disclosure: WindowDisclosure,
+    disclosure: RunDisclosure,
     *,
     result: AuditResult | None = None,
 ) -> tuple[ReplayOutcome, AuditResult]:
@@ -275,7 +275,7 @@ def replay_disclosure(
                 "undisclosed_instance",
                 "error",
                 f"instance {entry.instance_id} carries seed {entry.instance_seed}, which "
-                "is not among the seeds this window says it drew",
+                "is not among the seeds this run says it drew",
                 subject,
             )
 
@@ -334,7 +334,7 @@ def replay_disclosure(
         result.add(
             "nothing_disclosed",
             "warning",
-            f"window {disclosure.window_id} discloses no instances, so none of its "
+            f"run {disclosure.run_id} discloses no instances, so none of its "
             "scoring can be independently checked",
         )
 
@@ -342,7 +342,7 @@ def replay_disclosure(
 
 
 def verify_disclosure(
-    disclosure: WindowDisclosure,
+    disclosure: RunDisclosure,
     *,
     trusted_signers: set[str] | None = None,
 ) -> tuple[ReplayOutcome, AuditResult]:
@@ -350,7 +350,7 @@ def verify_disclosure(
     from capability_subnet.common.signing import verify_payload
 
     result = AuditResult()
-    subject = f"window {disclosure.window_id}"
+    subject = f"run {disclosure.run_id}"
 
     if not disclosure.signature or not disclosure.signer_hotkey:
         result.add("unsigned", "error", "the disclosure carries no signature", subject)

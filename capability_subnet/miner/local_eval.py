@@ -37,7 +37,7 @@ from capability_subnet.scoring.retention import (
 from capability_subnet.workflows import get_workflow
 
 #: Probe seed for local runs. Fixed and public: the engine draws its own from a
-#: secret root per window, so there is nothing here for a miner to tune against
+#: secret root per run, so there is nothing here for a miner to tune against
 #: and no reason to hide it.
 LOCAL_PROBE_SEED = 20260729
 
@@ -106,7 +106,7 @@ def build_local_artifact(
     methods decompose a materialised update per projection, 252 times, and run
     roughly thirty times faster on a GPU: a validator measuring every candidate
     for itself is the caller that cannot afford the difference, because it pays
-    it once per submission per window.
+    it once per submission per run.
 
     The device is consensus-relevant in the sense that cuSOLVER and LAPACK do
     not agree bit-for-bit, so an artifact digest reproduces only on the same
@@ -163,11 +163,11 @@ def evaluate_locally(
             variance of an end-to-end rate over twenty instances is wide enough
             that small differences between two recipes will not be visible.
         probe_seed: seed for the general-capability probe. Any value works
-            locally; the engine draws its own from a secret root per window, so
+            locally; the engine draws its own from a secret root per run, so
             matching it is neither possible nor useful.
         base_probe: the base model's outcome on the same probe. Without it the
             retention component reads as 1.0, which is optimistic — the engine
-            measures the base every window and will not be. Measure the base
+            measures the base every run and will not be. Measure the base
             model once with :func:`probe_base_model` and pass the result in.
     """
     import random

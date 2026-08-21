@@ -16,7 +16,7 @@ from capability_subnet.workflows.shared_contract import (
     recipe_contract,
     resolve_snapshot,
     source_pool_contract,
-    windows_contract,
+    runs_contract,
 )
 
 
@@ -42,7 +42,7 @@ def build_contract(snapshot=None, seed_root_commitment: str = "") -> dict[str, A
             # Described by what it measures, not by where it came from. The
             # exact corpora and revisions are pinned in `sources.py` of the
             # installed package, which is what a validator regenerating a
-            # window's instances reads — verification does not depend on this
+            # run's instances reads — verification does not depend on this
             # document naming them, and advertising them here mostly helps
             # somebody select adapters trained on the same data.
             "sources": [
@@ -60,15 +60,15 @@ def build_contract(snapshot=None, seed_root_commitment: str = "") -> dict[str, A
             "task_families": [*S.LOGIC_FAMILIES, S.CODE_FAMILY],
             "note": (
                 "Both corpora are public and pinned, and the package that scores a "
-                "window carries the pin, so anyone re-scoring a closed window resolves "
+                "run carries the pin, so anyone re-scoring a closed run resolves "
                 "the same items. They are not named in this document — naming them "
                 "mostly helps somebody go looking for adapters already trained on "
                 "them — but they are not secret and you should not plan as if they "
                 "were. The hidden seed protects which "
-                "items a window draws, not the items themselves. Roughly 3,200 logic "
+                "items a run draws, not the items themselves. Roughly 3,200 logic "
                 "items carry the difficulty labels selection needs and roughly 2,900 "
                 "code problems are admitted, so corpus size is not the mitigation: "
-                "stratified selection, the executed quarter of each window, and a "
+                "stratified selection, the executed quarter of each run, and a "
                 "general-capability probe scored outside this corpus are."
             ),
         },
@@ -133,6 +133,6 @@ def build_contract(snapshot=None, seed_root_commitment: str = "") -> dict[str, A
         ),
         "qualified_score": qualified_scoring_contract(),
         "champion_challenge": ranking_contract(),
-        "windows": windows_contract(seed_root_commitment),
+        "runs": runs_contract(seed_root_commitment),
         "incentive": incentive_contract(),
     }

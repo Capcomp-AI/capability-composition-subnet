@@ -7,7 +7,7 @@ comparison. No agent loop, no tool services, no language model judging anything.
 Why this shape, next to the V1 maintenance workflow:
 
 * **It discriminates for this model class.** Items are selected on the corpus's
-  own measured pass rate for a 4B model, so a window contains problems an
+  own measured pass rate for a 4B model, so a run contains problems an
   8B-class package can neither trivially solve nor never solve. The V1 workflow
   had no such calibration and its scripted oracle needs ten of its twelve turns,
   leaving a real model no room for a single wasted step.
@@ -18,7 +18,7 @@ Why this shape, next to the V1 maintenance workflow:
   statistically honest sample size affordable at all.
 
 What it gives up is stated in ``dataset.py``: the items are public, so the
-secret seed protects only which of them a window draws.
+secret seed protects only which of them a run draws.
 """
 
 from __future__ import annotations

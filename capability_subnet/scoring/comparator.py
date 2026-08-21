@@ -67,10 +67,10 @@ class ComparatorConfig:
 #: is set above what the network actually exhibits rather than at it.
 #:
 #: Measured, not guessed: across 210 candidate pairs over a full 1350-instance
-#: window (run-411), pairwise discordance ran 0.042 to 0.133 with a mean of
+#: run (run-411), pairwise discordance ran 0.042 to 0.133 with a mean of
 #: 0.089. Ten percent sits above that mean and above all but the extreme tail,
 #: and it replaces an earlier 0.15 that was a placeholder chosen before any
-#: window had been measured. The difference is not cosmetic: 0.15 demands 2940
+#: run had been measured. The difference is not cosmetic: 0.15 demands 2940
 #: instances to resolve a 0.02 margin where 0.10 demands 1960.
 ASSUMED_DISCORDANCE: float = 0.10
 
@@ -103,7 +103,7 @@ def decayed_champion_margin(config: ComparatorConfig, *, blocks_held: int) -> fl
     """The margin a challenger must clear over the incumbent right now.
 
     Full at the moment of crowning, falling linearly to zero over the decay
-    window. A defender's advantage is worth having — it stops a copy of the
+    run. A defender's advantage is worth having — it stops a copy of the
     champion from trading places with it on noise — but it should be an
     advantage for holding the throne *well*, not a freehold. An incumbent that
     nothing has displaced for a month is either genuinely excellent or simply
@@ -180,8 +180,8 @@ def compare(
     """Decide whether ``challenger`` dethrones the incumbent.
 
     Args:
-        challenger: the challenger's sample rows for this window.
-        champion: the incumbent's rows for the same window.
+        challenger: the challenger's sample rows for this run.
+        champion: the incumbent's rows for the same run.
         reference: the strongest reference's rows — the incumbent itself when
             the incumbent is the strongest thing on the board.
         axes: the workflow's capability axes.

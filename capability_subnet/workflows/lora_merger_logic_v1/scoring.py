@@ -7,7 +7,7 @@ the exact answer, so scoring is a string comparison.
 **Execution**, for the code corpus. The candidate's program is run against
 stdin/stdout cases, which asks whether the code works rather than whether it
 looks right. The stronger claim of the two, and the reason a quarter of every
-window is drawn from it.
+run is drawn from it.
 
 Both are checkable by someone who is not the operator — the property that makes a
 published score worth anything.

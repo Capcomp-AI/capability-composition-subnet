@@ -232,7 +232,7 @@ Nobody. Each run's instances derive from the hash of the block the run opened at
 
 That block is public, it is not any participant's to pick, and it does not exist until the run begins — so the draw cannot be selected after seeing a candidate, and every validator computes byte-identical seeds from material anyone can fetch. Instance generation is a pure function of the seed, so an auditor with a laptop can regenerate the exact problems a run asked, years later, from a block hash and a revision pin.
 
-Deriving from the run's own opening block — `window_id × window_blocks` — rather than from the moment a process happened to start is what makes it checkable and idempotent: a validator restarted mid-run re-derives the seeds it was already using instead of quietly evaluating a different test.
+Deriving from the run's own opening block — `run_id × run_blocks` — rather than from the moment a process happened to start is what makes it checkable and idempotent: a validator restarted mid-run re-derives the seeds it was already using instead of quietly evaluating a different test.
 
 What stops a miner tuning to the instances is not concealment but ordering. The commitment being evaluated is the one standing at the opening block, and its recipe is fixed before the instances it will face are drawn; learning them a moment later is worth nothing. A hotkey may resubmit in a later run, but each recipe still faces a draw it could not see when it was committed.
 
@@ -610,7 +610,7 @@ Because concatenating factorisations is algebraically the sum of the updates, so
 
 ### How long does a run take?
 
-Roughly `(references + 1) × instances × per-instance-time`. With the default 100 hidden instances and around ten references, opening a run is the dominant cost. Size `window_blocks` accordingly.
+Roughly `(references + 1) × instances × per-instance-time`. With the default 100 hidden instances and around ten references, opening a run is the dominant cost. Size `run_blocks` accordingly.
 
 ### Can I change the comparator thresholds?
 

@@ -26,7 +26,7 @@ from capability_subnet.scoring.bootstrap import (
     paired_bootstrap,
     paired_differences,
 )
-from capability_subnet.scoring.sampler import common_instance_ids, draw_window
+from capability_subnet.scoring.sampler import common_instance_ids, draw_run
 from capability_subnet.testing import make_results
 
 STAGES = ("stage_a", "stage_b", "stage_c")
@@ -239,27 +239,27 @@ class TestPairedBootstrap:
 
 
 class TestSampler:
-    def test_a_window_draw_is_reproducible(self):
-        first = draw_window(7, root=12345, hidden_count=20, ood_count=5)
-        again = draw_window(7, root=12345, hidden_count=20, ood_count=5)
+    def test_a_run_draw_is_reproducible(self):
+        first = draw_run(7, root=12345, hidden_count=20, ood_count=5)
+        again = draw_run(7, root=12345, hidden_count=20, ood_count=5)
         assert first.hidden_seeds == again.hidden_seeds
 
-    def test_different_windows_draw_different_instances(self):
-        first = draw_window(7, root=12345, hidden_count=40, ood_count=5)
-        second = draw_window(8, root=12345, hidden_count=40, ood_count=5)
+    def test_different_runs_draw_different_instances(self):
+        first = draw_run(7, root=12345, hidden_count=40, ood_count=5)
+        second = draw_run(8, root=12345, hidden_count=40, ood_count=5)
         assert set(first.hidden_seeds).isdisjoint(second.hidden_seeds)
 
     def test_a_different_root_gives_a_different_draw(self):
-        first = draw_window(7, root=1, hidden_count=40, ood_count=5)
-        second = draw_window(7, root=2, hidden_count=40, ood_count=5)
+        first = draw_run(7, root=1, hidden_count=40, ood_count=5)
+        second = draw_run(7, root=2, hidden_count=40, ood_count=5)
         assert set(first.hidden_seeds).isdisjoint(second.hidden_seeds)
 
     def test_hidden_and_ood_draws_do_not_overlap(self):
-        sample = draw_window(3, root=999, hidden_count=50, ood_count=50)
+        sample = draw_run(3, root=999, hidden_count=50, ood_count=50)
         assert set(sample.hidden_seeds).isdisjoint(sample.ood_seeds)
 
     def test_seeds_are_distinct(self):
-        sample = draw_window(1, root=42, hidden_count=100, ood_count=30)
+        sample = draw_run(1, root=42, hidden_count=100, ood_count=30)
         assert len(set(sample.hidden_seeds)) == 100
 
     def test_common_instances_exclude_anything_either_side_failed(self):
@@ -274,17 +274,17 @@ class TestSampler:
 
 
 class TestAnEmptyThroneDoesNotPayTheRunnersUp:
-    """A leaderless window pays less than a crowned one, and pays something.
+    """A leaderless run pays less than a crowned one, and pays something.
 
     Half of it burns, and the best measured package leads what remains on the
     same terms a champion leads the whole — so its best miner takes roughly half
     what a champion would. Two failures are being held apart here.
 
     Handing the leader's share to the runners-up intact pays *more* in exactly
-    the windows where the field was weakest. Observed on the testnet arena: with
-    no champion a single contributor took 0.80 of the window instead of 0.36.
+    the runs where the field was weakest. Observed on the testnet arena: with
+    no champion a single contributor took 0.80 of the run instead of 0.36.
 
-    Burning all of it pays nothing in every window before the first crown, which
+    Burning all of it pays nothing in every run before the first crown, which
     is the state a launch begins in and can hold for as long as the queue takes
     to work through.
     """
@@ -303,7 +303,7 @@ class TestAnEmptyThroneDoesNotPayTheRunnersUp:
 
         return graded_contribution(
             workflow_id="w",
-            window_id=1,
+            run_id=1,
             block=10,
             champion=champion,
             contributors=[(1, "5A", 1.0)],
@@ -321,7 +321,7 @@ class TestAnEmptyThroneDoesNotPayTheRunnersUp:
         assert by_role.get("contributor", 0) == pytest.approx(leader, abs=1e-6)
         assert by_role.get("burn", 0) == pytest.approx(1.0 - leader, abs=1e-6)
 
-    def test_a_leaderless_window_pays_its_best_miner_less_than_a_crown(self):
+    def test_a_leaderless_run_pays_its_best_miner_less_than_a_crown(self):
         """The throne has to stay worth taking."""
         leaderless = {e.role: e.weight for e in self._vector(None).entries}
         crowned = {e.role: e.weight for e in self._vector(self._champion()).entries}
@@ -332,7 +332,7 @@ class TestAnEmptyThroneDoesNotPayTheRunnersUp:
 
         vector = graded_contribution(
             workflow_id="w",
-            window_id=1,
+            run_id=1,
             block=10,
             champion=None,
             contributors=[(1, "5A", 1.0), (2, "5B", 0.5), (3, "5C", 0.25)],

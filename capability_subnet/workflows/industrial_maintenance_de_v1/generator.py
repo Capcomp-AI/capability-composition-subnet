@@ -49,7 +49,7 @@ OOD_MUTATIONS: tuple[str, ...] = (
 OOD_MUTATION_COUNT = (2, 3)
 
 #: Fixed reference date. Anchoring it makes the maintenance history and the SQL
-#: window reproducible; deriving it from the wall clock would make yesterday's
+#: run reproducible; deriving it from the wall clock would make yesterday's
 #: instance unreplayable today.
 REFERENCE_DATE = date(2026, 6, 30)
 

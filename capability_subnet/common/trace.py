@@ -119,7 +119,7 @@ class ExecutionTrace:
         """Serialisable form, stored alongside the sample row for audit.
 
         Complete on purpose. This is the record an auditor re-scores a closed
-        window from, so every field the scorer reads has to survive the round
+        run from, so every field the scorer reads has to survive the round
         trip — a trace that omits the SQL submissions or the diagnostic results
         cannot reproduce those stages, and the omission would look exactly like
         the engine having scored them dishonestly.

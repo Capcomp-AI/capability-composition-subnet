@@ -188,7 +188,7 @@ def gate_stage_floors(
     above what any package reaches. Measured on the real arena, the unmerged base
     model was under such a floor on nine axes of eleven — so every package failed
     a hard gate, nothing could be crowned, and the whole emission would have
-    burned every window while the engine looked healthy.
+    burned every run while the engine looked healthy.
 
     What this gate is for is catching a package that has *lost* an axis, not
     ranking packages that have one. Ranking is the comparator's job, and it is
@@ -270,7 +270,7 @@ def gate_sample_sufficiency(hidden_results: list[InstanceResult], minimum: int) 
 
     Fails open in the sense that matters: a candidate with too few valid rows is
     not terminated, it simply cannot be crowned. The scheduler retries it in a
-    later window rather than punishing it for the engine's bad night.
+    later run rather than punishing it for the engine's bad night.
     """
     valid = len(valid_rows(hidden_results))
     passed = valid >= minimum

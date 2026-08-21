@@ -4,7 +4,7 @@ A plain king-of-the-hill contest only requires beating whoever holds the throne.
 That is not a high enough bar for this commodity: at genesis the throne is
 empty, and later a mediocre champion could hold it simply because nothing better
 challenged. So the network keeps the untouched base model on the board
-permanently. It is evaluated on the same hidden instances every window,
+permanently. It is evaluated on the same hidden instances every run,
 alongside the incumbent, and a challenger must beat it. It cannot be terminated
 and it earns no emission — if the base model is the best thing on the board, the
 workflow share is burned, because the network has not yet produced anything
@@ -12,10 +12,10 @@ worth paying for.
 
 The set used to be wider: the base model, the best single adapter, and three
 standard equal-weight merges. Measuring them retired all but the base. Over a
-full 1350-instance window the base model scored 0.1133 end-to-end and every
+full 1350-instance run the base model scored 0.1133 end-to-end and every
 other reference scored below it — the equal-weight TIES merge 0.0926, the
 equal-weight linear merge 0.0000, single adapters 0.1067 and 0.0815. None ever
-bound, so each spent a card every window raising a bar the base had already
+bound, so each spent a card every run raising a bar the base had already
 raised higher.
 
 The linear merge is worth recording plainly. Linear aggregation sums the
@@ -74,7 +74,7 @@ BASE_MODEL = "reference:base_model"
 INCUMBENT = "incumbent"
 
 #: Fixed seed for the stochastic reference merge. The reference must be the same
-#: package every window, or the bar a challenger has to clear would drift.
+#: package every run, or the bar a challenger has to clear would drift.
 REFERENCE_SEED = 1_000_003
 
 

@@ -20,8 +20,8 @@ the language it was addressed in. Every item is checked by exact string or
 numeric comparison, never by a model, for the same reason the workflow scorer is:
 a judged probe would make the gate's verdict depend on a second model's mood.
 
-Items are drawn from the window seed, so a candidate cannot tune to a fixed probe
-set, and the base model is measured on the same draw in the same window — the
+Items are drawn from the run seed, so a candidate cannot tune to a fixed probe
+set, and the base model is measured on the same draw in the same run — the
 comparison is paired, like every other comparison in this engine.
 """
 
@@ -139,7 +139,7 @@ GENERATORS = (_arithmetic, _ordering, _extraction, _format_only, _language)
 def build_probe(seed: int, count: int = C.RETENTION_PROBE_ITEMS) -> list[ProbeItem]:
     """Draw a probe set from ``seed``.
 
-    Deterministic in the seed, so an auditor replaying a closed window
+    Deterministic in the seed, so an auditor replaying a closed run
     regenerates exactly the items the candidate faced — the same property the
     workflow instances have, for the same reason.
     """

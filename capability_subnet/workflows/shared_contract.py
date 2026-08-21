@@ -124,7 +124,7 @@ def ranking_contract() -> dict[str, Any]:
             "comparator, not the sort — a challenger must beat the strongest "
             "reference, the incumbent included, by an absolute end-to-end margin, "
             "and a copy cannot beat what it copied by any margin. References are "
-            "measured and published every window either way."
+            "measured and published every run either way."
         ),
         "strict_rule": (
             "With require_beat_reference enabled, a challenger additionally has to "
@@ -141,28 +141,28 @@ def ranking_contract() -> dict[str, Any]:
     }
 
 
-def windows_contract(root_commitment: str = "") -> dict[str, Any]:
-    """How a window is sized, and what its instance draw is bound to.
+def runs_contract(root_commitment: str = "") -> dict[str, Any]:
+    """How a run is sized, and what its instance draw is bound to.
 
     Args:
         root_commitment: hash of the operator's seed root. Published so a miner
-            can see that one root produces every window: it reveals nothing about
-            the root, and a value that changes between windows is the operator
+            can see that one root produces every run: it reveals nothing about
+            the root, and a value that changes between runs is the operator
             changing the draw where everyone can see it.
     """
     return {
-        "window_blocks": C.DEFAULT_WINDOW_BLOCKS,
+        "run_blocks": C.DEFAULT_RUN_BLOCKS,
         "hidden_instances": C.DEFAULT_HIDDEN_INSTANCES,
         "ood_instances": C.DEFAULT_OOD_INSTANCES,
         "public_pack_instances": C.PUBLIC_PACK_INSTANCES,
         "seed_root_commitment": root_commitment,
         "note": (
-            "Hidden instances are drawn per window from a secret root the operator "
-            "holds, mixed with the hash of the block the window opened at. The "
+            "Hidden instances are drawn per run from a secret root the operator "
+            "holds, mixed with the hash of the block the run opened at. The "
             "block hash is public and not the operator's to choose, so the draw "
             "cannot be selected after seeing a candidate; the commitment above "
-            "binds the operator to one root across every window. Both are "
-            "published in each closed window's disclosure."
+            "binds the operator to one root across every run. Both are "
+            "published in each closed run's disclosure."
         ),
     }
 
@@ -180,8 +180,8 @@ def incentive_contract() -> dict[str, Any]:
         "miner_pool_share": round(miner_pool, 6),
         "leader_share_of_pool": round(C.CHAMPION_BASE_SHARE, 6),
         "graded_share_of_pool": round(1.0 - C.CHAMPION_BASE_SHARE, 6),
-        "leader_share_of_window": round(miner_pool * C.CHAMPION_BASE_SHARE, 6),
-        "graded_share_of_window": round(miner_pool * (1.0 - C.CHAMPION_BASE_SHARE), 6),
+        "leader_share_of_run": round(miner_pool * C.CHAMPION_BASE_SHARE, 6),
+        "graded_share_of_run": round(miner_pool * (1.0 - C.CHAMPION_BASE_SHARE), 6),
         "max_graded_contributors": C.MAX_GRADED_CONTRIBUTORS,
         "graded_top3_shares": list(C.GRADED_TOP3_SHARES),
         "contribution_weights": {
@@ -191,7 +191,7 @@ def incentive_contract() -> dict[str, Any]:
             "cost": C.CONTRIBUTION_WEIGHT_COST,
         },
         "note": (
-            "Four fifths of a window burns to the subnet owner's UID. The best "
+            "Four fifths of a run burns to the subnet owner's UID. The best "
             "measured package takes 90% of the remaining fifth and the graded "
             "runners-up split the other 10% by rank, so a submission that moved the "
             "state of the art without leading is still paid for what it contributed. "

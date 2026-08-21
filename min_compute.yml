@@ -56,7 +56,7 @@ validator:
 
   cpu:
     # Reconstruction is pinned to one torch thread for byte-identical merges,
-    # so each merge saturates exactly one core. Cores shorten a window.
+    # so each merge saturates exactly one core. Cores shorten a run.
     min_cores: 16
     min_speed: 2.5
     recommended_cores: 32
@@ -129,7 +129,7 @@ backend:
   # a different precision is a different package.
   #
   # Four such cards is the enforced minimum (MIN_VALIDATOR_CARDS); eight is the
-  # recommendation. The floor is challenger throughput at a short window, not
+  # recommendation. The floor is challenger throughput at a short run, not
   # the reference schedule, which one card finishes comfortably.
   cpu:
     min_cores: 32

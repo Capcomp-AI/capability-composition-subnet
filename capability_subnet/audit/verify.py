@@ -317,7 +317,7 @@ def verify_weight_vector(
 ) -> AuditResult:
     """Check that a weight vector follows from the published reports."""
     result = result or AuditResult()
-    subject = f"window {vector.window_id}"
+    subject = f"run {vector.run_id}"
 
     if not vector.signature or not vector.signer_hotkey:
         result.add("unsigned", "error", "the weight vector carries no signature", subject)
@@ -443,7 +443,7 @@ def verify_weight_vector(
     return result
 
 
-def audit_window(
+def audit_run(
     reports: list[EvaluationReport],
     vector: WeightVector | None,
     *,
@@ -451,7 +451,7 @@ def audit_window(
     expected_snapshot: str | None = None,
     expected_base_revision: str | None = None,
 ) -> AuditResult:
-    """Verify every report in a window and the vector derived from them."""
+    """Verify every report in a run and the vector derived from them."""
     result = AuditResult()
 
     for report in reports:
@@ -468,7 +468,7 @@ def audit_window(
         result.add(
             "multiple_dethrones",
             "warning",
-            f"{len(crowned)} reports claim a dethrone in this window: "
+            f"{len(crowned)} reports claim a dethrone in this run: "
             f"{[r.candidate_id[:12] for r in crowned]}. Only the last can be the "
             "standing champion.",
         )

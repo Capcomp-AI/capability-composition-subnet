@@ -108,5 +108,5 @@ def apply_subprocess_limits(memory_mb: int, cpu_seconds: int) -> None:
     resource.setrlimit(resource.RLIMIT_NPROC, (64, 64))
     resource.setrlimit(resource.RLIMIT_FSIZE, (8 * 1024 * 1024, 8 * 1024 * 1024))
     # No core dumps: a 512 MB core file per crashed submission would fill the
-    # evaluation host within a window.
+    # evaluation host within a run.
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))

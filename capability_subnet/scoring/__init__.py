@@ -2,7 +2,7 @@
 
 Everything here decides a published number. It is public and stays public: a
 score that cannot be recomputed by the party about to pay for it is a claim, not
-a measurement. A validator re-scores a closed window with this code, a miner
+a measurement. A validator re-scores a closed run with this code, a miner
 scores a candidate locally with the same code, and an auditor checks that a
 published verdict follows from the published components.
 
@@ -34,7 +34,7 @@ from capability_subnet.scoring.references import (
     bar_scores,
     is_reference,
 )
-from capability_subnet.scoring.sampler import WindowSample, build_instances, draw_window
+from capability_subnet.scoring.sampler import RunSample, build_instances, draw_run
 from capability_subnet.scoring.weight_vector import (
     apply_validator_burn,
     graded_contribution,
@@ -48,7 +48,7 @@ __all__ = [
     "ContributionInputs",
     "ReferencePackage",
     "Submission",
-    "WindowSample",
+    "RunSample",
     "aggregate_scores",
     "apply_validator_burn",
     "build_instances",
@@ -59,7 +59,7 @@ __all__ = [
     "contribution_score",
     "decayed_champion_margin",
     "decisive_loss",
-    "draw_window",
+    "draw_run",
     "explain",
     "graded_contribution",
     "graded_top3",

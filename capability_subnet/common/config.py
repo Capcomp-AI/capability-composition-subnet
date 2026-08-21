@@ -243,13 +243,13 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     parser.add_argument(
-        "--neuron.max_candidates_per_window",
-        dest="max_candidates_per_window",
+        "--neuron.max_candidates_per_run",
+        dest="max_candidates_per_run",
         type=int,
-        default=_env_int("CAPSUB_MAX_CANDIDATES_PER_WINDOW", 0),
+        default=_env_int("CAPSUB_MAX_CANDIDATES_PER_RUN", 0),
         help=(
-            "Stop after this many candidates in one window, taken in commit "
-            "order. 0 measures everything eligible. A window that cannot finish "
+            "Stop after this many candidates in one run, taken in commit "
+            "order. 0 measures everything eligible. A run that cannot finish "
             "sets no weights at all, so a host slower than its queue should "
             "bound this rather than fall behind silently."
         ),
@@ -327,22 +327,22 @@ def add_backend_args(parser: argparse.ArgumentParser) -> None:
         help="Directory holding the engine database, artifact cache and reports.",
     )
     parser.add_argument(
-        "--window_blocks",
+        "--run_blocks",
         type=int,
-        default=_env_int("CAPSUB_WINDOW_BLOCKS", C.DEFAULT_WINDOW_BLOCKS),
-        help="Blocks per evaluation window.",
+        default=_env_int("CAPSUB_RUN_BLOCKS", C.DEFAULT_RUN_BLOCKS),
+        help="Blocks per evaluation run.",
     )
     parser.add_argument(
         "--hidden_instances",
         type=int,
         default=_env_int("CAPSUB_HIDDEN_INSTANCES", C.DEFAULT_HIDDEN_INSTANCES),
-        help="Hidden workflow instances sampled per window.",
+        help="Hidden workflow instances sampled per run.",
     )
     parser.add_argument(
         "--ood_instances",
         type=int,
         default=_env_int("CAPSUB_OOD_INSTANCES", C.DEFAULT_OOD_INSTANCES),
-        help="Out-of-distribution instances sampled per window.",
+        help="Out-of-distribution instances sampled per run.",
     )
     parser.add_argument(
         "--incentive_mode",

@@ -65,7 +65,7 @@ COLUMN_ALIASES: dict[str, dict[str, str]] = {
     },
 }
 
-#: Window the reference question asks about.
+#: Run the reference question asks about.
 LOOKBACK_MONTHS = 24
 
 
@@ -171,7 +171,7 @@ def build_snapshot(
         )
         event_id += 1
 
-    # Matching events inside the window — these are the answer.
+    # Matching events inside the run — these are the answer.
     for _ in range(rng.randint(2, 6)):
         days_ago = rng.randrange(5, LOOKBACK_MONTHS * 30 - 5)
         event_date = reference_date - timedelta(days=days_ago)
@@ -180,7 +180,7 @@ def build_snapshot(
         expected_count += 1
         expected_downtime += downtime
 
-    # Same fault code, same machine, but outside the window.
+    # Same fault code, same machine, but outside the run.
     for _ in range(rng.randint(1, 3)):
         days_ago = rng.randrange(LOOKBACK_MONTHS * 30 + 30, LOOKBACK_MONTHS * 30 + 900)
         add_event(
@@ -191,7 +191,7 @@ def build_snapshot(
             rng.randrange(20, 480),
         )
 
-    # Different fault codes on the same machine, inside the window.
+    # Different fault codes on the same machine, inside the run.
     others = [c for c in machine_type.components if c.key != component.key]
     for _ in range(rng.randint(2, 5)):
         other = rng.choice(others)
@@ -203,7 +203,7 @@ def build_snapshot(
             rng.randrange(20, 480),
         )
 
-    # The same fault code on the sibling machine, inside the window. A query that
+    # The same fault code on the sibling machine, inside the run. A query that
     # forgets to filter by machine picks these up and gets the wrong count.
     sibling_events = rng.randint(2, 5) if add_sibling_rows else rng.randint(1, 3)
     for _ in range(sibling_events):

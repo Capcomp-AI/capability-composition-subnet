@@ -2,7 +2,7 @@
 
 A commitment is 128 bytes: a workflow code, a digest, and a pointer. The pointer
 is not trusted and does not need to be — the bytes it returns are checked against
-the digest that was committed on-chain before the window opened, so a mutable
+the digest that was committed on-chain before the run opened, so a mutable
 pointer, a hijacked host and a substituted file all fail identically.
 
 Every validator does this independently. That is the point of an ownerless

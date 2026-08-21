@@ -1,6 +1,6 @@
-"""One window, run by a validator, with nobody above it.
+"""One run, run by a validator, with nobody above it.
 
-This is the loop that replaces the operator. A validator derives the window from
+This is the loop that replaces the operator. A validator derives the run from
 a block hash, works out which instances are its own, measures every candidate it
 can see, ranks them on what it measured, and sets weights from that. No signed
 vector arrives from anywhere, and there is no allow-list of whose evaluation to
@@ -23,7 +23,7 @@ from capability_subnet.scoring.comparator import minimum_detectable_effect
 from capability_subnet.scoring.contribution import ContributionInputs, contribution_score
 from capability_subnet.scoring.ranking import Submission, rank
 from capability_subnet.scoring.retention import ProbeOutcome
-from capability_subnet.scoring.sampler import WindowSample, draw_window_open
+from capability_subnet.scoring.sampler import RunSample, draw_run_open
 from capability_subnet.scoring.weight_vector import graded_contribution, graded_top3
 from capability_subnet.validator.agreement import outlier_validators
 from capability_subnet.validator.assignment import Assignment, assign
@@ -46,16 +46,16 @@ class Candidate:
 
 
 @dataclass(slots=True)
-class WindowOutcome:
+class RunOutcome:
     """What one validator concluded, and the evidence for it."""
 
-    window_id: int
+    run_id: int
     beacon: str
-    sample: WindowSample
+    sample: RunSample
     assignment: Assignment
     evaluations: list[CandidateEvaluation] = field(default_factory=list)
     weights: WeightVector | None = None
-    #: The bar this window measured. Recorded so a reader can tell what the
+    #: The bar this run measured. Recorded so a reader can tell what the
     #: candidates were held to rather than inferring it from the winner.
     reference_e2e: float = 0.0
     #: Peers whose core results are inconsistent with the majority. Reported
@@ -73,10 +73,10 @@ class WindowOutcome:
 #: Injected so the loop can be exercised without reconstruction or serving.
 @dataclass(frozen=True)
 class BaseMeasurement:
-    """The base model on this window's own draw.
+    """The base model on this run's own draw.
 
     The bar every candidate is held to, and the probe retention is scored
-    against. Both have to come from the same window as the candidates — a
+    against. Both have to come from the same run as the candidates — a
     reference measured on a different draw is not a paired comparison, which is
     the property the whole design rests on.
     """
@@ -87,7 +87,7 @@ class BaseMeasurement:
 
 
 @dataclass(frozen=True)
-class WindowInputs:
+class RunInputs:
     """Everything a measurement needs that is not the candidate itself.
 
     Passed as one object rather than a widening argument list because the
@@ -102,19 +102,19 @@ class WindowInputs:
     base: BaseMeasurement
 
 
-Measure = Callable[["Candidate", WindowInputs], CandidateEvaluation]
+Measure = Callable[["Candidate", RunInputs], CandidateEvaluation]
 
-#: Measures the base model on this window's draw. Required rather than
-#: defaulted: a window with no reference cannot say a candidate improved on
+#: Measures the base model on this run's draw. Required rather than
+#: defaulted: a run with no reference cannot say a candidate improved on
 #: anything, and defaulting the reference to zero made "improvement" mean
 #: "score", silently.
-MeasureBase = Callable[[Assignment, "WindowSample"], BaseMeasurement]
+MeasureBase = Callable[[Assignment, "RunSample"], BaseMeasurement]
 
 
-def run_window(
+def evaluate_run(
     candidates: list[Candidate],
     *,
-    window_id: int,
+    run_id: int,
     beacon: str,
     hotkey: str,
     block: int,
@@ -128,8 +128,8 @@ def run_window(
     incentive_mode: str = C.MODE_GRADED_TOP3,
     workers: int = 1,
     peer_core_results: dict[str, dict[int, bool]] | None = None,
-) -> WindowOutcome:
-    """Evaluate a window and produce this validator's own weight vector.
+) -> RunOutcome:
+    """Evaluate a run and produce this validator's own weight vector.
 
     Args:
         workers: how many candidates to measure at once. One per GPU: a
@@ -138,7 +138,7 @@ def run_window(
             for memory and measure each other rather than themselves.
         incentive_mode: how the measured field is turned into weights. See
             :func:`_weights_from`.
-        measure_base: measures the base model on this window's draw. The base
+        measure_base: measures the base model on this run's draw. The base
             model is the only permanent reference, and this loop cannot produce
             a bar without it. It used to be a ``reference_e2e`` parameter
             defaulting to zero, which made the graded mode's improvement term
@@ -149,12 +149,12 @@ def run_window(
             inconsistency — a miner is not paid less because another validator
             looks wrong, since the miner did not do anything.
     """
-    sample = draw_window_open(
-        window_id, beacon=beacon, hidden_count=hidden_count, ood_count=ood_count
+    sample = draw_run_open(
+        run_id, beacon=beacon, hidden_count=hidden_count, ood_count=ood_count
     )
     assignment = assign(sample.hidden_seeds, hotkey=hotkey, beacon=beacon)
-    outcome = WindowOutcome(
-        window_id=window_id, beacon=beacon, sample=sample, assignment=assignment
+    outcome = RunOutcome(
+        run_id=run_id, beacon=beacon, sample=sample, assignment=assignment
     )
 
     # The reference first, and alone. Every candidate's retention is scored
@@ -162,14 +162,14 @@ def run_window(
     # measuring it on the same draw is what makes the comparison paired.
     base = measure_base(assignment, sample)
     log.info(
-        "window %d reference %s: end_to_end %.4f, probe %d/%d",
-        window_id,
+        "run %d reference %s: end_to_end %.4f, probe %d/%d",
+        run_id,
         base.reference_id,
         base.end_to_end,
         base.probe.correct,
         base.probe.total,
     )
-    inputs = WindowInputs(
+    inputs = RunInputs(
         assignment=assignment,
         ood_seeds=sample.ood_seeds,
         probe_seed=sample.probe_seed,
@@ -195,7 +195,7 @@ def run_window(
     outcome.weights = _weights_from(
         outcome,
         candidates=candidates,
-        window_id=window_id,
+        run_id=run_id,
         block=block,
         workflow_id=workflow_id,
         burn_percentage=burn_percentage,
@@ -209,7 +209,7 @@ def run_window(
 def _failed(candidate: Candidate, exc: Exception) -> CandidateEvaluation:
     """A candidate this host could not measure.
 
-    Recorded rather than dropped so the window still reports how many candidates
+    Recorded rather than dropped so the run still reports how many candidates
     it saw, and so a reader can tell "measured and scored zero" from "never
     measured" — which are the same number and very different claims.
     """
@@ -225,7 +225,7 @@ def _failed(candidate: Candidate, exc: Exception) -> CandidateEvaluation:
 
 def _measure_all(
     candidates: list[Candidate],
-    inputs: WindowInputs,
+    inputs: RunInputs,
     measure: Measure,
     workers: int,
 ) -> list[CandidateEvaluation]:
@@ -243,7 +243,7 @@ def _measure_all(
         for candidate in candidates:
             try:
                 results.append(measure(candidate, inputs))
-            except Exception as exc:  # one bad candidate must not stop the window
+            except Exception as exc:  # one bad candidate must not stop the run
                 log.warning("uid %s could not be measured: %s", candidate.uid, exc)
                 results.append(_failed(candidate, exc))
         return results
@@ -256,7 +256,7 @@ def _measure_all(
         candidate = candidates[index]
         try:
             ordered[index] = measure(candidate, inputs)
-        except Exception as exc:  # one bad candidate must not stop the window
+        except Exception as exc:  # one bad candidate must not stop the run
             log.warning("uid %s could not be measured: %s", candidate.uid, exc)
             ordered[index] = _failed(candidate, exc)
 
@@ -268,7 +268,7 @@ def _measure_all(
 
 
 def _flag_peers(
-    outcome: WindowOutcome,
+    outcome: RunOutcome,
     hotkey: str,
     peer_core_results: dict[str, dict[int, bool]],
 ) -> dict[str, str]:
@@ -292,10 +292,10 @@ def _flag_peers(
 
 
 def _weights_from(
-    outcome: WindowOutcome,
+    outcome: RunOutcome,
     *,
     candidates: list[Candidate],
-    window_id: int,
+    run_id: int,
     block: int,
     workflow_id: str,
     burn_percentage: float,
@@ -307,7 +307,7 @@ def _weights_from(
 
     An unmeasurable candidate earns nothing and burns nothing extra: it is simply
     absent, exactly as a miner who never submitted is absent. Paying it would
-    reward a recipe that does not reconstruct; charging the window for it would
+    reward a recipe that does not reconstruct; charging the run for it would
     let one broken submission tax everybody else.
 
     ``resolvable`` is this validator's own figure, not the network's, and is
@@ -337,7 +337,7 @@ def _weights_from(
         return _graded_contribution_weights(
             outcome,
             ranked=ranked,
-            window_id=window_id,
+            run_id=run_id,
             block=block,
             workflow_id=workflow_id,
             burn_percentage=burn_percentage,
@@ -347,7 +347,7 @@ def _weights_from(
 
     return graded_top3(
         ordered,
-        window_id=window_id,
+        run_id=run_id,
         block=block,
         workflow_id=workflow_id,
         burn_percentage=burn_percentage,
@@ -356,10 +356,10 @@ def _weights_from(
 
 
 def _graded_contribution_weights(
-    outcome: WindowOutcome,
+    outcome: RunOutcome,
     *,
     ranked: list[Submission],
-    window_id: int,
+    run_id: int,
     block: int,
     workflow_id: str,
     burn_percentage: float,
@@ -370,21 +370,21 @@ def _graded_contribution_weights(
 
     ``champion`` is deliberately ``None``. The throne is held by whoever last
     *dethroned* the incumbent, and that is a fact about the subnet's history
-    rather than about this window — nothing in the ownerless loop carries a
-    ChampionRecord between windows, so this validator has not seen anyone take
-    it. Synthesising one from the window's own leader would crown a package for
+    rather than about this run — nothing in the ownerless loop carries a
+    ChampionRecord between runs, so this validator has not seen anyone take
+    it. Synthesising one from the run's own leader would crown a package for
     winning a field of one, skip the leaderless burn entirely, and pay the full
-    champion share every window regardless of whether anything was dethroned.
+    champion share every run regardless of whether anything was dethroned.
 
     So the leaderless branch is the honest one, and it is also the arrangement
-    the contract describes for it: half the window burns, the best measured
+    the contract describes for it: half the run burns, the best measured
     package leads what remains on the champion's terms, and the rest of the
     graded field splits what is left of that. Because the function pops the
     leader out of the graded list *after* capping it, the miners sharing the
     remainder are exactly ranks two through ten.
 
     Grades come from the four terms the published contract already defines, over
-    scores this window produced. A candidate graded zero does not appear at all,
+    scores this run produced. A candidate graded zero does not appear at all,
     and the share nobody earned burns rather than inflating the leader's.
     """
     scores_by_hotkey = {e.candidate_id: e.scores for e in outcome.usable}
@@ -410,7 +410,7 @@ def _graded_contribution_weights(
     return graded_contribution(
         None,
         contributors,
-        window_id=window_id,
+        run_id=run_id,
         block=block,
         workflow_id=workflow_id,
         burn_percentage=burn_percentage,

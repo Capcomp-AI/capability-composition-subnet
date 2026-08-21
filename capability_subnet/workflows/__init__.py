@@ -66,11 +66,11 @@ class WorkflowModule:
     #:
     #: Signature: ``(instance, client, *, config) -> SandboxOutcome``.
     run_instance: Callable[..., Any]
-    #: Rebuilds one published trace so a closed window can be re-scored.
+    #: Rebuilds one published trace so a closed run can be re-scored.
     #:
     #: Owned by the workflow for the same reason as ``run_instance``: a trace
     #: holds whatever its workflow's scorer reads, and those differ. Hardcoding
-    #: the agent-loop trace into the replay made every other workflow's window
+    #: the agent-loop trace into the replay made every other workflow's run
     #: unverifiable, which is the one thing a validator will not pay for.
     #:
     #: Signature: ``(payload: dict) -> trace``.
@@ -78,13 +78,13 @@ class WorkflowModule:
     #: Scores one trace against the instance that produced it.
     #:
     #: The same call the workflow's own runner makes, so an auditor replaying a
-    #: window runs the engine's arithmetic rather than a second implementation of
+    #: run runs the engine's arithmetic rather than a second implementation of
     #: it. Workflows disagreed on what `score_instance` even returns — one an
     #: object, one a mapping — and the replay could only read one of them.
     #:
     #: Signature: ``(instance, trace) -> InstanceResult``.
     result_from_trace: Callable[..., Any]
-    #: Whether anyone can obtain this workflow and re-score a closed window from
+    #: Whether anyone can obtain this workflow and re-score a closed run from
     #: its published seeds and traces. False for a workflow whose generator
     #: cannot be published — which is a legitimate choice and a materially
     #: weaker guarantee, so it is recorded rather than assumed.
@@ -223,7 +223,7 @@ def get_workflow(workflow_id: str = C.DEFAULT_WORKFLOW_ID) -> WorkflowModule:
     if not module.publicly_verifiable:
         log.warning(
             "workflow %r is not publicly verifiable: its generator is not distributed, so "
-            "nobody outside this operator can replay a closed window. Scores on this "
+            "nobody outside this operator can replay a closed run. Scores on this "
             "workflow rest on the operator's word.",
             workflow_id,
         )

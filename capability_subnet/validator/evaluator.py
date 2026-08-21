@@ -1,14 +1,14 @@
 """A validator measuring candidates for itself.
 
 This is the same reconstruction, sandbox and scorer a miner runs locally and an
-operator ran centrally — pointed at the seeds a window actually decided on, and
+operator ran centrally — pointed at the seeds a run actually decided on, and
 driven by the validator that is about to pay for the result.
 
 Two things make that possible without an operator. The draw comes from
-:func:`~capability_subnet.scoring.sampler.draw_window_open`, so it is a pure
+:func:`~capability_subnet.scoring.sampler.draw_run_open`, so it is a pure
 function of a block hash and every validator derives it independently. The work
 comes from :mod:`~capability_subnet.validator.assignment`, so a validator
-measures a shared core plus a slice of its own rather than the whole window.
+measures a shared core plus a slice of its own rather than the whole run.
 
 What this deliberately does *not* do is require two validators to agree on
 artifact bytes. Six of the seven merge methods run an SVD and an SVD is not
@@ -90,7 +90,7 @@ class CandidateEvaluation:
 
     @property
     def gate_failures(self) -> list[str]:
-        """Why this candidate cannot compete, for the window log."""
+        """Why this candidate cannot compete, for the run log."""
         return [f"{v.name}: {v.detail}" for v in self.gate_verdicts if not v.passed]
 
 
@@ -122,7 +122,7 @@ def evaluate_candidate(
             that up is the validator's job, exactly as it is the miner's — this
             function does not assume a serving stack, so a validator may use
             vLLM, SGLang or anything else that speaks the client protocol.
-        ood_seeds: this window's out-of-distribution draw. Required: it used to
+        ood_seeds: this run's out-of-distribution draw. Required: it used to
             default to empty, and an empty draw scores the OOD term zero for
             every candidate — a tenth of the qualified score, silently absent.
         base_probe: the base model on the same probe. Required: retention used
@@ -238,11 +238,11 @@ def measure_base_model(
     workflow: WorkflowModule | None = None,
     sandbox_config: SandboxConfig | None = None,
 ) -> tuple[list[InstanceResult], ProbeOutcome]:
-    """Score the untouched base model on this window's own draw.
+    """Score the untouched base model on this run's own draw.
 
     The bar every candidate is held to, and the probe their retention is scored
     against. Measured here rather than assumed because a reference taken from a
-    different window is not a paired comparison, and a reference left at zero —
+    different run is not a paired comparison, and a reference left at zero —
     which is what the loop did before — turns "improvement over the reference"
     into "the candidate's score".
 

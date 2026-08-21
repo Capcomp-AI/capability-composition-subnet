@@ -3,7 +3,7 @@
 One immutable base model is the foundation of the whole protocol: every
 certified adapter targets it, every reconstruction produces a delta against it,
 and every score is measured on it. Repinning the base creates a new arena, not a
-new window.
+new run.
 """
 
 from __future__ import annotations

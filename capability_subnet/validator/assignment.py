@@ -1,7 +1,7 @@
 """Which instances a particular validator measures.
 
 Every validator evaluating every instance is the obvious design and the wrong
-one. A window is around seventeen GPU-hours; replicating it per validator
+one. A run is around seventeen GPU-hours; replicating it per validator
 multiplies the network's cost by the number of validators while producing the
 same numbers, and prices the role at a 48 GB card running most of the day. That
 does not decentralise the role, it just makes it expensive enough that few can
@@ -14,7 +14,7 @@ The split here buys both properties for a fraction of the work:
   should land within the cross-device band on exactly these instances, and one
   that does not is visible without anybody re-running its work.
 * a **tail** unique to each validator, drawn from what the core left. Coverage
-  of the window grows with the number of validators rather than being repeated,
+  of the run grows with the number of validators rather than being repeated,
   and no miner can know which validator will see which instances.
 
 Both parts derive from public material — the beacon and the validator's hotkey —
@@ -30,19 +30,19 @@ import hashlib
 import random
 from dataclasses import dataclass
 
-#: Share of a window every validator measures. Sized so two validators share
+#: Share of a run every validator measures. Sized so two validators share
 #: enough paired instances for their disagreement to mean something: the paired
 #: comparison needs samples, and a core far below this makes "these two disagree"
 #: indistinguishable from ordinary sampling noise.
 DEFAULT_CORE_FRACTION: float = 0.25
 
-#: Share of a window each validator measures alone, drawn from outside the core.
+#: Share of a run each validator measures alone, drawn from outside the core.
 DEFAULT_TAIL_FRACTION: float = 0.15
 
 
 @dataclass(frozen=True, slots=True)
 class Assignment:
-    """The instances one validator is accountable for this window."""
+    """The instances one validator is accountable for this run."""
 
     core: tuple[int, ...]
     tail: tuple[int, ...]
@@ -87,7 +87,7 @@ def assign(
     core_fraction: float = DEFAULT_CORE_FRACTION,
     tail_fraction: float = DEFAULT_TAIL_FRACTION,
 ) -> Assignment:
-    """Split a window's instances into this validator's core and tail.
+    """Split a run's instances into this validator's core and tail.
 
     Args:
         hotkey: the validator's hotkey. Only the tail depends on it, so a
@@ -114,7 +114,7 @@ def _checked_fraction(value: float, name: str) -> float:
 
 
 def coverage(assignments: list[Assignment], total: int) -> float:
-    """Share of a window measured by at least one validator.
+    """Share of a run measured by at least one validator.
 
     The number worth watching as validators join: the core is repeated by
     everyone and does not grow, so this rising above the core fraction is the

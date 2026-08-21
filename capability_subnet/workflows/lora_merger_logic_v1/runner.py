@@ -55,7 +55,7 @@ class LogicTrace:
         """Rebuild a trace from a published disclosure.
 
         The inverse of :meth:`to_dict`, and the reason an auditor can re-score a
-        closed window: without it the replay decoded every trace as the
+        closed run: without it the replay decoded every trace as the
         agent-loop workflow's, found no reply on it, and reported that the engine
         could not be reproduced.
         """

@@ -33,7 +33,7 @@ from capability_subnet.workflows.shared_contract import (
     recipe_contract,
     resolve_snapshot,
     source_pool_contract,
-    windows_contract,
+    runs_contract,
 )
 
 #: This workflow's own identifier, stated rather than read from the shipped
@@ -104,6 +104,6 @@ def build_contract(snapshot=None, seed_root_commitment: str = "") -> dict[str, A
         "hard_gates": hard_gates_contract(),
         "scoring": qualified_scoring_contract(),
         "champion_challenge": ranking_contract(),
-        "windows": windows_contract(seed_root_commitment),
+        "runs": runs_contract(seed_root_commitment),
         "incentive": incentive_contract(),
     }

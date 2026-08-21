@@ -46,10 +46,10 @@ class ContributionInputs:
     """What one candidate's grade is computed from."""
 
     scores: CandidateScores
-    #: End-to-end completion of the strongest permanent reference in the window
+    #: End-to-end completion of the strongest permanent reference in the run
     #: this candidate was measured in.
     reference_e2e: float
-    #: The reigning champion's completion in that window, or ``None`` when the
+    #: The reigning champion's completion in that run, or ``None`` when the
     #: throne was empty.
     champion_e2e: float | None
 

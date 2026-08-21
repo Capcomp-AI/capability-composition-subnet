@@ -250,7 +250,7 @@ MAX_SELECTED_ADAPTERS: Final[int] = 10
 #: arithmetic for this model (36 layers, 8 KV heads, 128 head dim, bf16 —
 #: 144 KiB per token), not measured on a 32 GB card, because none was available
 #: when this changed. A validator bringing up 32 GB hardware should confirm the
-#: runtime accepts the reservation before trusting a window run on it.
+#: runtime accepts the reservation before trusting a run run on it.
 SERVING_RESERVED_GIB: Final[float] = 24.0
 
 #: The smallest card a validator may serve on, in GiB of total device memory.
@@ -261,26 +261,26 @@ SERVING_RESERVED_GIB: Final[float] = 24.0
 #: GiB before it can serve and reconstruct at once. 32 GiB is the smallest
 #: commodity size above that, and validator.serving.utilization_for refuses
 #: anything smaller at start-up with the arithmetic in the message rather than
-#: letting a window fail halfway through.
+#: letting a run fail halfway through.
 MIN_VALIDATOR_CARD_GIB: Final[float] = 32.0
 
 #: The smallest fleet a validator may run.
 #:
 #: Not forced by the reference schedule: batched serving finishes the eight
 #: reference packages in about 3.7 hours on a single card, well inside a 72-hour
-#: window. It is forced by challenger throughput at the cadence this network is
+#: run. It is forced by challenger throughput at the cadence this network is
 #: moving to. Measured at the current rate — 2100 instances, about 0.47 hours a
-#: package — a validator covers roughly this many challengers per window:
+#: package — a validator covers roughly this many challengers per run:
 #:
-#:      cards       3-day window        1-day window
+#:      cards       3-day run        1-day run
 #:          1                 106                  30
 #:          2                 220                  67
 #:          4                 448                 142
 #:
-#: A single card is comfortable today and stops being so the moment the window
+#: A single card is comfortable today and stops being so the moment the run
 #: shortens: 30 challengers against the 29 commitments the network already
 #: carries is not headroom, it is the edge. Four cards is what keeps a 1-day
-#: window viable while the miner count grows.
+#: run viable while the miner count grows.
 MIN_VALIDATOR_CARDS: Final[int] = 4
 
 #: Context length every candidate is served at. Part of the measurement: a
@@ -290,14 +290,14 @@ MIN_VALIDATOR_CARDS: Final[int] = 4
 #: 8192, raised from 4096, because 4096 could not hold what the workflow already
 #: asks. Measured over 300 real arena instances the prompt runs to a median of
 #: 552 tokens, p99 of 3190 and a maximum of 3456; against the runner's 1024-token
-#: answer budget the worst case needs 4480, and a 4096 window refused it. Not
+#: answer budget the worst case needs 4480, and a 4096 run refused it. Not
 #: hypothetical — an engine run answered 400 with "your prompt contains at least
 #: 3073 input tokens ... for a total of at least 4097 tokens" on ordinary
 #: instances, scoring candidates zero for a truncation the contract permitted.
 #:
 #: 8192 clears the worst observed case by 3712 tokens. It is not larger because
 #: nothing needs it to be: the KV cache holds one sequence at a time, so a wider
-#: window buys unreachable headroom and costs reserved memory a smaller
+#: run buys unreachable headroom and costs reserved memory a smaller
 #: validator card does not have. A workflow whose turns accumulate — the
 #: maintenance chain runs twelve — must be sized against this before it is made
 #: the default.
@@ -341,8 +341,8 @@ MAX_OUTPUT_TOKENS: Final[int] = 8192
 #: number finer-grained than that.
 BASE_RETENTION_FLOOR: Final[float] = 0.95
 
-#: Items drawn per window for the general-capability probe. Small because each
-#: item is a few tokens and the probe runs once per package per window, and
+#: Items drawn per run for the general-capability probe. Small because each
+#: item is a few tokens and the probe runs once per package per run, and
 #: large enough that a single unlucky item cannot move the ratio past the floor.
 RETENTION_PROBE_ITEMS: Final[int] = 40
 
@@ -459,7 +459,7 @@ DEFAULT_MIN_AXIS_SAMPLES: Final[int] = 20
 #: ever says so.
 #:
 #: The bill is quadratic. Resolving 0.03 instead of 0.055 takes 1350 instances
-#: instead of 400, which takes a 72-hour window instead of a 24-hour one. That is
+#: instead of 400, which takes a 72-hour run instead of a 24-hour one. That is
 #: the real price of a lower bar and it is charged in cadence, not in this number.
 #:
 #: 0.02 was tried twice and reverted both times. At 1350 instances it sits below
@@ -498,31 +498,31 @@ BOOTSTRAP_CONFIDENCE: Final[float] = 0.95
 # Continuous loop timing
 # ---------------------------------------------------------------------------
 
-#: Blocks per evaluation window. At 12s blocks this is roughly 72 hours. Hidden
-#: instances are resampled and the champion re-measured once per window.
+#: Blocks per evaluation run. At 12s blocks this is roughly 72 hours. Hidden
+#: instances are resampled and the champion re-measured once per run.
 #:
 #: The work no longer needs three days. This was tripled from 7200 to pay for
 #: 1350 instances at 13.9s each — about 5.6 hours a package, and 45 hours of
 #: references before a challenger was touched. Continuous batching and a
 #: four-card fleet took the same 1350 instances to roughly half an hour a
 #: package and the whole reference schedule to about an hour, so most of the
-#: window is now idle.
+#: run is now idle.
 #:
 #: Shortening it back to 7200 is therefore a cadence decision that is available,
-#: not one that has been taken — and it cannot be taken quietly. The window id
+#: not one that has been taken — and it cannot be taken quietly. The run id
 #: is the block divided by this, so at the time of writing block 8886140 is
-#: window 411 at 21600 and window 1234 at 7200: every run renumbers, and a
+#: run 411 at 21600 and run 1234 at 7200: every run renumbers, and a
 #: console, a store and a set of published reports all key off that number.
 #:
-#: Not a free parameter on a running deployment: the window id is the block
-#: divided by this, and the beacon is drawn from the window's own opening block,
-#: so changing it renumbers every window and moves the block each past beacon
-#: came from. WindowDisclosure records the value in force when a window ran,
+#: Not a free parameter on a running deployment: the run id is the block
+#: divided by this, and the beacon is drawn from the run's own opening block,
+#: so changing it renumbers every run and moves the block each past beacon
+#: came from. RunDisclosure records the value in force when a run ran,
 #: which is what lets a reader check an old beacon against the length that
 #: actually produced it rather than against whatever is configured today.
-DEFAULT_WINDOW_BLOCKS: Final[int] = 21600
+DEFAULT_RUN_BLOCKS: Final[int] = 21600
 
-#: Hidden instances drawn per window for the canonical comparison.
+#: Hidden instances drawn per run for the canonical comparison.
 #:
 #: Chosen together with DEFAULT_END_TO_END_MARGIN, not independently. A paired
 #: comparison over 1350 instances resolves about 0.0241, so a 0.03 margin is
@@ -534,13 +534,13 @@ DEFAULT_WINDOW_BLOCKS: Final[int] = 21600
 #: bar costs four times the evaluation. That arithmetic is unchanged; what
 #: changed is the wall clock behind it. Seven reference packages over 1450
 #: instances was close to 51 hours one instance at a time, and is about an hour
-#: batched across four cards. The schedule preflight still allows a window to
-#: spend three quarters of itself on references, and a window that cannot finish
+#: batched across four cards. The schedule preflight still allows a run to
+#: spend three quarters of itself on references, and a run that cannot finish
 #: its own schedule never reaches a challenger at all — that check simply has a
 #: great deal more room in it now.
 DEFAULT_HIDDEN_INSTANCES: Final[int] = 1350
 
-#: Additional out-of-distribution instances drawn per window.
+#: Additional out-of-distribution instances drawn per run.
 DEFAULT_OOD_INSTANCES: Final[int] = 100
 
 #: Public pack size shipped to miners for offline search and debugging.
@@ -585,30 +585,30 @@ CONTRIBUTION_WEIGHT_IMPROVEMENT: Final[float] = 0.25
 CONTRIBUTION_WEIGHT_PROXIMITY: Final[float] = 0.15
 CONTRIBUTION_WEIGHT_COST: Final[float] = 0.10
 
-#: Windows a qualified candidate keeps earning its graded share for.
+#: Runs a qualified candidate keeps earning its graded share for.
 #:
 #: Bounded because a package's measured contribution is a statement about the
-#: window it was measured in. Paying it indefinitely would let an early miner
-#: collect rent on a result the network has moved past; paying it for one window
+#: run it was measured in. Paying it indefinitely would let an early miner
+#: collect rent on a result the network has moved past; paying it for one run
 #: would make the reward depend on the accident of when the engine got to it.
-CONTRIBUTION_MEMORY_WINDOWS: Final[int] = 7
+CONTRIBUTION_MEMORY_RUNS: Final[int] = 7
 
-#: Fraction of a leaderless window's emission that burns.
+#: Fraction of a leaderless run's emission that burns.
 #:
-#: With no champion there is nobody who has beaten the field, so the window pays
+#: With no champion there is nobody who has beaten the field, so the run pays
 #: less than a crowned one — but it still pays. Burning the whole leader's share
 #: would mean a subnet that has never crowned anyone burns everything, which is
 #: the state every launch starts in and can sit in for weeks while the queue is
 #: worked through.
 #:
 #: Four fifths. The remaining fifth is the miner pool, and the best measured
-#: package leads it on the same terms a champion leads a crowned window: it
+#: package leads it on the same terms a champion leads a crowned run: it
 #: takes CHAMPION_BASE_SHARE of the pool and the graded field splits the rest.
-#: Against the whole window that is 19% to the leader and 1% across the graded
+#: Against the whole run that is 19% to the leader and 1% across the graded
 #: runners-up. The throne stays worth taking.
 NO_CHAMPION_BURN_SHARE: Final[float] = 0.80
 
-#: Most graded contributors paid in one window, sharing what the champion does
+#: Most graded contributors paid in one run, sharing what the champion does
 #: not take. Ten rather than thirty-two: a 0.05 pool split thirty-two ways is
 #: below the noise floor of the chain's own weight quantisation, so it would be
 #: bookkeeping rather than payment.
@@ -624,7 +624,7 @@ GRADED_TOP3_SHARES: Final[tuple[float, float, float]] = (0.60, 0.25, 0.15)
 #: Not generosity — deregistration protection. A miner with zero emission is
 #: what Bittensor's pruning selects first, so under a strict winner-take-all
 #: split every challenger waiting its turn is a candidate for eviction before it
-#: is ever evaluated. The engine evaluates roughly one challenger per window, so
+#: is ever evaluated. The engine evaluates roughly one challenger per run, so
 #: that wait is long enough to matter, and a queue that empties itself is a
 #: subnet with one participant.
 DEFAULT_TAIL_SHARE: Final[float] = 0.0
@@ -653,13 +653,13 @@ DEFAULT_BURN_PERCENTAGE: Final[float] = 0.0
 #: One at a time left the card decode-bound and idle between tokens of a single
 #: stream: measured on this corpus, sequential runs 15.89s an instance and
 #: continuous batching at 32 runs 1.08s — 14.7x, on identical hardware and
-#: identical greedy settings. A window that spent seven hours a package spends
+#: identical greedy settings. A run that spent seven hours a package spends
 #: half an hour.
 #:
 #: Consensus-relevant, and not only for cadence. Batch composition changes
 #: kernel selection and reduction order, so a batched reply is not token-identical
 #: to a sequential one — measured, 1 of 48 replies matched. Every package in a
-#: window is therefore asked the same way, and the number is pinned so that two
+#: run is therefore asked the same way, and the number is pinned so that two
 #: validators ask the same way as each other.
 SANDBOX_BATCH_CONCURRENCY: Final[int] = 32
 

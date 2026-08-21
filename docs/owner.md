@@ -67,7 +67,7 @@ adapter_pool_dir: /var/lib/capsub/pool
 report_dir: /var/lib/capsub/state/reports
 
 workflow_id: lora_merger_logic_v1
-window_blocks: 21600          # ~72h at 12s blocks
+run_blocks: 21600          # ~72h at 12s blocks
 hidden_instances: 1350
 ood_instances: 100
 end_to_end_margin: 0.03       # 1350 instances resolve ~0.024
