@@ -522,6 +522,31 @@ BOOTSTRAP_CONFIDENCE: Final[float] = 0.95
 #: actually produced it rather than against whatever is configured today.
 DEFAULT_RUN_BLOCKS: Final[int] = 21600
 
+#: How long a commitment must stand before the run that measures it opens.
+#: 300 blocks is about an hour at 12s.
+#:
+#: A rate limit that could be enforced, in place of one that could not. Limiting
+#: a miner to one submission an hour needs to know when the previous ones were,
+#: and there is no such record: the chain keeps one commitment per hotkey, and a
+#: validator reading it sees the current block and nothing about what stood
+#: there before. Counting attempts would mean keeping local state, which is the
+#: thing measured_in_run exists to avoid — two validators with different uptime
+#: would disagree about whose turn it was.
+#:
+#: Age is the part that *is* on the chain. A commitment measured in the run
+#: after it was made must have been standing for at least this long when that
+#: run opened, so the rule reads "let it settle for an hour" rather than "submit
+#: at most hourly". The effect on churn is the same and stronger at the boundary:
+#: every replacement restarts the hour, so a miner still editing in the last
+#: hour of a run is not measured in the next one and waits a further run.
+#:
+#: It is also what stops a submission being timed against the field. A miner who
+#: commits at the closing block has watched the entire run — every published
+#: result and every recipe another miner disclosed — before choosing. An hour is
+#: not a large tax on someone who searched, and it is the whole advantage of
+#: someone who waited.
+MIN_COMMITMENT_AGE_BLOCKS: Final[int] = 300
+
 #: Hidden instances drawn per run for the canonical comparison.
 #:
 #: Chosen together with DEFAULT_END_TO_END_MARGIN, not independently. A paired

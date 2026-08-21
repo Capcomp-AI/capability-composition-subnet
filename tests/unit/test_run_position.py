@@ -82,17 +82,36 @@ class TestACommitmentIsMeasuredOnce:
         assert measured_in_run(410 * self.W, 411, self.W)
         assert not measured_in_run(410 * self.W, 412, self.W)
 
-    def test_the_last_block_of_a_run_belongs_to_that_run(self):
+    def test_a_commitment_made_at_the_close_is_held_to_the_run_after(self):
+        """The last block of a run is too fresh to be measured by the next one.
+
+        It is held over rather than dropped: a commitment made in the closing
+        minutes has not been standing for MIN_COMMITMENT_AGE_BLOCKS when the
+        next run opens, so it is measured by the one after that instead.
+        """
+        from capability_subnet.common import constants as C
         from capability_subnet.common.chain import measured_in_run
 
-        assert measured_in_run(411 * self.W - 1, 411, self.W)
+        closing = 411 * self.W - 1
+        assert not measured_in_run(closing, 411, self.W), "too fresh for run 411"
+        assert measured_in_run(closing, 412, self.W), "measured by the run after"
+
+        # With no age requirement it would have been run 411, which is the
+        # behaviour this rule deliberately changes.
+        assert measured_in_run(closing, 411, self.W, min_age_blocks=0)
 
     def test_every_validator_agrees_without_remembering_anything(self):
         """The rule reads one chain fact, so a fresh validator selects the same set."""
+        from capability_subnet.common import constants as C
         from capability_subnet.common.chain import measured_in_run
 
-        blocks = [410 * self.W + n for n in (0, 1, 17, 5_000, self.W - 1)]
-        assert all(measured_in_run(b, 411, self.W) for b in blocks)
+        # Every block of run 410 with room to settle before 411 opens.
+        settled = [410 * self.W + n for n in (0, 1, 17, 5_000)]
+        assert all(measured_in_run(b, 411, self.W) for b in settled)
+
+        # And one without, which run 411 does not measure.
+        fresh = 411 * self.W - C.MIN_COMMITMENT_AGE_BLOCKS + 1
+        assert not measured_in_run(fresh, 411, self.W)
 
     def test_a_nonsense_run_length_is_refused(self):
         import pytest

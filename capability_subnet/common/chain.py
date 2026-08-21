@@ -24,6 +24,7 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from capability_subnet.common import constants as C
 from capability_subnet.common.commitments import (
     CommitmentError,
     CommitmentPayload,
@@ -366,7 +367,13 @@ def run_id_for_block(block: int, run_blocks: int) -> int:
     return block // run_blocks
 
 
-def measured_in_run(commitment_block: int, run_id: int, run_blocks: int) -> bool:
+def measured_in_run(
+    commitment_block: int,
+    run_id: int,
+    run_blocks: int,
+    *,
+    min_age_blocks: int = C.MIN_COMMITMENT_AGE_BLOCKS,
+) -> bool:
     """Whether a commitment is the business of this run.
 
     A commitment is measured once, in the run after the one it was made in.
@@ -379,18 +386,41 @@ def measured_in_run(commitment_block: int, run_id: int, run_blocks: int) -> bool
       which is the difference between work that grows with the churn and work
       that grows with the size of the subnet.
 
+    A commitment must also have been standing for MIN_COMMITMENT_AGE_BLOCKS when
+    that run opened. One made in the closing minutes is held over to the run
+    after instead — not discarded, only delayed. This is the enforceable half of
+    a rate limit: there is no record of a miner's earlier commitments to count,
+    but there is the age of the one that stands, and every replacement restarts
+    it. A miner still editing in the last hour of a run waits a further run.
+
     It is derived entirely from the commitment block, which every validator
     reads from the same chain. A validator that restarts, or one that registered
     this morning, selects exactly the same candidates as one that has been
     running for months — no local record of whose turn it has been, and nothing
     to disagree about.
 
+    Args:
+        min_age_blocks: how long the commitment must have stood when this run
+            opened. Overridable so a test can state the rule it is checking
+            rather than depending on the deployed value.
+
     Raises:
         ValueError: if ``run_blocks`` is not positive.
     """
     if run_blocks <= 0:
         raise ValueError("run_blocks must be positive")
-    return commitment_block // run_blocks == run_id - 1
+    if min_age_blocks < 0:
+        raise ValueError("min_age_blocks cannot be negative")
+
+    # The first run that opens strictly after the commitment, and no sooner
+    # than min_age_blocks after it. Both halves are needed: the first alone
+    # would measure a commitment made exactly at a run's opening block in that
+    # same run, and the second alone would do the same when min_age_blocks is
+    # zero. A commitment that has stood for exactly the required age qualifies,
+    # so the ceiling is inclusive of the boundary.
+    next_run = commitment_block // run_blocks + 1
+    settled_run = -(-(commitment_block + min_age_blocks) // run_blocks)
+    return run_id == max(next_run, settled_run)
 
 
 @dataclass(frozen=True, slots=True)

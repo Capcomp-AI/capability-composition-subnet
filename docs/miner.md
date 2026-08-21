@@ -29,8 +29,21 @@ commitment block moves into N+1 with it, so N+1 measures nothing from you and
 your new recipe waits for N+2. You did not fail a gate or lose a comparison —
 you withdrew the submission that was about to be judged, and you skip a run.
 
-The rule in one line: **replace it freely before the run ends, then leave it
-alone until you have been measured.**
+**And stop editing an hour before the run closes.** A commitment must have been
+standing for `MIN_COMMITMENT_AGE_BLOCKS` — 300 blocks, about an hour — when the
+run that would measure it opens. Commit inside that last hour and you are not
+dropped, you are held over to the run after. Every replacement restarts the
+hour, so a miner still swapping recipes at the close waits a further run.
+
+This is a rate limit that can actually be enforced. Limiting submissions by
+count would need a record of your earlier ones, and there is none: the chain
+keeps one commitment per hotkey and a validator sees only the block of the one
+standing. Age is the part that is on the chain, so the rule is "let it settle"
+rather than "submit at most hourly". It also removes the advantage of committing
+at the closing block after watching the whole run.
+
+The rule in three lines: **replace it freely early in the run, stop an hour
+before it closes, then leave it alone until you have been measured.**
 
 The floor is what keeps copying expensive. Reading a published recipe, tweaking
 it and resubmitting costs a full run per attempt, against an anti-copy check
