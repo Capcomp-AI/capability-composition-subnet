@@ -42,6 +42,28 @@ standing. Age is the part that is on the chain, so the rule is "let it settle"
 rather than "submit at most hourly". It also removes the advantage of committing
 at the closing block after watching the whole run.
 
+Ask the tooling rather than doing the arithmetic. Pass the current block and
+`capability-miner commitment` says which run will measure the recipe and how
+long you have left:
+
+```bash
+capability-miner commitment --recipe recipe.canon.json \
+    --recipe-uri <your-url> --block $(btcli subnet show --netuid 103 | grep -i block)
+
+# run 411: measured in run 412. 21290 blocks (~71.0h) left to change your mind.
+```
+
+Inside the closing window it says so instead:
+
+```
+run 411 closes in 200 blocks, inside the 60-minute settling window.
+A commitment made now is measured in run 413, not 412.
+Commit anyway and you skip a run; wait for run 412 to open and you do not.
+```
+
+Add `--strict-timing` to make that a non-zero exit, so a script does not commit
+into a run that will not measure it.
+
 The rule in three lines: **replace it freely early in the run, stop an hour
 before it closes, then leave it alone until you have been measured.**
 

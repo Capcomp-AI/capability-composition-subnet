@@ -204,7 +204,15 @@ def _cmd_pack(args: argparse.Namespace) -> int:
 
 
 def _cmd_commitment(args: argparse.Namespace) -> int:
-    """Show the exact payload that would be written on-chain."""
+    """Show the exact payload that would be written on-chain.
+
+    With ``--block``, also says which run will measure it. Committing inside the
+    closing window is not refused by the chain and not an error here either —
+    but it is almost never what a miner means, so it has to be said out loud
+    rather than discovered a run later when nothing was scored.
+    """
+    from capability_subnet.common import constants as C
+    from capability_subnet.common.chain import run_position
     from capability_subnet.common.commitments import CommitmentError, encode_commitment
 
     try:
@@ -216,6 +224,31 @@ def _cmd_commitment(args: argparse.Namespace) -> int:
 
     print(payload)
     print(f"\n{len(payload.encode('utf-8'))} bytes", file=sys.stderr)
+
+    if args.block is None:
+        return 0
+
+    position = run_position(args.block, C.DEFAULT_RUN_BLOCKS)
+    minutes = C.MIN_COMMITMENT_AGE_BLOCKS * 12 / 60
+    if position.in_settling_window:
+        print(
+            f"\nrun {position.run_id} closes in {position.blocks_remaining} blocks, inside the "
+            f"{minutes:.0f}-minute settling window.\n"
+            f"A commitment made now is measured in run {position.run_id + 2}, not "
+            f"{position.run_id + 1} — it has to have been standing for "
+            f"{C.MIN_COMMITMENT_AGE_BLOCKS} blocks when a run opens to be measured by it.\n"
+            f"Commit anyway and you skip a run; wait for run {position.run_id + 1} to open "
+            f"and you do not.",
+            file=sys.stderr,
+        )
+        return 3 if args.strict_timing else 0
+
+    print(
+        f"\nrun {position.run_id}: measured in run {position.run_id + 1}. "
+        f"{position.blocks_until_settling_window} blocks "
+        f"(~{position.blocks_until_settling_window * 12 / 3600:.1f}h) left to change your mind.",
+        file=sys.stderr,
+    )
     return 0
 
 
@@ -285,6 +318,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     commitment.add_argument("--recipe", required=True)
     commitment.add_argument("--recipe-uri", dest="recipe_uri", required=True)
+    commitment.add_argument(
+        "--block",
+        type=int,
+        default=None,
+        help=(
+            "Current chain block. Reports which run will measure this commitment, "
+            "and warns if the run is close enough to closing that it would be held "
+            "over to the run after."
+        ),
+    )
+    commitment.add_argument(
+        "--strict-timing",
+        action="store_true",
+        help=(
+            "Exit non-zero when --block falls inside the settling window, so a "
+            "script does not commit into a run that will not measure it."
+        ),
+    )
     commitment.set_defaults(func=_cmd_commitment)
 
     return parser

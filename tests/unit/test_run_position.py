@@ -120,3 +120,50 @@ class TestACommitmentIsMeasuredOnce:
 
         with pytest.raises(ValueError):
             measured_in_run(1000, 1, 0)
+
+
+class TestTheSettlingDeadlineIsVisible:
+    """A miner should learn the deadline before missing it, not after.
+
+    The chain accepts a commitment at any point in a run, so nothing stops a
+    late one being made — it is simply measured a run later than intended. The
+    only warning available is the arithmetic, and it is only useful if the
+    tooling does it.
+    """
+
+    W = 21600
+
+    def test_the_deadline_is_an_hour_before_the_run_closes(self):
+        from capability_subnet.common import constants as C
+        from capability_subnet.common.chain import run_position
+
+        p = run_position(411 * self.W + 10, self.W)
+        assert p.closes_block - p.settles_by_block == C.MIN_COMMITMENT_AGE_BLOCKS
+
+    def test_early_in_the_run_there_is_time_to_change_your_mind(self):
+        from capability_subnet.common.chain import run_position
+
+        p = run_position(411 * self.W + 10, self.W)
+        assert not p.in_settling_window
+        assert p.blocks_until_settling_window > 0
+
+    def test_inside_the_window_it_says_so(self):
+        from capability_subnet.common import constants as C
+        from capability_subnet.common.chain import run_position
+
+        late = 412 * self.W - C.MIN_COMMITMENT_AGE_BLOCKS + 1
+        p = run_position(late, self.W)
+        assert p.in_settling_window
+        assert p.blocks_until_settling_window == 0
+
+    def test_the_boundary_block_is_still_in_time(self):
+        """Standing for exactly the required age counts, here as elsewhere."""
+        from capability_subnet.common import constants as C
+        from capability_subnet.common.chain import measured_in_run, run_position
+
+        exactly = 412 * self.W - C.MIN_COMMITMENT_AGE_BLOCKS
+        p = run_position(exactly, self.W)
+
+        assert not p.in_settling_window
+        # And the position agrees with the rule it is describing.
+        assert measured_in_run(exactly, p.run_id + 1, self.W)

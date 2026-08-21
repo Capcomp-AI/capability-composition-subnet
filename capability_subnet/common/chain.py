@@ -434,10 +434,13 @@ class RunPosition:
     default arrangement each validator evaluates for itself and there is no
     central engine to ask.
 
-    What it deliberately does not claim is a *phase*. Runs are continuous:
-    there is no submission cut-off after which the arena stops accepting
-    commitments and starts evaluating. A commitment is admitted when it is seen,
-    and where a run is in its own span is the only position that exists.
+    Runs are continuous: the arena never stops accepting commitments, and a
+    commitment made at any point is admitted when it is seen. What does change
+    across a run is *which* run will measure it. A commitment must have stood
+    for MIN_COMMITMENT_AGE_BLOCKS when the next run opens, so one made inside
+    the closing window is held over to the run after — admitted, but a run
+    later than the miner probably intended. ``settles_by_block`` is where that
+    line falls.
     """
 
     run_id: int
@@ -445,6 +448,22 @@ class RunPosition:
     closes_block: int
     blocks_elapsed: int
     blocks_remaining: int
+    #: Last block at which a commitment still counts for the next run.
+    settles_by_block: int
+
+    @property
+    def block(self) -> int:
+        return self.opened_block + self.blocks_elapsed
+
+    @property
+    def in_settling_window(self) -> bool:
+        """Whether a commitment made now waits an extra run to be measured."""
+        return self.block > self.settles_by_block
+
+    @property
+    def blocks_until_settling_window(self) -> int:
+        """Blocks left in which a commitment still counts for the next run."""
+        return max(0, self.settles_by_block - self.block)
 
     @property
     def progress(self) -> float:
@@ -457,7 +476,12 @@ class RunPosition:
         return self.blocks_remaining * block_seconds
 
 
-def run_position(block: int, run_blocks: int) -> RunPosition:
+def run_position(
+    block: int,
+    run_blocks: int,
+    *,
+    min_age_blocks: int = C.MIN_COMMITMENT_AGE_BLOCKS,
+) -> RunPosition:
     """Locate ``block`` within its evaluation run.
 
     Raises:
@@ -478,4 +502,5 @@ def run_position(block: int, run_blocks: int) -> RunPosition:
         closes_block=opened + run_blocks,
         blocks_elapsed=block - opened,
         blocks_remaining=opened + run_blocks - block,
+        settles_by_block=opened + run_blocks - min_age_blocks,
     )
