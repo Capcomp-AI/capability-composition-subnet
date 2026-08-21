@@ -28,10 +28,17 @@ from contextlib import AbstractContextManager, ExitStack
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from capability_subnet.common.schemas import CandidateScores, InstanceResult, Recipe
+from capability_subnet.common import constants as C
+from capability_subnet.common.schemas import (
+    CandidateScores,
+    GateVerdict,
+    InstanceResult,
+    Recipe,
+)
 from capability_subnet.registry.snapshot import PoolSnapshot, load_snapshot
 from capability_subnet.sandbox.model_client import ModelClient
 from capability_subnet.sandbox.orchestrator import SandboxConfig, run_batch
+from capability_subnet.scoring import gates
 from capability_subnet.scoring.aggregate import (
     EfficiencyInputs,
     aggregate_scores,
@@ -63,11 +70,28 @@ class CandidateEvaluation:
     per_instance: dict[int, bool] = field(default_factory=dict)
     hidden_results: list[InstanceResult] = field(default_factory=list)
     ood_results: list[InstanceResult] = field(default_factory=list)
+    #: Every gate this candidate was put through. Empty means the gates never
+    #: ran, which is not the same as passing them — see ``usable``.
+    gate_verdicts: list[GateVerdict] = field(default_factory=list)
     error: str = ""
 
     @property
     def usable(self) -> bool:
-        return not self.error
+        """Whether this candidate may compete for weight.
+
+        Was ``not self.error``, which asked only whether the host managed to
+        finish — so a package that destroyed the base model's general ability,
+        or answered a handful of instances, or never cleared the reference,
+        ranked alongside one that did none of those things. The gates decide it
+        now, and an empty verdict list is a failure rather than a pass: a
+        candidate whose gates never ran has not cleared them.
+        """
+        return not self.error and gates.all_passed(self.gate_verdicts)
+
+    @property
+    def gate_failures(self) -> list[str]:
+        """Why this candidate cannot compete, for the window log."""
+        return [f"{v.name}: {v.detail}" for v in self.gate_verdicts if not v.passed]
 
 
 def evaluate_candidate(
@@ -75,15 +99,19 @@ def evaluate_candidate(
     client: ModelClient,
     *,
     assignment: Assignment,
-    ood_seeds: tuple[int, ...] | list[int] = (),
+    ood_seeds: tuple[int, ...] | list[int],
     pool_dir: str | Path,
     artifact_dir: str | Path,
     candidate_id: str = "",
     snapshot: PoolSnapshot | None = None,
     workflow: WorkflowModule | None = None,
     sandbox_config: SandboxConfig | None = None,
-    probe_seed: int | None = None,
-    base_probe: ProbeOutcome | None = None,
+    probe_seed: int,
+    base_probe: ProbeOutcome,
+    reference_e2e: float = 0.0,
+    reference_id: str = "",
+    end_to_end_margin: float = C.DEFAULT_END_TO_END_MARGIN,
+    min_valid_samples: int = C.DEFAULT_MIN_AXIS_SAMPLES,
     device: str = "cpu",
     serve: Callable[[str], AbstractContextManager[ModelClient]] | None = None,
 ) -> CandidateEvaluation:
@@ -94,9 +122,14 @@ def evaluate_candidate(
             that up is the validator's job, exactly as it is the miner's — this
             function does not assume a serving stack, so a validator may use
             vLLM, SGLang or anything else that speaks the client protocol.
-        base_probe: the base model on the same probe. Without it retention reads
-            as 1.0, which flatters every candidate equally and therefore changes
-            the ranking less than it looks, but it is still wrong.
+        ood_seeds: this window's out-of-distribution draw. Required: it used to
+            default to empty, and an empty draw scores the OOD term zero for
+            every candidate — a tenth of the qualified score, silently absent.
+        base_probe: the base model on the same probe. Required: retention used
+            to read as 1.0 without it, so a package that destroyed the base
+            model's general ability passed the floor it exists to fail.
+        reference_e2e: end-to-end completion of the strongest permanent
+            reference. A challenger must clear it by ``end_to_end_margin``.
     """
     from capability_subnet.miner.local_eval import build_local_artifact
 
@@ -148,8 +181,8 @@ def evaluate_candidate(
         }
 
         measure_resources(hidden_results, artifact_bytes=artifact_bytes)
-        probe = run_probe(client, build_probe(probe_seed if probe_seed is not None else 0))
-        retention = relative_retention(probe, base_probe) if base_probe is not None else 1.0
+        probe = run_probe(client, build_probe(probe_seed))
+        retention = relative_retention(probe, base_probe)
 
         scores = aggregate_scores(
             hidden_results,
@@ -161,6 +194,26 @@ def evaluate_candidate(
             ),
         )
 
+        # The same gates the engine applies, in the same order, so a validator
+        # and the operator's engine reach the same verdict about a package
+        # rather than two defensible different ones.
+        verdicts = [
+            gates.gate_artifact_size(artifact_bytes),
+            gates.gate_sample_sufficiency(hidden_results, min_valid_samples),
+            gates.gate_agent_limits(hidden_results),
+            gates.gate_safety(hidden_results),
+            gates.gate_stage_floors(
+                scores, flow.stage_floors, min_samples=min_valid_samples
+            ),
+            gates.gate_base_retention(scores.retention),
+            gates.gate_beats_strongest_reference(
+                scores.end_to_end,
+                reference_id or "no reference",
+                reference_e2e,
+                end_to_end_margin,
+            ),
+        ]
+
         return CandidateEvaluation(
             candidate_id=candidate_id,
             recipe_sha256=recipe.digest(),
@@ -170,7 +223,52 @@ def evaluate_candidate(
             per_instance=per_instance,
             hidden_results=hidden_results,
             ood_results=ood_results,
+            gate_verdicts=verdicts,
         )
+
+
+def measure_base_model(
+    client: ModelClient,
+    *,
+    assignment: Assignment,
+    probe_seed: int,
+    seeds: tuple[int, ...] | None = None,
+    with_probe: bool = True,
+    snapshot: PoolSnapshot | None = None,
+    workflow: WorkflowModule | None = None,
+    sandbox_config: SandboxConfig | None = None,
+) -> tuple[list[InstanceResult], ProbeOutcome]:
+    """Score the untouched base model on this window's own draw.
+
+    The bar every candidate is held to, and the probe their retention is scored
+    against. Measured here rather than assumed because a reference taken from a
+    different window is not a paired comparison, and a reference left at zero —
+    which is what the loop did before — turns "improvement over the reference"
+    into "the candidate's score".
+
+    Args:
+        seeds: a subset of the assignment to measure, when the sweep is split
+            across a fleet. Defaults to the whole assignment.
+        with_probe: whether to ask the probe. One shard asks it; the rest do
+            not, because forty extra questions per card measure the same forty
+            answers.
+
+    Returns:
+        The instance results and the probe outcome. Raw results rather than a
+        score, so a caller splitting the sweep aggregates once over everything
+        instead of averaging averages.
+    """
+    pool = snapshot or load_snapshot()
+    flow = workflow or get_workflow(pool.registry.workflow_id)
+    config = sandbox_config or SandboxConfig()
+
+    shard = seeds if seeds is not None else assignment.seeds
+    hidden = [flow.generate_instance(seed, split="hidden") for seed in shard]
+    outcomes = run_batch(hidden, client, config=config, runner=flow.run_instance)
+    results = [o.result for o in outcomes]
+    probe = run_probe(client, build_probe(probe_seed)) if with_probe else ProbeOutcome()
+
+    return results, probe
 
 
 def core_results(evaluation: CandidateEvaluation, assignment: Assignment) -> dict[int, bool]:

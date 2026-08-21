@@ -16,6 +16,7 @@ import pytest
 from capability_subnet.common import constants as C
 from capability_subnet.common.schemas import InstanceResult, StageResult
 from capability_subnet.sandbox.model_client import ModelReply
+from capability_subnet.scoring.retention import ProbeOutcome
 from capability_subnet.validator.assignment import assign
 from capability_subnet.validator.evaluator import (
     core_results,
@@ -112,6 +113,18 @@ def _evaluate(recipe, pool_dir, snapshot, stub_workflow, tmp_path, seeds=tuple(r
             candidate_id="5AAA",
             snapshot=snapshot,
             workflow=stub_workflow,
+            ood_seeds=(),
+            probe_seed=7,
+            # A base that answered nothing is an unmeasurable probe, and
+            # relative_retention reads that as full retention. These tests are
+            # about reconstruction and scoring, not about the retention gate,
+            # which has its own tests with a real base.
+            base_probe=ProbeOutcome(correct=0, total=0),
+            # This fixture's assignment is a sixteen-seed slice, below the
+            # protocol's twenty-sample floor. The floor has its own tests; these
+            # are about reconstruction and scoring, so it is lowered rather than
+            # padding every fixture to clear a gate they are not exercising.
+            min_valid_samples=1,
         ),
         assignment,
     )
@@ -124,7 +137,7 @@ class TestAValidatorCanCarryTheEvaluation:
         result, assignment = _evaluate(
             recipe_factory(), tiny_pool_dir, tiny_snapshot, stub_workflow, tmp_path
         )
-        assert result.usable, result.error
+        assert result.usable, result.error or result.gate_failures
         assert set(result.per_instance) == set(assignment.seeds)
 
     def test_it_reconstructs_for_itself(
@@ -199,3 +212,71 @@ class TestOnlyTheCoreIsComparable:
         shared = core_results(result, assignment)
         assert set(shared) == set(assignment.core)
         assert set(shared).isdisjoint(assignment.tail)
+
+
+class TestTheScoredTermsAreActuallyMeasured:
+    """Terms that were silently absent from the default validator path.
+
+    `evaluate_candidate` accepted an empty out-of-distribution draw and a
+    missing base probe, and scored the corresponding terms 0 and 1.0. Both are
+    tenths of the qualified score and one of them is a hard gate, so a package
+    that destroyed the base model's general ability passed the floor that exists
+    to fail it. They are required arguments now; these check the values reach
+    the score rather than merely being accepted.
+    """
+
+    def test_the_out_of_distribution_draw_is_scored(
+        self, recipe_factory, tmp_path, tiny_pool_dir, tiny_snapshot, stub_workflow
+    ):
+        recipe = recipe_factory()
+        assignment = assign(tuple(range(1, 41)), hotkey="5AAA", beacon=BEACON)
+
+        result = evaluate_candidate(
+            recipe,
+            _StubClient(),
+            assignment=assignment,
+            ood_seeds=(101, 102, 103, 104, 105, 106),
+            pool_dir=tiny_pool_dir,
+            artifact_dir=tmp_path / "artifact",
+            candidate_id="5AAA",
+            snapshot=tiny_snapshot,
+            workflow=stub_workflow,
+            probe_seed=7,
+            base_probe=ProbeOutcome(correct=0, total=0),
+            min_valid_samples=1,
+        )
+
+        assert len(result.ood_results) == 6, "the draw was accepted and then not run"
+        assert result.scores.ood > 0.0
+
+    def test_retention_is_measured_against_the_base_probe(
+        self, recipe_factory, tmp_path, tiny_pool_dir, tiny_snapshot, stub_workflow
+    ):
+        """A base that answered more than the candidate pulls retention below 1."""
+        recipe = recipe_factory()
+        assignment = assign(tuple(range(1, 41)), hotkey="5AAA", beacon=BEACON)
+
+        def evaluate(base_probe):
+            return evaluate_candidate(
+                recipe,
+                _StubClient(),
+                assignment=assignment,
+                ood_seeds=(),
+                pool_dir=tiny_pool_dir,
+                artifact_dir=tmp_path / f"artifact-{base_probe.correct}",
+                candidate_id="5AAA",
+                snapshot=tiny_snapshot,
+                workflow=stub_workflow,
+                probe_seed=7,
+                base_probe=base_probe,
+                min_valid_samples=1,
+            )
+
+        unmeasurable = evaluate(ProbeOutcome(correct=0, total=0))
+        assert unmeasurable.scores.retention == 1.0
+
+        # A base model that answered a great deal more than this candidate can.
+        strong_base = evaluate(ProbeOutcome(correct=40, total=40))
+        assert strong_base.scores.retention < 1.0, (
+            "retention did not move when the base probe did, so it is not being compared"
+        )

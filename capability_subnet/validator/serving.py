@@ -136,7 +136,7 @@ def _device_total_gib(device: str) -> float:
 
 
 def build_command(
-    artifact_dir: str | Path,
+    artifact_dir: str | Path | None,
     *,
     base_model_path: str | Path,
     python_executable: str,
@@ -144,7 +144,26 @@ def build_command(
     port: int,
     gpu_memory_utilization: float,
 ) -> list[str]:
-    """The runtime invocation for one candidate."""
+    """The runtime invocation for one candidate.
+
+    ``artifact_dir`` of ``None`` serves the base model with no adapter attached,
+    which is what the permanent reference is. Loading a LoRA and declining to
+    address it would leave the runtime holding an adapter the reference is not
+    supposed to have.
+    """
+    lora = (
+        [
+            "--enable-lora",
+            "--max-lora-rank",
+            str(max(C.ALLOWED_OUTPUT_RANKS)),
+            "--lora-modules",
+            f"{CANDIDATE_MODEL}={artifact_dir}",
+            "--max-loras",
+            "1",
+        ]
+        if artifact_dir is not None
+        else []
+    )
     return [
         python_executable,
         "-m",
@@ -168,13 +187,7 @@ def build_command(
         "--enable-auto-tool-choice",
         "--tool-call-parser",
         "hermes",
-        "--enable-lora",
-        "--max-lora-rank",
-        str(max(C.ALLOWED_OUTPUT_RANKS)),
-        "--lora-modules",
-        f"{CANDIDATE_MODEL}={artifact_dir}",
-        "--max-loras",
-        "1",
+        *lora,
         "--kv-cache-dtype",
         "fp8",
         "--max-num-seqs",
@@ -208,7 +221,7 @@ def _environment(python_executable: str, device: str) -> dict[str, str]:
 
 @contextmanager
 def serve_candidate(
-    artifact_dir: str | Path,
+    artifact_dir: str | Path | None,
     *,
     base_model_path: str | Path,
     device: str = "cuda",
@@ -217,10 +230,14 @@ def serve_candidate(
     port: int = 8000,
     startup_timeout: float = STARTUP_TIMEOUT_S,
 ) -> Iterator[str]:
-    """Serve one candidate, yielding the base URL it answers on.
+    """Serve one package, yielding the base URL it answers on.
+
+    ``artifact_dir`` of ``None`` serves the base model alone, which is how the
+    permanent reference is measured on the same draw as the candidates it is the
+    bar for.
 
     The runtime is stopped on the way out whether or not scoring succeeded, so
-    the next candidate starts from an empty card.
+    the next package starts from an empty card.
     """
     import httpx
 
@@ -244,8 +261,8 @@ def serve_candidate(
     )
 
     log.info(
-        "serving candidate from %s on %s (reserving %.1f GiB, utilization %.3f)",
-        artifact_dir,
+        "serving %s on %s (reserving %.1f GiB, utilization %.3f)",
+        artifact_dir if artifact_dir is not None else "the base model",
         device,
         C.SERVING_RESERVED_GIB,
         utilization,

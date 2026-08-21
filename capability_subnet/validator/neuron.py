@@ -354,6 +354,7 @@ class ValidatorNeuron:
             hotkey=self.wallet.hotkey.ss58_address,
             block=block,
             measure=self._measure,
+            measure_base=self._measure_base,
             burn_percentage=self.config.burn_percentage,
             burn_uid=self.burn_uid(),
             incentive_mode=getattr(self.config, "incentive_mode", C.MODE_GRADED_TOP3),
@@ -470,8 +471,98 @@ class ValidatorNeuron:
             log.info("uid %s: %s", commitment.hotkey[:8], exc)
             return None
 
-    def _measure(self, candidate, assignment):
-        """Reconstruct, serve and score one candidate on this host."""
+    def _measure_base(self, assignment, sample):
+        """Measure the permanent reference on this window's draw.
+
+        The base model with no adapter attached, on the same instances and the
+        same probe the candidates face.
+
+        Split across the whole fleet rather than run on one card. The reference
+        has to finish before any candidate starts — every candidate's retention
+        is scored against its probe and every margin against its score — so it
+        is the one sweep no amount of candidate concurrency can overlap, and
+        leaving three cards idle through it is the whole fleet running at a
+        quarter speed for the length of a full instance draw.
+        """
+        from concurrent.futures import ThreadPoolExecutor
+
+        from capability_subnet.sandbox.model_client import OpenAICompatibleClient
+        from capability_subnet.scoring.aggregate import EfficiencyInputs, aggregate_scores
+        from capability_subnet.validator.evaluator import measure_base_model
+        from capability_subnet.validator.serving import BASE_MODEL, serve_candidate
+        from capability_subnet.validator.window import BaseMeasurement
+        from capability_subnet.workflows import get_workflow
+
+        if not self.config.serve_url:
+            raise RuntimeError(
+                "--neuron.evaluation=own needs --neuron.serve_url: this validator "
+                "measures the reference itself and has nowhere to serve it"
+            )
+
+        bind = urlsplit(self.config.serve_url)
+        host = bind.hostname or "127.0.0.1"
+        cards = max(1, self._slots.qsize())
+        shards = [tuple(assignment.seeds[i::cards]) for i in range(cards)]
+        shards = [shard for shard in shards if shard]
+
+        def run(index: int):
+            shard = shards[index]
+            with self._slot() as (device, port):
+                with serve_candidate(
+                    None,  # no adapter: this is the base model
+                    base_model_path=self.config.base_model_path,
+                    device=device,
+                    python_executable=getattr(self.config, "serving_python", ""),
+                    host=host,
+                    port=port,
+                ) as base_url:
+                    return measure_base_model(
+                        OpenAICompatibleClient(base_url, BASE_MODEL),
+                        assignment=assignment,
+                        probe_seed=sample.probe_seed,
+                        seeds=shard,
+                        # One shard asks the probe. It is the same forty
+                        # questions on the same model on every card.
+                        with_probe=index == 0,
+                    )
+
+        log.info(
+            "measuring the reference over %d instances across %d card(s)",
+            len(assignment.seeds),
+            len(shards),
+        )
+        with ThreadPoolExecutor(max_workers=len(shards)) as pool:
+            measured = list(pool.map(run, range(len(shards))))
+
+        results = [row for shard_results, _ in measured for row in shard_results]
+        probe = measured[0][1]
+        if len(results) != len(assignment.seeds):
+            # Aggregating a short sweep would quietly report the reference as
+            # weaker than it is, which lowers the bar for every candidate.
+            raise RuntimeError(
+                f"the reference sweep returned {len(results)} of "
+                f"{len(assignment.seeds)} instances; refusing to set a bar from it"
+            )
+
+        flow = get_workflow(self.config.workflow_id)
+        scores = aggregate_scores(
+            results,
+            [],
+            flow.critical_axes,
+            retention=1.0,
+            efficiency=EfficiencyInputs(artifact_bytes=0),
+        )
+        return BaseMeasurement(end_to_end=scores.end_to_end, probe=probe)
+
+    def _measure(self, candidate, inputs):
+        """Reconstruct, serve and score one candidate on this host.
+
+        ``inputs`` carries the out-of-distribution draw, the probe seed and the
+        measured base model. Every one of them used to be absent here: the OOD
+        term scored zero for everybody, retention read 1.0 for everybody, and
+        the reference was zero, so three of the six scored terms and two of the
+        gates were not measuring anything.
+        """
         from capability_subnet.sandbox.model_client import OpenAICompatibleClient
         from capability_subnet.validator.evaluator import evaluate_candidate
         from capability_subnet.validator.serving import CANDIDATE_MODEL, serve_candidate
@@ -509,7 +600,12 @@ class ValidatorNeuron:
                 candidate.recipe,
                 OpenAICompatibleClient(f"{bind.scheme or 'http'}://{host}:{port}", CANDIDATE_MODEL),
                 serve=serve,
-                assignment=assignment,
+                assignment=inputs.assignment,
+                ood_seeds=inputs.ood_seeds,
+                probe_seed=inputs.probe_seed,
+                base_probe=inputs.base.probe,
+                reference_e2e=inputs.base.end_to_end,
+                reference_id=inputs.base.reference_id,
                 pool_dir=self.config.pool_dir,
                 artifact_dir=f"{self.config.full_path}/artifacts/{candidate.hotkey[:12]}",
                 candidate_id=candidate.hotkey,

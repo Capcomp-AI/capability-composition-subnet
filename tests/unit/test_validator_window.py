@@ -10,15 +10,24 @@ from __future__ import annotations
 
 import pytest
 
-from capability_subnet.common.schemas import CandidateScores
+from capability_subnet.common.schemas import CandidateScores, GateVerdict
 from capability_subnet.validator.evaluator import CandidateEvaluation
-from capability_subnet.validator.window import Candidate, run_window
+from capability_subnet.scoring.retention import ProbeOutcome
+from capability_subnet.validator.window import BaseMeasurement, Candidate, run_window
 
 BEACON = "0x" + "ab" * 32
 
 
 def _candidate(uid: int, recipe, *, first_block: int = 100) -> Candidate:
     return Candidate(uid=uid, hotkey=f"5HOT{uid}", recipe=recipe, first_block=first_block)
+
+
+#: A candidate that cleared everything. These tests are about how a window
+#: turns measurements into weights, not about the gates — but an evaluation
+#: carrying no verdicts is deliberately unusable, so a stub has to say it
+#: passed rather than say nothing.
+def _cleared() -> list[GateVerdict]:
+    return [GateVerdict(name="stub", passed=True, detail="cleared in a fixture")]
 
 
 def _measurement(hotkey: str, score: float, *, seeds=(), success=lambda s: s % 3 == 0):
@@ -29,19 +38,29 @@ def _measurement(hotkey: str, score: float, *, seeds=(), success=lambda s: s % 3
         artifact_bytes=1024,
         scores=CandidateScores(qualified_score=score),
         per_instance={s: success(s) for s in seeds},
+        gate_verdicts=_cleared(),
     )
 
 
 def _scorer(scores: dict[str, float]):
     """A measure function that returns a fixed score per hotkey."""
 
-    def measure(candidate: Candidate, assignment):
-        return _measurement(candidate.hotkey, scores[candidate.hotkey], seeds=assignment.seeds)
+    def measure(candidate: Candidate, inputs):
+        return _measurement(
+            candidate.hotkey, scores[candidate.hotkey], seeds=inputs.assignment.seeds
+        )
 
     return measure
 
 
-def _run(candidates, measure, **kw):
+def _base(end_to_end: float = 0.0) -> BaseMeasurement:
+    """A reference the fixtures can be held to."""
+    return BaseMeasurement(
+        end_to_end=end_to_end, probe=ProbeOutcome(correct=0, total=0)
+    )
+
+
+def _run(candidates, measure, *, measure_base=None, **kw):
     return run_window(
         candidates,
         window_id=1080,
@@ -49,6 +68,7 @@ def _run(candidates, measure, **kw):
         hotkey="5SELF",
         block=7_000_000,
         measure=measure,
+        measure_base=measure_base or (lambda assignment, sample: _base()),
         hidden_count=120,
         ood_count=20,
         **kw,
@@ -84,6 +104,7 @@ class TestTheValidatorDecidesForItself:
             hotkey="5OTHER",
             block=7_000_000,
             measure=_scorer({"5HOT1": 0.4}),
+            measure_base=lambda assignment, sample: _base(),
             hidden_count=120,
             ood_count=20,
         )
@@ -104,10 +125,10 @@ class TestOneBadSubmissionCannotTaxTheRest:
     def test_an_unmeasurable_candidate_is_absent_not_penalised(self, recipe_factory):
         r = recipe_factory()
 
-        def measure(candidate, assignment):
+        def measure(candidate, inputs):
             if candidate.uid == 2:
                 raise RuntimeError("reconstruction exploded")
-            return _measurement(candidate.hotkey, 0.5, seeds=assignment.seeds)
+            return _measurement(candidate.hotkey, 0.5, seeds=inputs.assignment.seeds)
 
         out = _run([_candidate(1, r), _candidate(2, r)], measure)
         assert len(out.evaluations) == 2
@@ -119,7 +140,7 @@ class TestOneBadSubmissionCannotTaxTheRest:
     def test_a_window_where_nothing_measures_still_produces_a_vector(self, recipe_factory):
         r = recipe_factory()
 
-        def measure(candidate, assignment):
+        def measure(candidate, inputs):
             raise RuntimeError("nothing works today")
 
         out = _run([_candidate(1, r)], measure)
@@ -196,9 +217,9 @@ class TestMeasuringCandidatesInParallel:
         r = recipe_factory()
         delays = {"5HOT1": 0.20, "5HOT2": 0.05, "5HOT3": 0.10}
 
-        def measure(candidate: Candidate, assignment):
+        def measure(candidate: Candidate, inputs):
             time.sleep(delays[candidate.hotkey])
-            return _measurement(candidate.hotkey, 0.5, seeds=assignment.seeds)
+            return _measurement(candidate.hotkey, 0.5, seeds=inputs.assignment.seeds)
 
         candidates = [_candidate(1, r), _candidate(2, r), _candidate(3, r)]
         out = _run(candidates, measure, workers=3)
@@ -221,10 +242,10 @@ class TestMeasuringCandidatesInParallel:
     def test_one_candidate_failing_does_not_stop_the_others(self, recipe_factory):
         r = recipe_factory()
 
-        def measure(candidate: Candidate, assignment):
+        def measure(candidate: Candidate, inputs):
             if candidate.hotkey == "5HOT2":
                 raise RuntimeError("this host could not serve it")
-            return _measurement(candidate.hotkey, 0.5, seeds=assignment.seeds)
+            return _measurement(candidate.hotkey, 0.5, seeds=inputs.assignment.seeds)
 
         out = _run([_candidate(1, r), _candidate(2, r), _candidate(3, r)], measure, workers=3)
 
@@ -232,3 +253,108 @@ class TestMeasuringCandidatesInParallel:
         assert {e.candidate_id for e in out.usable} == {"5HOT1", "5HOT3"}
         failed = next(e for e in out.evaluations if e.candidate_id == "5HOT2")
         assert "could not serve it" in (failed.error or "")
+
+
+class TestTheWindowMeasuresWhatItClaimsTo:
+    """The scored terms are wired to something that measures them.
+
+    Each of these covers a term that was silently absent from the default
+    validator path: the out-of-distribution draw was extracted and never passed
+    on, retention defaulted to 1.0 with no base probe to compare against, the
+    reference defaulted to zero so "improvement" meant "score", and `usable`
+    asked only whether the host had crashed. A window can be wrong in all four
+    ways at once without a single error in a log, which is why they are pinned
+    here rather than left to review.
+    """
+
+    def test_the_reference_is_measured_and_becomes_the_bar(self, recipe_factory):
+        r = recipe_factory()
+        seen = {}
+
+        def measure(candidate, inputs):
+            seen["reference"] = inputs.base.end_to_end
+            seen["probe"] = inputs.base.probe
+            return _measurement(candidate.hotkey, 0.5, seeds=inputs.assignment.seeds)
+
+        out = _run(
+            [_candidate(1, r)],
+            measure,
+            measure_base=lambda assignment, sample: BaseMeasurement(
+                end_to_end=0.42, probe=ProbeOutcome(correct=36, total=40)
+            ),
+        )
+
+        assert seen["reference"] == 0.42
+        assert seen["probe"].correct == 36
+        assert out.reference_e2e == 0.42
+
+    def test_a_window_cannot_run_without_a_reference(self, recipe_factory):
+        """No bar, no window. It used to default to zero and carry on."""
+        r = recipe_factory()
+        with pytest.raises(TypeError, match="measure_base"):
+            run_window(
+                [_candidate(1, r)],
+                window_id=1080,
+                beacon=BEACON,
+                hotkey="5SELF",
+                block=7_000_000,
+                measure=_scorer({"5HOT1": 0.5}),
+            )
+
+    def test_the_out_of_distribution_draw_reaches_the_measurement(self, recipe_factory):
+        r = recipe_factory()
+        seen = {}
+
+        def measure(candidate, inputs):
+            seen["ood"] = inputs.ood_seeds
+            return _measurement(candidate.hotkey, 0.5, seeds=inputs.assignment.seeds)
+
+        out = _run([_candidate(1, r)], measure)
+
+        assert seen["ood"] == out.sample.ood_seeds
+        assert len(seen["ood"]) == 20, "the draw was extracted and then dropped"
+
+    def test_the_probe_seed_reaches_the_measurement(self, recipe_factory):
+        r = recipe_factory()
+        seen = {}
+
+        def measure(candidate, inputs):
+            seen["probe_seed"] = inputs.probe_seed
+            return _measurement(candidate.hotkey, 0.5, seeds=inputs.assignment.seeds)
+
+        out = _run([_candidate(1, r)], measure)
+
+        assert seen["probe_seed"] == out.sample.probe_seed
+        assert seen["probe_seed"] != 0, "a zero probe seed is the same probe every window"
+
+    def test_a_candidate_that_fails_a_gate_does_not_compete(self, recipe_factory):
+        r = recipe_factory()
+
+        def measure(candidate, inputs):
+            evaluation = _measurement(candidate.hotkey, 0.9, seeds=inputs.assignment.seeds)
+            evaluation.gate_verdicts = [
+                GateVerdict(name="base_retention", passed=False, detail="0.700 against a 0.95 floor")
+            ]
+            return evaluation
+
+        out = _run([_candidate(1, r)], measure)
+
+        assert out.usable == [], "a candidate that failed a gate was ranked anyway"
+        assert out.evaluations[0].gate_failures == [
+            "base_retention: 0.700 against a 0.95 floor"
+        ]
+
+    def test_an_evaluation_whose_gates_never_ran_does_not_compete(self, recipe_factory):
+        """An empty verdict list is not a pass.
+
+        ``all([])`` is True, so a candidate that returned before the gates ran
+        would otherwise read as having cleared every one of them.
+        """
+        r = recipe_factory()
+
+        def measure(candidate, inputs):
+            evaluation = _measurement(candidate.hotkey, 0.9, seeds=inputs.assignment.seeds)
+            evaluation.gate_verdicts = []
+            return evaluation
+
+        assert _run([_candidate(1, r)], measure).usable == []

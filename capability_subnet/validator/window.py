@@ -22,6 +22,7 @@ from capability_subnet.common.schemas import CandidateScores, Recipe, WeightVect
 from capability_subnet.scoring.comparator import minimum_detectable_effect
 from capability_subnet.scoring.contribution import ContributionInputs, contribution_score
 from capability_subnet.scoring.ranking import Submission, rank
+from capability_subnet.scoring.retention import ProbeOutcome
 from capability_subnet.scoring.sampler import WindowSample, draw_window_open
 from capability_subnet.scoring.weight_vector import graded_contribution, graded_top3
 from capability_subnet.validator.agreement import outlier_validators
@@ -54,6 +55,9 @@ class WindowOutcome:
     assignment: Assignment
     evaluations: list[CandidateEvaluation] = field(default_factory=list)
     weights: WeightVector | None = None
+    #: The bar this window measured. Recorded so a reader can tell what the
+    #: candidates were held to rather than inferring it from the winner.
+    reference_e2e: float = 0.0
     #: Peers whose core results are inconsistent with the majority. Reported
     #: rather than acted on: which validators to distrust is a network-level
     #: decision, and one validator concluding it alone is how a split becomes
@@ -67,7 +71,44 @@ class WindowOutcome:
 
 #: Given a candidate and the instances to measure it on, produce a measurement.
 #: Injected so the loop can be exercised without reconstruction or serving.
-Measure = Callable[["Candidate", Assignment], CandidateEvaluation]
+@dataclass(frozen=True)
+class BaseMeasurement:
+    """The base model on this window's own draw.
+
+    The bar every candidate is held to, and the probe retention is scored
+    against. Both have to come from the same window as the candidates — a
+    reference measured on a different draw is not a paired comparison, which is
+    the property the whole design rests on.
+    """
+
+    end_to_end: float
+    probe: ProbeOutcome
+    reference_id: str = "reference:base_model"
+
+
+@dataclass(frozen=True)
+class WindowInputs:
+    """Everything a measurement needs that is not the candidate itself.
+
+    Passed as one object rather than a widening argument list because the
+    previous signature made it possible — and it happened — to call a
+    measurement without the out-of-distribution draw or the base probe, which
+    scores those terms zero and one respectively without anything saying so.
+    """
+
+    assignment: Assignment
+    ood_seeds: tuple[int, ...]
+    probe_seed: int
+    base: BaseMeasurement
+
+
+Measure = Callable[["Candidate", WindowInputs], CandidateEvaluation]
+
+#: Measures the base model on this window's draw. Required rather than
+#: defaulted: a window with no reference cannot say a candidate improved on
+#: anything, and defaulting the reference to zero made "improvement" mean
+#: "score", silently.
+MeasureBase = Callable[[Assignment, "WindowSample"], BaseMeasurement]
 
 
 def run_window(
@@ -78,13 +119,13 @@ def run_window(
     hotkey: str,
     block: int,
     measure: Measure,
+    measure_base: MeasureBase,
     hidden_count: int = C.DEFAULT_HIDDEN_INSTANCES,
     ood_count: int = C.DEFAULT_OOD_INSTANCES,
     workflow_id: str = C.DEFAULT_WORKFLOW_ID,
     burn_percentage: float = 0.0,
     burn_uid: int = C.BURN_UID,
     incentive_mode: str = C.MODE_GRADED_TOP3,
-    reference_e2e: float = 0.0,
     workers: int = 1,
     peer_core_results: dict[str, dict[int, bool]] | None = None,
 ) -> WindowOutcome:
@@ -97,12 +138,12 @@ def run_window(
             for memory and measure each other rather than themselves.
         incentive_mode: how the measured field is turned into weights. See
             :func:`_weights_from`.
-        reference_e2e: end-to-end completion of the strongest permanent
-            reference, used by the graded mode's improvement term. This loop
-            measures committed candidates only and never a reference, so there
-            is no honest value to derive here — it is a parameter rather than a
-            default so a caller that *does* measure references can supply one,
-            and a caller that does not is visibly claiming zero.
+        measure_base: measures the base model on this window's draw. The base
+            model is the only permanent reference, and this loop cannot produce
+            a bar without it. It used to be a ``reference_e2e`` parameter
+            defaulting to zero, which made the graded mode's improvement term
+            equal to the candidate's raw score and let a package that beat
+            nothing collect improvement credit.
         peer_core_results: other validators' core results for one shared
             candidate, when this validator has them. Used only to report
             inconsistency — a miner is not paid less because another validator
@@ -116,7 +157,37 @@ def run_window(
         window_id=window_id, beacon=beacon, sample=sample, assignment=assignment
     )
 
-    outcome.evaluations.extend(_measure_all(candidates, assignment, measure, workers))
+    # The reference first, and alone. Every candidate's retention is scored
+    # against this probe and every candidate's margin against this score, so
+    # measuring it on the same draw is what makes the comparison paired.
+    base = measure_base(assignment, sample)
+    log.info(
+        "window %d reference %s: end_to_end %.4f, probe %d/%d",
+        window_id,
+        base.reference_id,
+        base.end_to_end,
+        base.probe.correct,
+        base.probe.total,
+    )
+    inputs = WindowInputs(
+        assignment=assignment,
+        ood_seeds=sample.ood_seeds,
+        probe_seed=sample.probe_seed,
+        base=base,
+    )
+    outcome.reference_e2e = base.end_to_end
+
+    outcome.evaluations.extend(_measure_all(candidates, inputs, measure, workers))
+
+    for evaluation in outcome.evaluations:
+        if evaluation.error:
+            log.warning("%s could not be measured: %s", evaluation.candidate_id[:12], evaluation.error)
+        elif not evaluation.usable:
+            log.info(
+                "%s did not clear its gates: %s",
+                evaluation.candidate_id[:12],
+                "; ".join(evaluation.gate_failures) or "no gates ran",
+            )
 
     if peer_core_results:
         outcome.flagged_peers = _flag_peers(outcome, hotkey, peer_core_results)
@@ -130,7 +201,7 @@ def run_window(
         burn_percentage=burn_percentage,
         burn_uid=burn_uid,
         incentive_mode=incentive_mode,
-        reference_e2e=reference_e2e,
+        reference_e2e=base.end_to_end,
     )
     return outcome
 
@@ -154,7 +225,7 @@ def _failed(candidate: Candidate, exc: Exception) -> CandidateEvaluation:
 
 def _measure_all(
     candidates: list[Candidate],
-    assignment: Assignment,
+    inputs: WindowInputs,
     measure: Measure,
     workers: int,
 ) -> list[CandidateEvaluation]:
@@ -171,7 +242,7 @@ def _measure_all(
         results = []
         for candidate in candidates:
             try:
-                results.append(measure(candidate, assignment))
+                results.append(measure(candidate, inputs))
             except Exception as exc:  # one bad candidate must not stop the window
                 log.warning("uid %s could not be measured: %s", candidate.uid, exc)
                 results.append(_failed(candidate, exc))
@@ -184,7 +255,7 @@ def _measure_all(
     def run(index: int) -> None:
         candidate = candidates[index]
         try:
-            ordered[index] = measure(candidate, assignment)
+            ordered[index] = measure(candidate, inputs)
         except Exception as exc:  # one bad candidate must not stop the window
             log.warning("uid %s could not be measured: %s", candidate.uid, exc)
             ordered[index] = _failed(candidate, exc)
