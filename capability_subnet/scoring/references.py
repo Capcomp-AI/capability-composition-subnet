@@ -1,20 +1,58 @@
-"""Permanent reference champions.
+"""The permanent reference the network measures against.
 
 A plain king-of-the-hill contest only requires beating whoever holds the throne.
-That is not a high enough bar for this commodity: at genesis the throne is empty,
-and later a mediocre champion could hold it simply because nothing better
-challenged. So the network keeps a set of references on the board permanently.
+That is not a high enough bar for this commodity: at genesis the throne is
+empty, and later a mediocre champion could hold it simply because nothing better
+challenged. So the network keeps the untouched base model on the board
+permanently. It is evaluated on the same hidden instances every window,
+alongside the incumbent, and a challenger must beat it. It cannot be terminated
+and it earns no emission — if the base model is the best thing on the board, the
+workflow share is burned, because the network has not yet produced anything
+worth paying for.
 
-They are evaluated on the same hidden instances every window, alongside the
-incumbent, and a challenger must beat the *strongest* of them. None of them can
-be terminated and none of them earn emission — if a reference is the best thing
-on the board, the workflow share is burned, because the network has not yet
-produced anything worth paying for.
+The set used to be wider: the base model, the best single adapter, and three
+standard equal-weight merges. Measuring them retired all but the base. Over a
+full 1350-instance window the base model scored 0.1133 end-to-end and every
+other reference scored below it — the equal-weight TIES merge 0.0926, the
+equal-weight linear merge 0.0000, single adapters 0.1067 and 0.0815. None ever
+bound, so each spent a card every window raising a bar the base had already
+raised higher.
 
-The set spans what a competent engineer would try before reaching for a search:
-the untouched base model, the single best specialist, and three standard
-equal-weight merges. If a miner cannot beat all of those, composition has not
-added value and the correct outcome is that nobody gets paid.
+The linear merge is worth recording plainly. Linear aggregation sums the
+weighted updates without normalising, so ten adapters at the implicit
+coefficient of 1.0 is a tenfold sum rather than an average. It served without
+error over all 1350 instances and answered in fragments — "By eighty For By
+ByxFE ByxFE" — scoring zero end-to-end and 0/40 on the retention probe. It was
+not what a competent engineer would try before reaching for a search; it was a
+configuration nobody would ship.
+
+What this gives up, recorded so it is not rediscovered as a surprise:
+
+- A recipe identical to a naive equal-weight merge used to be terminated for
+  matching a reference. It is now an ordinary candidate that has to beat the
+  base by the margin. It still loses on measurement, but it loses on its score
+  rather than on its identity.
+- The single-adapter references are the bar that actually bound, and they are
+  gone. On a 250-item paired benchmark over this pool the best single adapter
+  scored 0.132 against the base model's 0.100 — the only reference measured to
+  beat the base — and no merge has beaten it. Removing it lowers the bar from
+  "beat the best specialist" to "beat the untouched model", which is a
+  materially easier thing to do.
+
+  Concretely, on the run-411 draw the base scored 0.1133 and the strongest
+  challenger 0.1496. Scaling the benchmark's best single adapter to that draw
+  puts it near 0.150, so that challenger clears the base by a wide margin and
+  would not clear the specialist at all. It is eligible because this reference
+  was removed.
+
+  The specialist is exactly what the reference set was for: a merge worse than
+  one adapter used alone is composition with negative value, and it can now
+  take the throne and earn emission. This was removed knowingly, for the card
+  time, and it is the first thing to restore if the network starts paying for
+  merges nobody would deploy.
+
+The remedy is to measure the pool's twenty-seven adapters once and append a
+reference here for anything that clears the base.
 """
 
 from __future__ import annotations
@@ -33,10 +71,6 @@ ReferenceKind = Literal["base", "single_adapter", "recipe"]
 
 #: Identifiers of the permanent references, in the order they are reported.
 BASE_MODEL = "reference:base_model"
-BEST_SINGLE = "reference:best_single_adapter"
-EQUAL_LINEAR = "reference:equal_linear_merge"
-EQUAL_TIES = "reference:equal_ties_svd_merge"
-EQUAL_DARE_TIES = "reference:equal_dare_ties_svd_merge"
 INCUMBENT = "incumbent"
 
 #: Fixed seed for the stochastic reference merge. The reference must be the same
@@ -59,55 +93,14 @@ class ReferencePackage:
         return self.kind == "base" or self.adapter_id is not None or self.recipe is not None
 
 
-def _equal_weight_recipe(
-    snapshot: PoolSnapshot,
-    adapters: list[str],
-    *,
-    combination_type: str,
-    density: float | None = None,
-    sign_method: str | None = None,
-) -> Recipe:
-    """An equal-weight merge over ``adapters``.
-
-    Every coefficient is left at the implicit default of 1.0 and no layer group
-    is singled out. That is the point: these references represent what you get
-    without doing any composition research, so any tuning would make them a
-    weaker bar than they are meant to be.
-
-    Capped at the same number of adapters a miner may select. A reference built
-    from more of the pool than any submission is allowed to use is not a bar a
-    submission can clear — and on a pool larger than the cap it is not even a
-    valid recipe, which is why a pool of more than twelve capability adapters
-    could not be started against at all.
-
-    Which twelve is decided by sorting on adapter id and taking the first: an
-    arbitrary rule, but a fixed one that every engine reproduces and no operator
-    chooses. Selecting by measured score instead would let the bar move whenever
-    a certification landed.
-    """
-    return Recipe(
-        workflow_id=snapshot.registry.workflow_id,
-        base_revision=snapshot.manifest.revision,
-        source_snapshot_sha256=snapshot.sha256,
-        selected_adapters=sorted(adapters)[: C.MAX_SELECTED_ADAPTERS],
-        merge=MergeSpec(
-            combination_type=combination_type,
-            density=density,
-            majority_sign_method=sign_method,  # type: ignore[arg-type]
-            random_seed=REFERENCE_SEED,
-        ),
-        compression=CompressionSpec(
-            output_rank=snapshot.registry.canonical_rank, svd_clamp_quantile=1.0
-        ),
-        output=OutputSpec(adapter_name="reference"),
-    )
-
-
 def build_references(snapshot: PoolSnapshot) -> list[ReferencePackage]:
-    """Every permanent reference for this pool."""
-    capability_adapters = list(snapshot.registry.capability_adapters())
+    """Every permanent reference for this pool.
 
-    references: list[ReferencePackage] = [
+    One, now. Kept as a list because the audit path, the disclosure and the
+    engine all iterate it, and because restoring a reference should be a matter
+    of appending here rather than reshaping its callers.
+    """
+    return [
         ReferencePackage(
             reference_id=BASE_MODEL,
             kind="base",
@@ -115,99 +108,28 @@ def build_references(snapshot: PoolSnapshot) -> list[ReferencePackage]:
         )
     ]
 
-    references.append(
-        ReferencePackage(
-            reference_id=EQUAL_LINEAR,
-            kind="recipe",
-            description="Equal-weight linear merge of every capability adapter.",
-            recipe=_equal_weight_recipe(
-                snapshot, capability_adapters, combination_type=C.MERGE_LINEAR
-            ),
-        )
-    )
-    references.append(
-        ReferencePackage(
-            reference_id=EQUAL_TIES,
-            kind="recipe",
-            description="Equal-weight trimmed merge with sign election.",
-            recipe=_equal_weight_recipe(
-                snapshot,
-                capability_adapters,
-                combination_type=C.MERGE_TIES_SVD,
-                density=0.5,
-                sign_method="total",
-            ),
-        )
-    )
-    references.append(
-        ReferencePackage(
-            reference_id=EQUAL_DARE_TIES,
-            kind="recipe",
-            description="Equal-weight drop-and-rescale merge with sign election.",
-            recipe=_equal_weight_recipe(
-                snapshot,
-                capability_adapters,
-                combination_type=C.MERGE_DARE_TIES_SVD,
-                density=0.5,
-                sign_method="total",
-            ),
-        )
-    )
-    return references
 
-
-def single_adapter_references(snapshot: PoolSnapshot) -> list[ReferencePackage]:
-    """One reference per capability adapter.
-
-    Evaluated separately so the best single adapter can be identified rather than
-    assumed. Which specialist is strongest on the whole workflow is exactly the
-    kind of thing that is obvious in retrospect and wrong in advance.
-    """
-    return [
-        ReferencePackage(
-            reference_id=f"{BEST_SINGLE}:{adapter_id}",
-            kind="single_adapter",
-            description=f"The {adapter_id} adapter alone.",
-            adapter_id=adapter_id,
-        )
-        for adapter_id in snapshot.registry.capability_adapters()
-    ]
-
-
-def collapse_single_adapters(
+def bar_scores(
     scores: dict[str, float], *, include_incumbent: bool = True
 ) -> dict[str, float]:
-    """Fold the per-adapter references into one ``best single adapter`` entry.
+    """The reference scores a bar is taken from.
 
-    A challenger has to beat the best specialist, not each one individually, so
-    the reference set the comparator sees carries a single collapsed entry. The
-    per-adapter numbers stay in the report, because which specialist was
-    strongest is one of the more useful things the network learns each window.
+    Was ``collapse_single_adapters``, and folded the per-adapter references into
+    one "best single adapter" entry before applying the rule below. There are no
+    per-adapter references left to fold, so only the rule remains.
 
     Args:
         include_incumbent: whether the reigning champion counts as a reference.
             False when picking the bar a challenger must clear by the absolute
-            margin. The permanent references answer "did composition add value
+            margin. The permanent reference answers "did composition add value
             at all", and that question does not get harder because someone
             already answered it — folding the incumbent in made every successive
             champion clear the previous one by a further fixed margin, which
             walks the bar up until nothing can move it.
     """
-    collapsed: dict[str, float] = {}
-    singles: dict[str, float] = {}
-
-    for name, value in scores.items():
-        if name.startswith(BEST_SINGLE + ":"):
-            singles[name] = value
-        elif name == INCUMBENT and not include_incumbent:
-            continue
-        else:
-            collapsed[name] = value
-
-    if singles:
-        collapsed[BEST_SINGLE] = max(singles.values())
-
-    return collapsed
+    if include_incumbent:
+        return dict(scores)
+    return {name: value for name, value in scores.items() if name != INCUMBENT}
 
 
 def is_reference(candidate_id: str) -> bool:

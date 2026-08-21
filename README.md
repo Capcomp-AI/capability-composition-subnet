@@ -291,7 +291,7 @@ Cost is not a claim here: latency, token efficiency and artifact size are 15% of
 
 - **Efficient multi-adapter serving is genuinely good.** S-LoRA and Punica amortise adapter swapping well. Where your router is a cheap classifier rather than a model, the token argument shrinks to a latency and operations argument.
 - **A specialist can simply be better.** If one adapter dominates your traffic, merging trades capability for convenience you may not need. On the current pool, no merge has beaten the best single adapter.
-- **Merging can destroy general ability** before it destroys task score, which is why a 0.98 retention floor on a held-out probe is a hard gate rather than a scored term.
+- **Merging can destroy general ability** before it destroys task score, which is why a 0.95 retention floor on a held-out probe is a hard gate rather than a scored term.
 
 ## Scope
 
@@ -302,7 +302,7 @@ no distillation, no miner-hosted inference.
 Narrowness makes the subnet measurable, secure and reproducible with technology
 that already exists. The questions it is built to answer:
 
-- Can composed adapters beat the best single adapter and the standard merges?
+- Can composed adapters beat the best single adapter and the standard merges? (Measured, and reported — though only the base model is a gating reference.)
 - Does that improvement survive out-of-distribution data?
 - Is a static merged package cheaper than runtime adapter routing?
 
@@ -338,7 +338,7 @@ A routed-adapter reference baseline is a planned addition. Until it exists, the 
 
 ### What happens if composition turns out not to help?
 
-Nobody gets paid. The permanent reference baselines — including plain equal-weight merges — sit on the board specifically so the network can discover the answer is "no" rather than paying miners to not discover it.
+Nobody gets paid. The untouched base model sits on the board permanently, specifically so the network can discover the answer is "no" rather than paying miners to not discover it.
 
 If a reference holds the throne, the workflow share burns.
 

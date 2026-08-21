@@ -31,9 +31,8 @@ from capability_subnet.scoring.ranking import Submission, rank, tied
 from capability_subnet.scoring.references import (
     ReferencePackage,
     build_references,
-    collapse_single_adapters,
+    bar_scores,
     is_reference,
-    single_adapter_references,
 )
 from capability_subnet.scoring.sampler import WindowSample, build_instances, draw_window
 from capability_subnet.scoring.weight_vector import (
@@ -54,7 +53,7 @@ __all__ = [
     "apply_validator_burn",
     "build_instances",
     "build_references",
-    "collapse_single_adapters",
+    "bar_scores",
     "compare",
     "compare_axis",
     "contribution_score",
@@ -68,7 +67,6 @@ __all__ = [
     "minimum_detectable_effect",
     "paired_bootstrap",
     "rank",
-    "single_adapter_references",
     "strongest_reference",
     "tied",
     "valid_rows",

@@ -71,9 +71,10 @@ workflow_id: lora_merger_logic_v1
 serving_base_url: http://127.0.0.1:8000
 serving_model_name: candidate
 
-# Extra serving arguments. The defaults are what make a single 24 GB card
-# sufficient: fp8 quantises the KV *cache* (not the weights, so canonical
-# scores stay bfloat16), and the engine evaluates one sequence at a time.
+# Extra serving arguments. fp8 quantises the KV *cache* and not the weights, so
+# canonical scores stay bfloat16, and the sequence limit matches the batch the
+# orchestrator submits. It was 1 while latency was scored, because a queued
+# request would have been timed as a slow one.
 serving_extra_args: "--kv-cache-dtype fp8 --max-num-seqs 32"   # must admit >= SANDBOX_BATCH_CONCURRENCY or batching is throttled at the runtime
 
 # PostgreSQL for the hidden maintenance snapshot. Leave empty to serve it from
@@ -95,7 +96,6 @@ reconstruction_workers: 2
 # true on any host with a GPU: a broken counter reads as 0 GB, and 0 GB passes a
 # 24 GB limit, so every candidate would clear the memory gate unchecked. Set it
 # false only for CPU-only development, where there is no GPU to measure.
-require_vram_measurement: true
 
 # Traces retained per candidate per window, for later disclosure. Once a window
 # closes, its seeds and these traces are published so anyone can regenerate the
@@ -112,8 +112,8 @@ disclosure_traces: 10
 # not worse on every other one, then clear the end-to-end margin against the
 # strongest reference with a paired lower confidence bound above zero.
 # A margin the instance count cannot resolve is not strictness: nothing is ever
-# crowned, and every verdict looks like an ordinary loss. 400 hidden instances
-# resolve about 0.054, so the margin sits just above it. Raising the margin or
+# crowned, and every verdict looks like an ordinary loss. 1350 hidden instances
+# resolve about 0.024, so the margin sits above it. Raising the margin or
 # lowering the instances is safe; lowering the margin needs more instances, and
 # more instances need a longer window — preflight checks both and says which.
 axis_margin: 0.02             # absolute margin to count as dominant on an axis
@@ -174,7 +174,7 @@ serving_gpu_index: 0
 # Note the fraction also decides peak memory, which is gated: on a large card
 # 0.78 can exceed the 24 GiB limit on its own, before any candidate is served.
 serving_max_model_len: 8192
-serving_gpu_memory_utilization: 0.4168
+serving_gpu_memory_utilization: 0.5
 
 # The interpreter vLLM runs under. Empty uses the engine's own; set it when vLLM
 # has its own virtualenv, which is common because it pins torch tightly.

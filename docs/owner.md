@@ -67,22 +67,21 @@ adapter_pool_dir: /var/lib/capsub/pool
 report_dir: /var/lib/capsub/state/reports
 
 workflow_id: lora_merger_logic_v1
-window_blocks: 7200           # ~24h at 12s blocks
-hidden_instances: 400
-ood_instances: 30
-end_to_end_margin: 0.06       # 400 instances resolve ~0.054
+window_blocks: 21600          # ~72h at 12s blocks
+hidden_instances: 1350
+ood_instances: 100
+end_to_end_margin: 0.03       # 1350 instances resolve ~0.024
 
 base_model_path: /var/lib/capsub/base-model/Qwen3-8B
 serving_gpu_uuid: "GPU-<uuid>"
 serving_max_model_len: 8192
-serving_gpu_memory_utilization: 0.4168  # 48 GB card; see the formula below
+serving_gpu_memory_utilization: 0.5     # 48 GB card; see the formula below
 serving_python: /opt/vllm/bin/python
-serving_extra_args: "--kv-cache-dtype fp8 --max-num-seqs 1"
+serving_extra_args: "--kv-cache-dtype fp8 --max-num-seqs 32"
 
 evaluator_image_digest: sha256:<digest of the built engine image>
 reconstruction_workers: 2
 merge_device: cuda
-require_vram_measurement: true
 disclosure_traces: 10
 ```
 

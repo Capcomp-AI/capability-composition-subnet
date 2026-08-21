@@ -64,7 +64,7 @@ the part you compete on, and random sampling is the weakest search there is.
 
 Things the contract lets you decide, that random sampling decides by coin flip:
 
-- **which adapters**, and how many (2 to 12). They are not interchangeable; the
+- **which adapters**, and how many (2 to 10). They are not interchangeable; the
   pool publishes what each one claims to do.
 - **the merge method**. `linear` is cheap and reproduces byte-for-byte anywhere;
   the SVD methods trim and re-factorise, which is usually better and costs a far

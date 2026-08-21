@@ -4,7 +4,7 @@ A validator decides where emission goes, and it earns that by measuring. There i
 
 | What you need | |
 |---|---|
-| GPU | **8 × RTX 5090 (32 GB)**, one candidate per card |
+| GPU | **4 × RTX 5090 (32 GB) minimum**, 8 recommended — one candidate per card |
 | Adapter pool on disk | ~9 GB |
 | Install | `capability-subnet[merge]` |
 | An operator to trust | None |
@@ -38,21 +38,41 @@ You are not a relay. Before anything touches the chain your validator:
 
 | | |
 |---|---|
-| GPU | **8 × RTX 5090 (32 GB)**, one candidate per card |
-| CPU | 8 cores |
-| RAM | 32 GB |
+| GPU | **4 × RTX 5090 (32 GB) minimum**, 8 recommended — one candidate per card |
+| CPU | 16 cores minimum, 32 recommended |
+| RAM | 64 GB |
 | Disk | 120 GB — base model ~16 GB, adapter pool ~9 GB, artifacts and state |
 | Network | 100 Mbps |
 
-A candidate reserves a fixed **20 GiB** while it is served, so a card needs more
-than that free to hold one. A 32 GB RTX 5090 exposes about 30.5 GiB and serves
-at 0.66 utilization; a card that cannot clear the 20 GiB reservation is refused
-at start-up rather than measuring a package it cannot fit. The reservation is
-absolute and the fraction is derived from whatever card you have, which is what
-keeps peak memory a property of the package rather than of your hardware — the
-same candidate peaks near 20.9 GiB on a 32 GB card, a 48 GB card and an 80 GB
-card alike. A larger card therefore does not run more candidates; it runs the
+The GPU floor is enforced, not advisory: `MIN_VALIDATOR_CARDS` and
+`MIN_VALIDATOR_CARD_GIB` are protocol constants and the engine refuses to start
+below them, with the arithmetic in the message.
+
+**Why 32 GB a card.** A candidate reserves a fixed **24 GiB** while it is
+served, the driver context holds about 1 GiB before anything loads, and a merge
+sharing the card peaks near 2.5 GiB — about 27.5 GiB before a card can serve and
+reconstruct at once. A card that cannot clear the reservation is refused at
+start-up rather than measuring a package it cannot fit. The reservation is
+absolute and the fraction is derived from whatever card you have: 0.78 on a
+32 GB card, 0.50 on a 48 GB one. That is what keeps what a candidate answers
+with a property of the package rather than of your hardware — the same KV cache
+everywhere. A larger card therefore does not run a bigger candidate; it runs the
 same one with a smaller fraction.
+
+**Why four cards.** Not the reference schedule — batched serving finishes the
+eight reference packages in about 3.7 hours on a single card, well inside a
+72-hour window. It is challenger throughput at the cadence this network is
+moving to. At the current rate a validator covers roughly 106 challengers per
+3-day window on one card and 448 on four; shorten the window to a day and one
+card covers 30, against the 29 commitments the network already carries. Four
+cards is what keeps a short window viable while the miner count grows.
+
+**Why the CPU and RAM are higher than they look.** Reconstruction is pinned to a
+single torch thread — byte-identical merges across machines require it — so each
+merge saturates exactly one core and no more. The engine runs merges for
+upcoming candidates while the fleet serves the current batch, so a 4-card
+validator has up to four merges and four servers in flight at once, each merge
+holding 1–4 GB resident. Cores, not clock speed, are what shorten a window.
 
 Cards are the unit of parallelism. Each one measures a whole candidate at a
 time, so eight cards measure eight candidates at once and the run's throughput

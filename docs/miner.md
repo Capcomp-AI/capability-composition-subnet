@@ -267,7 +267,7 @@ The full evaluation report is published at `/reports` — every gate verdict, ev
 |---|---|
 | Building and validating recipes | Any machine |
 | Reconstructing an artifact | ~32 GB RAM. A GPU is optional and ~30x faster on the trimming methods. |
-| Evaluating locally | A GPU that can hold the 20 GiB serving reservation (24 GB+) |
+| Evaluating locally | A GPU that can hold the 24 GiB serving reservation (32 GB+) |
 | Searching seriously | As much as you want to spend — this is where competition happens |
 
 See [min_compute.yml](../min_compute.yml) for detail.
@@ -359,7 +359,12 @@ Get both from `python -m capability_subnet.miner.cli pool`, or let `miner.cli in
 
 ### `selected_adapters`
 
-Between **2 and 12** adapter IDs from the certified pool. Duplicates are rejected.
+Between **2 and 10** adapter IDs from the frozen pool. Duplicates are rejected.
+
+All 30 pool adapters are selectable; certification no longer gates selection. The
+bound is `MIN_SELECTED_ADAPTERS`/`MAX_SELECTED_ADAPTERS` and is exported in the
+published JSON Schema as `minItems`/`maxItems`, so `capability-miner validate`
+catches a violation before you commit.
 
 Order does not matter — reconstruction always loads in sorted identifier order, so the same set produces the same artifact however you wrote it.
 

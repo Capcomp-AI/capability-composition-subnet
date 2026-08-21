@@ -210,17 +210,23 @@ class TestStrongestReference:
     def test_no_references_is_handled(self):
         assert strongest_reference({}) == ("", 0.0)
 
-    def test_single_adapter_references_collapse_to_the_best_one(self):
-        collapsed = ref.collapse_single_adapters(
-            {
-                f"{ref.BEST_SINGLE}:alpha": 0.3,
-                f"{ref.BEST_SINGLE}:beta": 0.6,
-                ref.BASE_MODEL: 0.2,
-            }
-        )
-        assert collapsed[ref.BEST_SINGLE] == 0.6
-        assert ref.BASE_MODEL in collapsed
-        assert f"{ref.BEST_SINGLE}:alpha" not in collapsed
+    def test_the_incumbent_is_excluded_from_the_absolute_bar(self):
+        """The bar is the permanent reference, not the last winner.
+
+        Replaces a test that folded the per-adapter references into a best-
+        single-adapter entry. There are no per-adapter references any more, so
+        the only rule left in this helper is the one below — and it is the one
+        that matters: counting the incumbent would make every new champion clear
+        the previous one by a further fixed margin, a staircase that completion,
+        being bounded by one, cannot climb far.
+        """
+        scores = {ref.BASE_MODEL: 0.2, ref.INCUMBENT: 0.6}
+
+        bar = ref.bar_scores(scores, include_incumbent=False)
+        assert bar == {ref.BASE_MODEL: 0.2}
+
+        # Excluded from the bar, not hidden — the report still shows it.
+        assert ref.INCUMBENT in ref.bar_scores(scores)
 
 
 class TestWeightVector:
@@ -241,10 +247,11 @@ class TestWeightVector:
         assert vector.entries[0].role == "burn"
 
     def test_a_reference_on_the_throne_earns_nothing(self):
-        # A reference holding the throne means no miner has beaten an
-        # off-the-shelf merge yet. Paying for that would be paying the operator.
+        # A reference holding the throne means no miner has beaten the untouched
+        # base model yet. Paying for that would be paying the operator for
+        # nothing the network produced.
         champion = self._champion(
-            candidate_id=ref.EQUAL_TIES, hotkey="5Operator", uid=3, is_reference=True
+            candidate_id=ref.BASE_MODEL, hotkey="5Operator", uid=3, is_reference=True
         )
         vector = winner_take_all(champion, window_id=1, block=100)
 

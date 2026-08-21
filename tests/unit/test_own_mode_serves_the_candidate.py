@@ -75,22 +75,33 @@ class TestTheServedPackageIsTheBuiltOne:
 
 
 class TestTheReservationIsTheSameEverywhere:
-    """`peak_vram` is a gate, so it has to mean the same thing on every host.
+    """What a candidate answers with has to be the same on every host.
 
-    A fraction of the card does not: the same candidate measures 25.4 GiB on a
-    validator running 0.78 of a 32 GB card and 22.9 GiB on one running 0.70, and
-    one refuses what the other passes for a reason that is not the miner's.
+    The reservation sets the KV cache, and the KV cache sets how much of the
+    batch is resident at once. A fraction of the card would make that differ by
+    validator — the same candidate would answer with more context on a bigger
+    card — and the scores would stop being comparable for a reason that is not
+    the miner's.
     """
 
-    @pytest.mark.parametrize("total", [24.0, 31.39, 47.4, 79.2])
+    #: Card sizes at or above the validator floor. 24 GB used to be here and is
+    #: deliberately not: the reservation grew past what such a card can hold, so
+    #: it now belongs in the refusal test below rather than this one.
+    @pytest.mark.parametrize("total", [31.39, 47.4, 79.2])
     def test_the_same_absolute_memory_is_reserved_on_any_card(self, total):
         reserved = utilization_for(total) * total
         assert reserved == pytest.approx(C.SERVING_RESERVED_GIB, abs=1e-6)
 
-    def test_a_card_too_small_is_refused_rather_than_squeezed(self):
-        """Serving a package that does not fit would measure the card."""
+    @pytest.mark.parametrize("total", [16.0, 24.0])
+    def test_a_card_too_small_is_refused_rather_than_squeezed(self, total):
+        """Serving a package that does not fit would measure the card.
+
+        24 GB is in here because the floor moved: refusing it at start-up with a
+        reason is the supported outcome, where squeezing the reservation to fit
+        would score every miner on the validator's hardware.
+        """
         with pytest.raises(ServingError, match="rather than the package"):
-            utilization_for(16.0)
+            utilization_for(total)
 
     @pytest.mark.parametrize("bad", [0.0, -1.0])
     def test_a_nonsense_card_size_raises(self, bad):

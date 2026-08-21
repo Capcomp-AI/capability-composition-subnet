@@ -335,11 +335,18 @@ score.
 
 Both are measured rather than assumed. Latency, token efficiency and artifact
 size carry 15% of the qualified score, so cost is priced into who wins. Base
-retention is a hard gate at 0.98 on a held-out probe, so a package that traded
+retention is a hard gate at 0.95 on a held-out probe, so a package that traded
 away general ability cannot be crowned whatever it scored. And the permanent
-references — the base model, the best single adapter, the standard merges — exist
-so the network can discover that composition did *not* help, which on the current
-pool is still the standing result.
+reference — the untouched base model — exists so the network can discover that
+composition did *not* help rather than paying miners to not discover it.
+
+That set used to be wider: the base model, the best single adapter and three
+standard equal-weight merges. The merges were measured and never bound, scoring
+far below the base. The single adapter did bind — on this pool the best one
+beats the base — and it was removed anyway, for the card time it cost. The bar
+is therefore now "beat the untouched model" rather than "beat the best
+specialist", which is the easier of the two, and a merge worse than one adapter
+used alone can hold the throne.
 
 See the economics tab of the published dashboard for the worked arithmetic, and
 [the README](../README.md#what-a-merged-package-is-worth) for the summary.
@@ -629,10 +636,10 @@ single evaluation ever ran.
 
 No. The margin a challenger must clear over the *incumbent* decays to zero over
 roughly thirty days, so an unopposed champion progressively loses its defender's
-advantage. What does not decay is the margin over the permanent references —
-beating an off-the-shelf equal-weight merge is the bar that says composition
-added value at all, and that question does not get easier because someone
-already answered it once.
+advantage. What does not decay is the margin over the permanent reference —
+beating the untouched base model is the bar that says composition added value at
+all, and that question does not get easier because someone already answered it
+once.
 
 ### I did not take the throne. Did I earn anything?
 

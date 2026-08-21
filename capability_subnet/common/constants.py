@@ -229,15 +229,59 @@ MAX_SELECTED_ADAPTERS: Final[int] = 10
 #: KV — 3.61x what one full-length sequence uses, which is what pays for
 #: SANDBOX_BATCH_CONCURRENCY — and peaks at about 21 GiB.
 #:
-#: It also has to fit on a card somebody owns. A 24 GB card exposes about 22.0
-#: GiB and roughly 21.7 GiB of that is free once the driver context is resident,
-#: so a 22 GiB reservation is refused by the runtime at start-up — measured, not
+#: It also has to fit on a card somebody owns, and that is what moved this
+#: number. The 20 GiB it held was sized for a 24 GB card: such a card exposes
+#: about 22.0 GiB, roughly 21.7 GiB of it free once the driver context is
+#: resident, so a 22 GiB reservation is refused at start-up — measured, not
 #: predicted: vLLM answers "free memory (21.65/22.04 GiB) is less than desired
 #: utilization (0.9984, 22.0 GiB)" and exits. Every candidate then records a
 #: serving failure, which scores every miner zero for the validator's hardware.
-#: At 20 GiB the same card serves at 0.907 utilization and peaks near 20.9 GiB,
-#: still under the gate.
-SERVING_RESERVED_GIB: Final[float] = 20.0
+#:
+#: The validator floor is now a 32 GB card (see the hardware requirements in the
+#: README), which retires that ceiling. 24 GiB leaves about 8.7 GiB of KV at
+#: SERVING_MAX_MODEL_LEN — roughly double what 20 GiB allowed — and that is what
+#: SANDBOX_BATCH_CONCURRENCY is actually spending. At 20 GiB on the same
+#: hardware the configured batch width could not be filled: the cache held
+#: 29,552 tokens against a p90 instance of 2,017, so about fourteen sequences
+#: were resident where thirty-two were being asked for, and the rest queued.
+#:
+#: Honest about provenance: the 20 GiB figures above were measured on real
+#: cards. The 24 GiB figures are derived from those measurements plus the KV
+#: arithmetic for this model (36 layers, 8 KV heads, 128 head dim, bf16 —
+#: 144 KiB per token), not measured on a 32 GB card, because none was available
+#: when this changed. A validator bringing up 32 GB hardware should confirm the
+#: runtime accepts the reservation before trusting a window run on it.
+SERVING_RESERVED_GIB: Final[float] = 24.0
+
+#: The smallest card a validator may serve on, in GiB of total device memory.
+#:
+#: Forced by SERVING_RESERVED_GIB, not chosen alongside it. A candidate reserves
+#: 24 GiB, the driver context holds about 1 GiB before anything loads, and a
+#: merge sharing the card peaks near 2.5 GiB — so a card must offer about 27.5
+#: GiB before it can serve and reconstruct at once. 32 GiB is the smallest
+#: commodity size above that, and validator.serving.utilization_for refuses
+#: anything smaller at start-up with the arithmetic in the message rather than
+#: letting a window fail halfway through.
+MIN_VALIDATOR_CARD_GIB: Final[float] = 32.0
+
+#: The smallest fleet a validator may run.
+#:
+#: Not forced by the reference schedule: batched serving finishes the eight
+#: reference packages in about 3.7 hours on a single card, well inside a 72-hour
+#: window. It is forced by challenger throughput at the cadence this network is
+#: moving to. Measured at the current rate — 2100 instances, about 0.47 hours a
+#: package — a validator covers roughly this many challengers per window:
+#:
+#:      cards       3-day window        1-day window
+#:          1                 106                  30
+#:          2                 220                  67
+#:          4                 448                 142
+#:
+#: A single card is comfortable today and stops being so the moment the window
+#: shortens: 30 challengers against the 29 commitments the network already
+#: carries is not headroom, it is the edge. Four cards is what keeps a 1-day
+#: window viable while the miner count grows.
+MIN_VALIDATOR_CARDS: Final[int] = 4
 
 #: Context length every candidate is served at. Part of the measurement: a
 #: package judged at a longer context is answering an easier question about its
@@ -281,7 +325,21 @@ MAX_OUTPUT_TOKENS: Final[int] = 8192
 #: Relative retention floor against the unmodified base model on a held-out
 #: general-capability probe. A candidate that trades away general ability for
 #: workflow score is rejected.
-BASE_RETENTION_FLOOR: Final[float] = 0.98
+#:
+#: Read against RETENTION_PROBE_ITEMS, because the two together decide how much
+#: loss is actually tolerated. One item out of forty is a 2.5% drop, so the
+#: earlier 0.98 admitted no loss whatever at any base score: a candidate matching
+#: the base on 35 of the 36 it answered scored 0.972 and was rejected, and the
+#: floor behaved as an exact-match rule wearing a percentage. Measured over two
+#: full runs, that cost three otherwise mid-field candidates their place on a
+#: single probe item each.
+#:
+#: At 0.95 the gate tolerates exactly one lost item and rejects two, which is
+#: what a floor of this shape can express on a forty-item probe. Anything
+#: between 0.951 and 0.975 is the same rule as 0.95; anything above 0.975 is the
+#: same rule as 1.0. Raising RETENTION_PROBE_ITEMS is the only way to make the
+#: number finer-grained than that.
+BASE_RETENTION_FLOOR: Final[float] = 0.95
 
 #: Items drawn per window for the general-capability probe. Small because each
 #: item is a few tokens and the probe runs once per package per window, and
@@ -403,6 +461,12 @@ DEFAULT_MIN_AXIS_SAMPLES: Final[int] = 20
 #: The bill is quadratic. Resolving 0.03 instead of 0.055 takes 1350 instances
 #: instead of 400, which takes a 72-hour window instead of a 24-hour one. That is
 #: the real price of a lower bar and it is charged in cadence, not in this number.
+#:
+#: 0.02 was tried twice and reverted both times. At 1350 instances it sits below
+#: what the draw resolves (0.0241), so the deployment preflight refuses it — not
+#: as strictness but as a network that can never crown anyone. Reaching it costs
+#: 2000 instances, and the cadence was judged worth more than the tenth of a
+#: point. The two constants move together or not at all.
 DEFAULT_END_TO_END_MARGIN: Final[float] = 0.03
 
 #: Margin a challenger must clear over the reigning champion, at the moment the
@@ -461,10 +525,10 @@ DEFAULT_WINDOW_BLOCKS: Final[int] = 21600
 #: Hidden instances drawn per window for the canonical comparison.
 #:
 #: Chosen together with DEFAULT_END_TO_END_MARGIN, not independently. A paired
-#: comparison over 1350 instances resolves about 0.0295, so a 0.03 margin is
-#: demonstrable; 400 resolve 0.054 and 100 resolve only 0.108, which made an
-#: earlier 0.03 margin unprovable and the throne effectively unwinnable. The
-#: engine refuses a configuration where the two contradict each other.
+#: comparison over 1350 instances resolves about 0.0241, so a 0.03 margin is
+#: demonstrable with room to spare; 400 resolve only 0.0443, which would make it
+#: unprovable and the throne effectively unwinnable. The engine refuses a
+#: configuration where the two contradict each other.
 #:
 #: The resolvable edge falls with the square root of this, so each halving of the
 #: bar costs four times the evaluation. That arithmetic is unchanged; what

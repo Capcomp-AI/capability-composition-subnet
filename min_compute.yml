@@ -20,7 +20,7 @@ miner:
     recommended_cores: 16
   gpu:
     required: false         # required only for local evaluation
-    min_vram: 24            # GB — matches the peak-VRAM deployment gate
+    min_vram: 32            # GB — a candidate reserves 24 GiB while served
     recommended_vram: 48
     cuda_cores: 5000
     min_compute_capability: 8.0
@@ -55,16 +55,21 @@ validator:
   # serving_gpu_memory_utilization to 0.45 on a 48 GB card.
 
   cpu:
-    min_cores: 8
+    # Reconstruction is pinned to one torch thread for byte-identical merges,
+    # so each merge saturates exactly one core. Cores shorten a window.
+    min_cores: 16
     min_speed: 2.5
-    recommended_cores: 16
+    recommended_cores: 32
   gpu:
     required: true
-    min_vram: 48
+    min_vram: 32            # MIN_VALIDATOR_CARD_GIB; refused below this
     recommended_vram: 48
+    min_count: 4            # MIN_VALIDATOR_CARDS; refused below this
+    recommended_count: 8
   memory:
-    min_ram: 32
-    recommended_ram: 64
+    # A merge holds 1-4 GB and several run at once while the fleet serves.
+    min_ram: 64
+    recommended_ram: 128
     min_swap: 8
   storage:
     # Base model ~16 GB, adapter pool ~9 GB, artifacts, state and kernel caches.
@@ -98,35 +103,43 @@ backend:
   # update at a time rather than stacking them. It can share the serving card
   # or run on any other.
   #
-  # 24 GB is verified sufficient, not merely arithmetically adequate. A merged
-  # rank-64 adapter was served on a single RTX 4090 through the engine's own
-  # ManagedVllmServer, and both request shapes the protocol uses succeeded:
+  # 32 GB is the floor, enforced by MIN_VALIDATOR_CARD_GIB. A candidate reserves
+  # 24 GiB, the driver context holds ~1 GiB, and a merge sharing the card peaks
+  # near 2.5 GiB — ~27.5 GiB before a card serves and reconstructs at once.
+  #
+  # The 24 GB figures below were measured when the reservation was 20 GiB, on a
+  # single RTX 4090 through the engine's own ManagedVllmServer. They are kept
+  # because they are real measurements of a real run; they describe the older,
+  # smaller reservation and a 24 GB card no longer clears the floor:
   #
   #   startup                                    67 s
   #   peak GPU memory (NVML, under load)      22.89 GB
   #   GPU KV cache                          73,968 tokens
-  #   concurrency at full 16384 context           4.51x
+  #   concurrency at full 16384 context           4.51x   (served at 8192 now)
   #
   # Two settings make the difference and both are safe:
   #   --kv-cache-dtype fp8   halves KV cost; this quantises the *cache*, not
   #                          the weights, so canonical scores stay bfloat16
-  #   --max-num-seqs 1       the engine evaluates one sequence at a time anyway
+  #   --max-num-seqs 32      matches SANDBOX_BATCH_CONCURRENCY; it was 1 while
+  #                          latency was scored, since a queued request would
+  #                          have been timed as a slow one
   #
   # Quantising the *weights* would free ~8 GB and is forbidden: the contract
   # requires bfloat16 for every canonical score, because a package measured at
   # a different precision is a different package.
   #
-  # 48 GB is still the recommendation, for context growth or concurrent
-  # evaluation, but it is a preference rather than a requirement.
+  # Four such cards is the enforced minimum (MIN_VALIDATOR_CARDS); eight is the
+  # recommendation. The floor is challenger throughput at a short window, not
+  # the reference schedule, which one card finishes comfortably.
   cpu:
     min_cores: 32
     min_speed: 3.0
     recommended_cores: 64
   gpu:
     required: true
-    min_vram: 24            # measured: 19.33 GB to serve, 1.5 GB to reconstruct
+    min_vram: 32            # 24 GiB reserved to serve, ~2.5 GB to reconstruct
     recommended_vram: 48    # room for context growth and concurrent evaluation
-    count: 1                # per concurrent sandbox
+    count: 4                # merges and evaluations run across the whole fleet
     min_compute_capability: 8.0
   memory:
     min_ram: 128
