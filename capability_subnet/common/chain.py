@@ -412,15 +412,38 @@ def measured_in_run(
     if min_age_blocks < 0:
         raise ValueError("min_age_blocks cannot be negative")
 
-    # The first run that opens strictly after the commitment, and no sooner
-    # than min_age_blocks after it. Both halves are needed: the first alone
-    # would measure a commitment made exactly at a run's opening block in that
-    # same run, and the second alone would do the same when min_age_blocks is
-    # zero. A commitment that has stood for exactly the required age qualifies,
-    # so the ceiling is inclusive of the boundary.
+    return run_id == measuring_run_for(
+        commitment_block, run_blocks, min_age_blocks=min_age_blocks
+    )
+
+
+def measuring_run_for(
+    commitment_block: int,
+    run_blocks: int,
+    *,
+    min_age_blocks: int = C.MIN_COMMITMENT_AGE_BLOCKS,
+) -> int:
+    """The single run that will measure a commitment made at this block.
+
+    The one place this is decided. A caller that needs to file a commitment
+    under the run that will score it — a console mirroring history, a report, a
+    miner asking where its recipe landed — must not re-derive it: the rule has
+    two parts and a copy that keeps only the obvious one is wrong exactly at the
+    boundary, where it is least likely to be noticed.
+
+    Both parts are needed. The first alone would measure a commitment made at a
+    run's opening block in that same run; the second alone would do the same
+    when min_age_blocks is zero. A commitment that has stood for exactly the
+    required age qualifies, so the ceiling includes the boundary.
+    """
+    if run_blocks <= 0:
+        raise ValueError("run_blocks must be positive")
+    if min_age_blocks < 0:
+        raise ValueError("min_age_blocks cannot be negative")
+
     next_run = commitment_block // run_blocks + 1
     settled_run = -(-(commitment_block + min_age_blocks) // run_blocks)
-    return run_id == max(next_run, settled_run)
+    return max(next_run, settled_run)
 
 
 @dataclass(frozen=True, slots=True)

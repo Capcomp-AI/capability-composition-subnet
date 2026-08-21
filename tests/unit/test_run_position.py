@@ -167,3 +167,43 @@ class TestTheSettlingDeadlineIsVisible:
         assert not p.in_settling_window
         # And the position agrees with the rule it is describing.
         assert measured_in_run(exactly, p.run_id + 1, self.W)
+
+
+class TestOneDefinitionOfWhichRunMeasuresACommitment:
+    """`measuring_run_for` is the only place that decides this.
+
+    The console files a mirrored row under the run that will score it, and it
+    used to re-derive that as commit+1. That is the first half of the rule; a
+    commitment made inside the closing window is measured a run later, so the
+    copy disagreed with the protocol exactly at the boundary — where a wrong
+    answer looks like an ordinary row.
+    """
+
+    W = 21600
+
+    def test_it_agrees_with_the_predicate_at_every_point_in_a_run(self):
+        from capability_subnet.common.chain import measured_in_run, measuring_run_for
+
+        start = 411 * self.W
+        for offset in (0, 1, 5_000, self.W // 2, self.W - 301, self.W - 300, self.W - 1):
+            block = start + offset
+            run = measuring_run_for(block, self.W)
+            assert measured_in_run(block, run, self.W), f"disagreed at +{offset}"
+            # And it is the *only* run that measures it.
+            others = [
+                r for r in range(410, 416)
+                if r != run and measured_in_run(block, r, self.W)
+            ]
+            assert not others, f"+{offset} is measured by {others} as well as {run}"
+
+    def test_a_settled_commitment_is_measured_by_the_next_run(self):
+        from capability_subnet.common import constants as C
+        from capability_subnet.common.chain import measuring_run_for
+
+        settled = 411 * self.W + self.W - C.MIN_COMMITMENT_AGE_BLOCKS
+        assert measuring_run_for(settled, self.W) == 412
+
+    def test_a_commitment_at_the_close_is_measured_a_run_later(self):
+        from capability_subnet.common.chain import measuring_run_for
+
+        assert measuring_run_for(412 * self.W - 1, self.W) == 413
