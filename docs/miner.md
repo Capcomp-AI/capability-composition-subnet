@@ -17,6 +17,21 @@ attempts, because a commitment made after a run opened is not measured in it.
 Nothing is terminated: a package that loses costs you that run, not the
 hotkey.
 
+**You may replace your recipe as often as you like before it is measured.** The
+chain keeps one commitment per hotkey, so committing again simply overwrites the
+last one. Submit once, twice, three times inside a run — whatever stands when
+the run ends is the one that gets measured, and the earlier ones cost you
+nothing but the transaction fee. Iterate freely up to that point.
+
+**But do not commit again once your submission is queued.** A recipe committed
+in run N is measured in run N+1. If you commit again *during* run N+1, the
+commitment block moves into N+1 with it, so N+1 measures nothing from you and
+your new recipe waits for N+2. You did not fail a gate or lose a comparison —
+you withdrew the submission that was about to be judged, and you skip a run.
+
+The rule in one line: **replace it freely before the run ends, then leave it
+alone until you have been measured.**
+
 The floor is what keeps copying expensive. Reading a published recipe, tweaking
 it and resubmitting costs a full run per attempt, against an anti-copy check
 that compares you to every commitment already admitted and a champion whose
