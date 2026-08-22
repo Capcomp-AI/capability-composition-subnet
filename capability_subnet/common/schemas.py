@@ -538,6 +538,10 @@ class WeightVector(StrictModel):
     run_id: int = Field(validation_alias=AliasChoices("run_id", "window_id"))
     computed_at_block: int
     burn_percentage: float = Field(default=C.BURN_SHARE, ge=0.0, le=1.0)
+    #: Accepted on the way in and never written out. Records exist to be
+    #: re-read, and a stored vector that stops parsing is not evidence of
+    #: anything; a strict model would reject every one already on disk.
+    mode: str | None = Field(default=None, exclude=True, repr=False)
 
     entries: list[WeightEntry] = Field(default_factory=list)
     champion_hotkey: str | None = None
