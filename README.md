@@ -89,20 +89,56 @@ The incumbent is not one of the permanent references. It gets its own smaller ma
 
 **One measurement per commitment.** A run is a day, and the pipeline is three runs deep: commit in run N, measured in run N+1, and that score sets the weight submitted on-chain in run N+2. A commitment earns from that one measurement alone; to earn again, commit again. Weights lag the measurement by a run so that a vector is always computed from a *closed* run's final leaderboard rather than from one still being written. Nothing is terminated, and a failure that indicts the validator — an unreadable memory counter, too few scored instances — is not scored against the miner at all.
 
-### Losing well is worth something
+### The run pays only if its leader takes the throne
 
-Almost every submission will fail to take the top slot, and a commitment buys one measurement. So the top slot is winner-takes-most and everything below it is **graded**:
+The best candidate in a run takes the throne by exceeding the reigning
+champion's **grade** by **0.002**. That single test also decides whether the
+run pays anybody. If the leader clears it, the field behind them is paid by
+rank. If the leader cannot, the run offered the network nothing it did not
+already have — nobody places behind a leader who did not win, and the whole
+miner share burns.
+
+The grade is one number per candidate, from three terms the evaluation already
+measures:
 
 | Term | Weight | What it rewards |
 |---|---|---|
-| Quality | 50% | The qualified score — completion, stage balance, OOD, retention, latency, tokens, size |
-| Improvement | 25% | How far past the strongest non-learned reference it got |
-| Proximity | 15% | How close it came to the champion — a near miss is not a wasted registration |
-| Cost | 10% | Token spend and latency, because two packages that finish equally are not equally valuable |
+| Quality | 60% | The qualified score — completion, stage balance, OOD, retention, tokens, size |
+| Improvement | 30% | How far past the base model it got |
+| Cost | 10% | Token spend, because two packages that finish equally are not equally valuable |
 
-Only packages that cleared **every hard gate** are graded. If nobody qualifies the graded pool burns. Every grade is published broken into its four terms.
+Every term is measured against fixed points — the run's own instances and the
+base model — so a grade means the same thing in every run. That is what lets
+the dethrone margin be a fixed number: a bar on a quantity whose scale moved
+between runs would be a different bar each time.
 
-Miners still waiting in the queue earn a small tapered share, so an unevaluated challenger is not the first thing the chain prunes.
+Only packages that cleared **every hard gate** are graded, and every grade is
+published broken into its terms.
+
+### How a run's emission splits
+
+Four fifths of every run burns to the subnet owner's UID. The remaining fifth
+is the miner pool, split by rank among those that cleared the throne:
+
+| Rank | Share of the miner pool | Share of the run |
+|---|---|---|
+| Burn | — | 80% |
+| 1st | 90% | 18% |
+| 2nd | 5% | 1% |
+| 3rd | 3% | 0.6% |
+| 4th | 1% | 0.2% |
+| 5th | 0.5% | 0.1% |
+| 6th–10th | 0.5%, in proportion to grade | 0.1% |
+
+Ten miners are paid at most. Ranks six to ten split their share in proportion
+to grade rather than evenly, so the ordering inside the tail still says
+something. A rank nobody filled burns rather than being promoted into the
+leader's share — a run with one qualified package is not a bigger achievement
+than a contested one.
+
+The throne does not move on its own. A run nobody wins leaves it exactly where
+it was, so the next run's challengers face the same grade rather than a rising
+one.
 
 ### How a run's emission splits
 

@@ -114,20 +114,42 @@ can rely on. See [examples/README.md](../examples/README.md).
 
 ## What a run pays
 
+**A run pays only if its best candidate takes the throne.** That means
+exceeding the reigning champion's grade by **0.002**. If the leader clears it,
+the field behind them is paid by rank. If the leader cannot, the run offered
+the network nothing it did not already have and the whole miner share burns —
+second place does not inherit a run its leader did not win.
+
 Four fifths of every run burns to the subnet owner's UID. The remaining fifth
-is the miner pool, and the best measured package takes 90% of it, and the graded runners-up split the rest by rank.
+is the miner pool:
 
-| Recipient | Share of the miner pool | Share of the run |
+| Rank | Share of the miner pool | Share of the run |
 |---|---|---|
-| Burn (subnet owner's UID) | — | 80% |
-| Best measured package | 90% | 18% |
-| Graded runners-up, ranks 2–10 | 10%, by rank | 2% |
+| Burn | — | 80% |
+| 1st | 90% | 18% |
+| 2nd | 5% | 1% |
+| 3rd | 3% | 0.6% |
+| 4th | 1% | 0.2% |
+| 5th | 0.5% | 0.1% |
+| 6th–10th | 0.5%, in proportion to grade | 0.1% |
 
-Ten miners are paid at most: the leader and nine graded runners-up. Ranking is by
-graded contribution — quality 50%, improvement over the strongest reference 25%,
-proximity to the champion 15%, running cost 10% — over the packages that cleared
-every hard gate. Anything nobody earned burns rather than being promoted into the
-leader's share.
+Ten miners are paid at most, and a rank nobody filled burns rather than being
+promoted into the leader's share.
+
+Ranking is by **grade**, one number per candidate over the packages that
+cleared every hard gate:
+
+| Term | Weight | What it rewards |
+|---|---|---|
+| Quality | 60% | The qualified score — completion, stage balance, OOD, retention, tokens, size |
+| Improvement | 30% | How far past the base model the package got |
+| Cost | 10% | Token spend |
+
+Every term is measured against the run's own instances and the base model,
+never against the incumbent, so a grade means the same thing in every run.
+
+The throne does not move on its own. A run nobody wins leaves it where it was,
+so the next run faces the same grade rather than a rising one.
 
 ---
 
@@ -359,7 +381,7 @@ See [min_compute.yml](../min_compute.yml) for detail.
 
 **Assuming only the throne pays.** It does not. Every package that clears all
 hard gates is graded on quality, improvement over the strongest reference,
-proximity to the champion, and running cost — and earns a share of emission for
+and running cost — and earns a share of emission for
 several runs whether or not it dethroned anything. Getting close is worth
 something; producing something undeployable is not. See
 [what a run pays](#what-a-run-pays) for the split.

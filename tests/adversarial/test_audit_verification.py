@@ -119,6 +119,7 @@ def report(**overrides) -> EvaluationReport:
             GateVerdict(name="baseline", passed=True),
         ],
         "scores": scores(),
+        "contribution": {"contribution": 0.42},
         "baseline_scores": {
             "reference:base_model": 0.20,
             "reference:best_single_adapter": 0.55,
@@ -315,35 +316,6 @@ class TestWeightVectors:
         result = verify_weight_vector(vector, [report()])
         assert any(f.code == "reference_paid" for f in result.errors)
 
-    def test_paying_several_recipients_in_winner_take_all_is_caught(self):
-        vector = self._vector(
-            mode=C.MODE_WINNER_TAKE_ALL,
-            entries=[
-                WeightEntry(uid=7, hotkey="5Challenger", weight=0.5),
-                WeightEntry(uid=8, hotkey="5Other", weight=0.5),
-            ],
-        )
-        result = verify_weight_vector(vector, [report()])
-        assert any(f.code == "multiple_recipients" for f in result.errors)
-
-    def test_paying_an_ungated_miner_in_graded_mode_is_caught(self):
-        failing = report(
-            miner_hotkey="5Weak",
-            candidate_id="5Weak",
-            verdict="terminated",
-            comparator=comparator(dethrones=False, reason="lost"),
-            hard_gates=[GateVerdict(name="baseline", passed=False, detail="below the bar")],
-        )
-        vector = self._vector(
-            mode=C.MODE_GRADED_TOP3,
-            entries=[
-                WeightEntry(uid=7, hotkey="5Challenger", weight=0.6),
-                WeightEntry(uid=9, hotkey="5Weak", weight=0.4, role="runner_up"),
-            ],
-        )
-        result = verify_weight_vector(vector, [report(), failing])
-        assert any(f.code == "unqualified_recipient" for f in result.errors)
-
     def test_a_burn_entry_is_not_treated_as_a_recipient(self):
         vector = self._vector(
             entries=[WeightEntry(uid=0, hotkey="", weight=1.0, role="burn")],
@@ -369,8 +341,10 @@ class TestWholeRun:
         assert "2 report(s) checked" in result.summary()
 
 
-class TestGradedContributionVectors:
-    """A mode that pays more people needs a rule about who may be paid."""
+class TestOnlyAGradedQualifierMayBePaid:
+    """Every payment claims the recipient cleared every hard gate and earned a
+    grade. Both are checkable from the published reports and neither is checked
+    by the chain, so without this a vector could pay anyone and still verify."""
 
     @staticmethod
     def _vector(**kwargs):
@@ -378,43 +352,52 @@ class TestGradedContributionVectors:
 
         defaults = dict(
             workflow_id=C.DEFAULT_WORKFLOW_ID,
-            run_id=1,
-            computed_at_block=100,
-            mode=C.MODE_GRADED_CONTRIBUTION,
+            run_id=12,
+            computed_at_block=90_000,
+            champion_hotkey="5Challenger",
         )
         defaults.update(kwargs)
         return WeightVector(**defaults)
 
-    def test_paying_a_contributor_with_no_passing_report_is_caught(self):
+    def test_paying_someone_with_no_passing_report_is_caught(self):
         vector = self._vector(
-            entries=[WeightEntry(uid=8, hotkey="5Ghost", weight=1.0, role="contributor")]
+            entries=[WeightEntry(uid=8, hotkey="5Ghost", weight=1.0, role="runner_up")]
         )
         result = verify_weight_vector(vector, [report()])
+
         assert any(f.code == "unqualified_recipient" for f in result.errors)
 
-    def test_paying_a_contributor_whose_report_records_no_grade_is_caught(self):
-        """Passing the gates is necessary; a grade is what a contributor share is *for*."""
-        ungraded = report(miner_hotkey="5Quiet", candidate_id="5Quiet")
-        ungraded.contribution = {}
+    def test_paying_someone_whose_report_records_no_grade_is_caught(self):
         vector = self._vector(
-            entries=[WeightEntry(uid=8, hotkey="5Quiet", weight=1.0, role="contributor")]
+            entries=[WeightEntry(uid=7, hotkey="5Challenger", weight=1.0, role="runner_up")]
         )
-        result = verify_weight_vector(vector, [ungraded])
-        assert any(f.code == "ungraded_contributor" for f in result.errors)
+        result = verify_weight_vector(vector, [report(contribution={})])
 
-    def test_a_graded_contributor_with_a_supporting_report_passes(self):
-        graded = report(miner_hotkey="5Real", candidate_id="5Real")
-        graded.contribution = {"contribution": 0.42}
-        vector = self._vector(
-            entries=[WeightEntry(uid=8, hotkey="5Real", weight=1.0, role="contributor")]
-        )
-        result = verify_weight_vector(vector, [graded])
-        assert not [f for f in result.errors if "recipient" in f.code or "contributor" in f.code]
+        assert any(f.code == "ungraded_recipient" for f in result.errors)
 
-    def test_the_queue_tail_needs_no_passing_report(self):
-        """It is deregistration protection, not payment for a result."""
+    def test_a_graded_qualifier_with_a_supporting_report_passes(self):
         vector = self._vector(
-            entries=[WeightEntry(uid=9, hotkey="5Waiting", weight=1.0, role="queued")]
+            entries=[WeightEntry(uid=7, hotkey="5Challenger", weight=1.0, role="champion")]
         )
         result = verify_weight_vector(vector, [report()])
-        assert not any(f.code == "unqualified_recipient" for f in result.errors)
+
+        assert [f.code for f in result.errors] == ["unsigned"]
+
+    def test_paying_anyone_without_naming_a_champion_is_caught(self):
+        """Nobody is paid without taking the throne, so a paying vector has one."""
+        vector = self._vector(
+            champion_hotkey=None,
+            entries=[WeightEntry(uid=7, hotkey="5Challenger", weight=1.0, role="runner_up")],
+        )
+        result = verify_weight_vector(vector, [report()])
+
+        assert any(f.code == "paid_without_a_throne" for f in result.errors)
+
+    def test_a_wholly_burned_vector_needs_no_champion(self):
+        vector = self._vector(
+            champion_hotkey=None,
+            entries=[WeightEntry(uid=C.BURN_UID, hotkey="", weight=1.0, role="burn")],
+        )
+        result = verify_weight_vector(vector, [report()])
+
+        assert not any(f.code == "paid_without_a_throne" for f in result.errors)

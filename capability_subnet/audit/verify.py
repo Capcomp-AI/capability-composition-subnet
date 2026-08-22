@@ -360,14 +360,6 @@ def verify_weight_vector(
                 subject,
             )
 
-    if vector.mode == C.MODE_WINNER_TAKE_ALL and len(paid) > 1:
-        result.add(
-            "multiple_recipients",
-            "error",
-            f"winner-take-all mode paid {len(paid)} recipients",
-            subject,
-        )
-
     # The champion must be someone a report actually crowned.
     if vector.champion_hotkey:
         crowned = {
@@ -389,56 +381,46 @@ def verify_weight_vector(
                 subject,
             )
 
-    if vector.mode == C.MODE_GRADED_CONTRIBUTION:
-        # A graded payment is a claim that the recipient cleared every hard gate
-        # and earned a grade. Both halves are checkable from the published
-        # reports, and neither is checked by the chain — so a mode that pays more
-        # people needs a rule that says who may be paid, or "graded" becomes a
-        # licence to pay anyone.
-        qualified = {
-            report.miner_hotkey: report
-            for report in reports
-            if report.gates_passed and report.miner_hotkey
-        }
-        for entry in paid:
-            if entry.role in ("burn", "queued"):
-                # The queue tail is deregistration protection, not payment for a
-                # result, so it is not required to have a passing report.
-                continue
-            if not entry.hotkey or not qualified:
-                continue
-            if entry.hotkey not in qualified:
-                result.add(
-                    "unqualified_recipient",
-                    "error",
-                    f"{entry.hotkey[:16]}… is paid a graded share but no published report "
-                    "shows it clearing every hard gate",
-                    subject,
-                )
-                continue
-            report = qualified[entry.hotkey]
-            if entry.role == "contributor" and report.contribution.get("contribution", 0.0) <= 0.0:
-                result.add(
-                    "ungraded_contributor",
-                    "error",
-                    f"{entry.hotkey[:16]}… is paid as a contributor but its report records "
-                    "no contribution grade",
-                    subject,
-                )
+    # Every payment is a claim that the recipient cleared every hard gate and
+    # earned a grade. Both halves are checkable from the published reports and
+    # neither is checked by the chain, so without this a vector could pay
+    # anyone and still verify.
+    qualified = {
+        report.miner_hotkey: report
+        for report in reports
+        if report.gates_passed and report.miner_hotkey
+    }
+    for entry in paid:
+        if entry.role == "burn" or not entry.hotkey or not qualified:
+            continue
+        if entry.hotkey not in qualified:
+            result.add(
+                "unqualified_recipient",
+                "error",
+                f"{entry.hotkey[:16]}… is paid but no published report shows it "
+                "clearing every hard gate",
+                subject,
+            )
+            continue
+        if qualified[entry.hotkey].contribution.get("contribution", 0.0) <= 0.0:
+            result.add(
+                "ungraded_recipient",
+                "error",
+                f"{entry.hotkey[:16]}… is paid but its report records no grade",
+                subject,
+            )
 
-    if vector.mode == C.MODE_GRADED_TOP3:
-        qualified = {
-            report.miner_hotkey for report in reports if report.gates_passed and report.miner_hotkey
-        }
-        for entry in paid:
-            if entry.hotkey and qualified and entry.hotkey not in qualified:
-                result.add(
-                    "unqualified_recipient",
-                    "error",
-                    f"{entry.hotkey[:16]}… is paid but no published report shows it "
-                    "clearing every gate",
-                    subject,
-                )
+    # Nobody is paid without taking the throne, so a vector that pays anyone
+    # must name the champion it paid. One without a champion has paid a field
+    # that did not clear the bar.
+    if paid and any(entry.role != "burn" for entry in paid) and not vector.champion_hotkey:
+        result.add(
+            "paid_without_a_throne",
+            "error",
+            "the vector pays miners but names no champion; nobody is paid "
+            "without exceeding the reigning grade",
+            subject,
+        )
 
     return result
 

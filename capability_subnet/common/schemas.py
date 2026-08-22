@@ -532,17 +532,12 @@ class WeightVector(StrictModel):
     """
 
     workflow_id: str = C.DEFAULT_WORKFLOW_ID
-    #: Named ``run_id`` until runs and runs were unified under one word.
-    #: The old spelling is still accepted on the way in, because a disclosure
-    #: exists to be re-read years later by someone checking a closed run — a
-    #: record that stops parsing when the code is renamed is not evidence of
-    #: anything. Written out under the new name only; the alias is for reading.
+    #: A record exists to be re-read years later by someone checking a closed
+    #: run, so the older spelling of this field is still accepted on the way in.
+    #: Written out under one name only; the alias is for reading.
     run_id: int = Field(validation_alias=AliasChoices("run_id", "window_id"))
     computed_at_block: int
-    mode: Literal["winner_take_all", "graded_top3", "graded_contribution"] = (
-        C.MODE_GRADED_CONTRIBUTION
-    )
-    burn_percentage: float = Field(default=0.0, ge=0.0, le=1.0)
+    burn_percentage: float = Field(default=C.BURN_SHARE, ge=0.0, le=1.0)
 
     entries: list[WeightEntry] = Field(default_factory=list)
     champion_hotkey: str | None = None

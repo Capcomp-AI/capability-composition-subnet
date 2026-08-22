@@ -50,6 +50,7 @@ from capability_subnet.common.chain import (
 )
 from capability_subnet.common.config import build_config
 from capability_subnet.common.logging import setup_logging
+from capability_subnet.scoring.contribution import ContributionInputs, contribution_score
 from capability_subnet.validator.client import safe_fallback
 
 log = logging.getLogger(__name__)
@@ -57,6 +58,30 @@ log = logging.getLogger(__name__)
 
 class BurnTargetUnavailable(Exception):
     """Raised when there is no owner UID to route a refused run's share to."""
+
+
+def _champion_grade(outcome, reigning: float | None) -> float | None:
+    """The grade that holds the throne once this run is decided.
+
+    The new champion's if one took it, and the incumbent's otherwise. The bar
+    does not move on its own: a run nobody wins burns the miner share and
+    leaves the throne exactly where it was, so the next challenger faces the
+    same grade rather than a rising one.
+    """
+    if outcome.weights is None or not outcome.weights.champion_hotkey:
+        return reigning
+
+    champion = outcome.weights.champion_hotkey
+    for evaluation in outcome.usable:
+        if evaluation.candidate_id == champion:
+            return contribution_score(
+                ContributionInputs(scores=evaluation.scores, reference_e2e=outcome.reference_e2e)
+            )
+
+    raise RuntimeError(
+        f"run {outcome.run_id} paid {champion[:16]}… as champion but produced no "
+        "usable evaluation for it; the throne would be recorded at the wrong grade"
+    )
 
 
 class ValidatorNeuron:
@@ -348,6 +373,7 @@ class ValidatorNeuron:
                 )
             )
 
+        reigning = self._reigning_grade(run_id)
         outcome = evaluate_run(
             candidates,
             run_id=run_id,
@@ -356,9 +382,9 @@ class ValidatorNeuron:
             block=block,
             measure=self._measure,
             measure_base=self._measure_base,
-            burn_percentage=self.config.burn_percentage,
+            burn_share=C.BURN_SHARE,
             burn_uid=self.burn_uid(),
-            incentive_mode=getattr(self.config, "incentive_mode", C.MODE_GRADED_TOP3),
+            champion_grade=reigning,
             workers=self._slots.qsize(),
         )
         for who, why in outcome.flagged_peers.items():
@@ -373,11 +399,44 @@ class ValidatorNeuron:
         )
         # Measured now, paid next run. The report is written first because it
         # is what the next run submits from.
-        self._report(outcome, candidates, run_id)
+        self._report(outcome, candidates, run_id, reigning)
         self._submit_measured_earlier(run_id, block)
 
     def _run_report_dir(self) -> Path:
         return Path(self.config.full_path) / "runs"
+
+    def _reigning_grade(self, run_id: int) -> float | None:
+        """The grade a challenger in ``run_id`` has to beat.
+
+        The throne is a fact about the subnet's history rather than about one
+        run, so it is carried in the run reports: each run records the grade of
+        whoever holds it once that run has been decided, and the next run reads
+        it back. Nothing is synthesised from the current run's own field —
+        crowning this run's leader would mean crowning whoever led a field of
+        one, and paying the full champion share every run regardless of whether
+        anything was taken.
+
+        ``None`` means the throne is empty and this run fills it. That is the
+        state before any run has crowned anybody, and only that state: once a
+        report records a grade, an unreadable report is an error rather than an
+        empty throne, because treating it as empty would pay a field that
+        cleared nothing.
+        """
+        previous = self._run_report_dir() / f"run-{run_id - 1}.json"
+        if not previous.exists():
+            log.info(
+                "no report for run %d; the throne is empty and run %d fills it",
+                run_id - 1,
+                run_id,
+            )
+            return None
+
+        payload = json.loads(previous.read_text())
+        grade = payload.get("champion_grade")
+        if grade is None:
+            log.info("run %d crowned nobody; the throne is still empty", run_id - 1)
+            return None
+        return float(grade)
 
     def _submit_measured_earlier(self, run_id: int, block: int) -> None:
         """Submit the vector from the run that closed, not the one just measured.
@@ -446,7 +505,7 @@ class ValidatorNeuron:
         )
         self._submit(vector, block)
 
-    def _report(self, outcome, candidates: list, run_id: int) -> None:
+    def _report(self, outcome, candidates: list, run_id: int, reigning: float | None) -> None:
         """Record what each candidate scored, and why.
 
         The weight vector says what a miner was paid; on its own it never says
@@ -513,6 +572,15 @@ class ValidatorNeuron:
                 "netuid": self.config.netuid,
                 "validator_hotkey": self.wallet.hotkey.ss58_address,
                 "instances": len(outcome.assignment),
+                # The grade the *next* run's challengers have to beat. The
+                # throne outlives a run, and this file is the only thing that
+                # carries it across one — a validator restarted between runs
+                # reads it back rather than starting from an empty throne and
+                # paying a field that cleared nothing.
+                "champion_grade": _champion_grade(outcome, reigning),
+                "champion_hotkey": (
+                    outcome.weights.champion_hotkey if outcome.weights is not None else None
+                ),
                 "candidates": rows,
                 # Enough to rebuild the vector, because the *next* run submits
                 # from this file: a validator restarted between runs has

@@ -37,9 +37,8 @@ from capability_subnet.scoring.references import (
 from capability_subnet.scoring.sampler import RunSample, build_instances, draw_run
 from capability_subnet.scoring.weight_vector import (
     apply_validator_burn,
-    graded_contribution,
-    graded_top3,
-    winner_take_all,
+    champion_ladder,
+    dethrone_threshold,
 )
 
 __all__ = [
@@ -61,8 +60,8 @@ __all__ = [
     "decisive_loss",
     "draw_run",
     "explain",
-    "graded_contribution",
-    "graded_top3",
+    "champion_ladder",
+    "dethrone_threshold",
     "is_reference",
     "minimum_detectable_effect",
     "paired_bootstrap",
@@ -70,5 +69,4 @@ __all__ = [
     "strongest_reference",
     "tied",
     "valid_rows",
-    "winner_take_all",
 ]

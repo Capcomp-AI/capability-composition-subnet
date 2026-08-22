@@ -166,38 +166,38 @@ def runs_contract(root_commitment: str = "") -> dict[str, Any]:
 
 
 def incentive_contract() -> dict[str, Any]:
-    burn_share = C.NO_CHAMPION_BURN_SHARE
-    miner_pool = 1.0 - burn_share
+    miner_pool = 1.0 - C.BURN_SHARE
     # Rounded because these are published figures a miner reads and compares
     # against its own arithmetic, and binary floating point renders an exact
     # fifth as 0.19999999999999996.
     return {
-        "default_mode": C.MODE_GRADED_CONTRIBUTION,
         "burn_uid": C.BURN_UID,
-        "burn_share": round(burn_share, 6),
+        "burn_share": round(C.BURN_SHARE, 6),
         "miner_pool_share": round(miner_pool, 6),
-        "leader_share_of_pool": round(C.CHAMPION_BASE_SHARE, 6),
-        "graded_share_of_pool": round(1.0 - C.CHAMPION_BASE_SHARE, 6),
-        "leader_share_of_run": round(miner_pool * C.CHAMPION_BASE_SHARE, 6),
-        "graded_share_of_run": round(miner_pool * (1.0 - C.CHAMPION_BASE_SHARE), 6),
-        "max_graded_contributors": C.MAX_GRADED_CONTRIBUTORS,
-        "graded_top3_shares": list(C.GRADED_TOP3_SHARES),
+        "rank_shares_of_pool": [round(share, 6) for share in C.RANK_SHARES],
+        "rank_shares_of_run": [round(share * miner_pool, 6) for share in C.RANK_SHARES],
+        "tail_share_of_pool": round(C.TAIL_SHARE, 6),
+        "tail_share_of_run": round(C.TAIL_SHARE * miner_pool, 6),
+        "paid_ranks": C.PAID_RANKS,
+        "champion_dethrone_margin": C.CHAMPION_DETHRONE_MARGIN,
         "contribution_weights": {
             "quality": C.CONTRIBUTION_WEIGHT_QUALITY,
             "improvement": C.CONTRIBUTION_WEIGHT_IMPROVEMENT,
-            "proximity": C.CONTRIBUTION_WEIGHT_PROXIMITY,
             "cost": C.CONTRIBUTION_WEIGHT_COST,
         },
         "note": (
-            "Four fifths of a run burns to the subnet owner's UID. The best "
-            "measured package takes 90% of the remaining fifth and the graded "
-            "runners-up split the other 10% by rank, so a submission that moved the "
-            "state of the art without leading is still paid for what it contributed. "
-            "At most "
-            "ten miners are paid: the leader and nine graded runners-up. Grading is "
-            "on quality, improvement, proximity and cost, and only candidates "
-            "clearing every hard gate are graded. If nothing qualifies, the share is "
-            "burned rather than redistributed."
+            f"{C.BURN_SHARE:.0%} of every run burns to the subnet owner's UID. "
+            "Nobody is paid without taking the throne: a candidate must exceed "
+            f"the reigning champion's grade by {C.CHAMPION_DETHRONE_MARGIN} to "
+            "be paid at all, not merely to be crowned, and a run where no "
+            "candidate does burns the whole miner share. Among those that "
+            "clear it the remaining share is split by rank — "
+            + ", ".join(f"{share:.1%}" for share in C.RANK_SHARES)
+            + f" for the first {len(C.RANK_SHARES)}, and {C.TAIL_SHARE:.1%} "
+            f"across ranks {len(C.RANK_SHARES) + 1} to {C.PAID_RANKS} in "
+            "proportion to grade. Grading is on quality, improvement and cost, "
+            "and only candidates clearing every hard gate are graded. An "
+            "unfilled rank burns rather than being redistributed."
         ),
     }
 

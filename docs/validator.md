@@ -262,34 +262,46 @@ Expect roughly 15 minutes of reconstruction per candidate that uses a trimming m
 | `--neuron.serving_python` | *empty* | Interpreter that starts each candidate's runtime |
 | `--neuron.devices` | *empty* | Cards to measure on, comma-separated. Empty uses `--neuron.device` alone |
 | `--neuron.max_candidates_per_run` | `0` | Stop after this many candidates, in commit order. `0` measures everything eligible |
-| `--incentive_mode` | `graded_contribution` | How the measured field becomes weights |
+| `--burn_percentage` | `0` | Burn *more* than the protocol asks, never less |
 
-### Incentive mode
+### How a run's emission splits
 
-| Mode | Split |
+Four fifths of every run burns to the subnet owner's UID. The remaining fifth
+is the miner pool, and it is paid only if the run's best candidate took the
+throne — exceeding the reigning champion's grade by `0.002`. If it did not, the
+whole miner share burns; second place does not inherit a run its leader did not
+win.
+
+| Rank | Share of the run |
 |---|---|
-| `winner_take_all` | The throne takes the whole payable share |
-| `graded_top3` | 60/25/15 across the top three |
-| `graded_contribution` | 80% burns; the best measured package takes 90% of the remaining fifth and ranks 2–10 split the other 10% by rank |
+| Burn | 80% |
+| 1st | 18% |
+| 2nd | 1% |
+| 3rd | 0.6% |
+| 4th | 0.2% |
+| 5th | 0.1% |
+| 6th–10th | 0.1%, in proportion to grade |
 
-Under `graded_contribution` a run pays at most ten miners — the leader and
-nine graded runners-up — and burns anything nobody earned rather than promoting
-it into the leader's share:
+Ten miners are paid at most, and a rank nobody filled burns rather than being
+promoted into the leader's share.
 
-| Recipient | Share of the run |
-|---|---|
-| Burn (subnet owner's UID) | 80% |
-| Best measured package | 18% |
-| Graded runners-up, ranks 2–10 | 1% |
+Ranking is by grade: quality 60%, improvement over the base model 30%, cost
+10%. A candidate that failed a hard gate is not graded at all. Every term is
+measured against the run's own instances and the base model, never against the
+incumbent, so a grade means the same thing in every run — which is what lets
+the dethrone margin be a fixed number.
 
-Grades come from the four terms in the published contract: quality 50%,
-improvement 25%, proximity 15%, cost 10%. A candidate that failed a hard gate is
-not graded at all.
+The throne is carried between runs in the run reports. A run that crowns nobody
+records the grade it inherited, so the bar stays where it was rather than
+rising or resetting.
 
-`--neuron.burn_percentage` compounds with this rather than replacing it. It is
-applied first, and the mode's own split then divides what is left, so a value of
-`0.5` under `graded_contribution` leaves miners a tenth of the run rather
-than a fifth.
+### Burning more than the protocol asks
+
+`--neuron.burn_percentage` compounds with the split above rather than replacing
+it: everything already in the vector is scaled by what remains and the extra is
+added on top, so `0.5` leaves miners a tenth of the run rather than a fifth. A
+validator may burn more than the protocol asks and never less — burning less
+would let one validator quietly override the rule the rest are applying.
 
 ### Your own burn
 

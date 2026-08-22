@@ -27,6 +27,7 @@ from capability_subnet.scoring.bootstrap import (
     paired_differences,
 )
 from capability_subnet.scoring.sampler import common_instance_ids, draw_run
+from capability_subnet.scoring.weight_vector import champion_ladder
 from capability_subnet.testing import make_results
 
 STAGES = ("stage_a", "stage_b", "stage_c")
@@ -273,89 +274,40 @@ class TestSampler:
         assert "hidden-000001" not in shared and "hidden-000003" not in shared
 
 
-class TestAnEmptyThroneDoesNotPayTheRunnersUp:
-    """A leaderless run pays less than a crowned one, and pays something.
+class TestAnEmptyThroneIsFilledRatherThanAssumed:
+    """The first throne, and what a run pays before anybody holds one.
 
-    Half of it burns, and the best measured package leads what remains on the
-    same terms a champion leads the whole — so its best miner takes roughly half
-    what a champion would. Two failures are being held apart here.
-
-    Handing the leader's share to the runners-up intact pays *more* in exactly
-    the runs where the field was weakest. Observed on the testnet arena: with
-    no champion a single contributor took 0.80 of the run instead of 0.36.
-
-    Burning all of it pays nothing in every run before the first crown, which
-    is the state a launch begins in and can hold for as long as the queue takes
-    to work through.
+    Two failures are held apart here. Treating an empty throne as a champion
+    with grade zero pays the leader of any field at all. Treating a missing
+    grade as an empty throne pays a field that cleared nothing, every run,
+    forever.
     """
 
-    @staticmethod
-    def _champion():
-        from capability_subnet.common.schemas import ChampionRecord
+    FIELD = [(7, "5A", 0.50), (9, "5B", 0.40), (3, "5C", 0.30)]
 
-        return ChampionRecord(
-            candidate_id="5Champ", hotkey="5Champ", uid=7, recipe_sha256="sha256:" + "0" * 64
+    def test_an_empty_throne_ranks_the_field_as_it_stands(self):
+        vector = champion_ladder(self.FIELD, run_id=1, block=1, champion_grade=None)
+
+        assert vector.champion_hotkey == "5A"
+        paid = {e.uid: e.weight for e in vector.entries if e.role != "burn"}
+        assert set(paid) == {7, 9, 3}
+
+    def test_the_leader_of_an_empty_throne_takes_the_same_share_as_a_champion(self):
+        """Filling the throne is not a lesser prize than holding it."""
+        first = champion_ladder(self.FIELD, run_id=1, block=1, champion_grade=None)
+        defended = champion_ladder(
+            [(7, "5A", 0.90), (9, "5B", 0.80), (3, "5C", 0.70)],
+            run_id=2,
+            block=1,
+            champion_grade=0.50,
         )
 
-    @staticmethod
-    def _vector(champion):
-        from capability_subnet.scoring.weight_vector import graded_contribution
+        lead = lambda v: next(e.weight for e in v.entries if e.role == "champion")  # noqa: E731
+        assert lead(first) == pytest.approx(lead(defended))
 
-        return graded_contribution(
-            workflow_id="w",
-            run_id=1,
-            block=10,
-            champion=champion,
-            contributors=[(1, "5A", 1.0)],
-            tail=[],
-        )
+    def test_a_field_that_clears_nothing_pays_nobody(self):
+        vector = champion_ladder(self.FIELD, run_id=2, block=1, champion_grade=0.50)
 
-    def test_with_no_champion_half_burns_and_the_leader_takes_the_rest(self):
-        vector = self._vector(None)
-        by_role = {e.role: e.weight for e in vector.entries}
-
-        leaderless = 1.0 - C.NO_CHAMPION_BURN_SHARE
-        leader = leaderless * C.CHAMPION_BASE_SHARE
-        # One contributor, so there is nobody to share the runner-up pool with
-        # and it burns alongside the half.
-        assert by_role.get("contributor", 0) == pytest.approx(leader, abs=1e-6)
-        assert by_role.get("burn", 0) == pytest.approx(1.0 - leader, abs=1e-6)
-
-    def test_a_leaderless_run_pays_its_best_miner_less_than_a_crown(self):
-        """The throne has to stay worth taking."""
-        leaderless = {e.role: e.weight for e in self._vector(None).entries}
-        crowned = {e.role: e.weight for e in self._vector(self._champion()).entries}
-        assert leaderless.get("contributor", 0) < crowned.get("champion", 0)
-
-    def test_the_runners_up_share_what_the_leader_does_not_take(self):
-        from capability_subnet.scoring.weight_vector import graded_contribution
-
-        vector = graded_contribution(
-            workflow_id="w",
-            run_id=1,
-            block=10,
-            champion=None,
-            contributors=[(1, "5A", 1.0), (2, "5B", 0.5), (3, "5C", 0.25)],
-            tail=[],
-        )
-        weights = sorted(
-            (e.weight for e in vector.entries if e.role == "contributor"), reverse=True
-        )
-        assert len(weights) == 3
-        leaderless = 1.0 - C.NO_CHAMPION_BURN_SHARE
-        assert weights[0] == pytest.approx(leaderless * C.CHAMPION_BASE_SHARE, abs=1e-6)
-        assert sum(weights[1:]) == pytest.approx(
-            leaderless * (1.0 - C.CHAMPION_BASE_SHARE), abs=1e-6
-        )
-        assert sum(e.weight for e in vector.entries) == pytest.approx(1.0, abs=1e-9)
-
-    def test_a_real_champion_is_still_paid_its_share(self):
-        from capability_subnet.common.schemas import ChampionRecord
-
-        champion = ChampionRecord(
-            candidate_id="5Champ", hotkey="5Champ", uid=7, recipe_sha256="sha256:" + "0" * 64
-        )
-        vector = self._vector(champion)
-        by_role = {e.role: e.weight for e in vector.entries}
-        assert by_role.get("champion", 0) == pytest.approx(C.CHAMPION_BASE_SHARE, abs=1e-6)
-        assert by_role.get("burn", 0) == pytest.approx(0.0, abs=1e-6)
+        assert vector.champion_hotkey is None
+        assert [e.role for e in vector.entries] == ["burn"]
+        assert vector.entries[0].weight == pytest.approx(1.0)

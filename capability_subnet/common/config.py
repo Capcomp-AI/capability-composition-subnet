@@ -254,21 +254,6 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
             "bound this rather than fall behind silently."
         ),
     )
-    parser.add_argument(
-        "--incentive_mode",
-        dest="incentive_mode",
-        type=str,
-        choices=list(C.ALLOWED_INCENTIVE_MODES),
-        default=_env("CAPSUB_INCENTIVE_MODE", C.MODE_GRADED_CONTRIBUTION),
-        help=(
-            "How this validator turns the field it measured into weights. "
-            "'graded_top3' splits 60/25/15 across the top three; "
-            f"'graded_contribution' burns {C.NO_CHAMPION_BURN_SHARE:.0%} and pays "
-            f"the leader {C.CHAMPION_BASE_SHARE:.0%} of the rest, with up to "
-            f"{C.MAX_GRADED_CONTRIBUTORS - 1} graded runners-up sharing the "
-            "remainder."
-        ),
-    )
 
 
 def add_miner_args(parser: argparse.ArgumentParser) -> None:
@@ -343,13 +328,6 @@ def add_backend_args(parser: argparse.ArgumentParser) -> None:
         type=int,
         default=_env_int("CAPSUB_OOD_INSTANCES", C.DEFAULT_OOD_INSTANCES),
         help="Out-of-distribution instances sampled per run.",
-    )
-    parser.add_argument(
-        "--incentive_mode",
-        type=str,
-        choices=list(C.ALLOWED_INCENTIVE_MODES),
-        default=_env("CAPSUB_INCENTIVE_MODE", C.MODE_GRADED_CONTRIBUTION),
-        help="Emission split policy.",
     )
     parser.add_argument(
         "--api_host",

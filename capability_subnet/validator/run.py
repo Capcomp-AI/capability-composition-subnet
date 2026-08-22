@@ -19,12 +19,10 @@ from dataclasses import dataclass, field
 
 from capability_subnet.common import constants as C
 from capability_subnet.common.schemas import CandidateScores, Recipe, WeightVector
-from capability_subnet.scoring.comparator import minimum_detectable_effect
 from capability_subnet.scoring.contribution import ContributionInputs, contribution_score
-from capability_subnet.scoring.ranking import Submission, rank
 from capability_subnet.scoring.retention import ProbeOutcome
 from capability_subnet.scoring.sampler import RunSample, draw_run_open
-from capability_subnet.scoring.weight_vector import graded_contribution, graded_top3
+from capability_subnet.scoring.weight_vector import champion_ladder
 from capability_subnet.validator.agreement import outlier_validators
 from capability_subnet.validator.assignment import Assignment, assign
 from capability_subnet.validator.evaluator import CandidateEvaluation, core_results
@@ -123,9 +121,9 @@ def evaluate_run(
     hidden_count: int = C.DEFAULT_HIDDEN_INSTANCES,
     ood_count: int = C.DEFAULT_OOD_INSTANCES,
     workflow_id: str = C.DEFAULT_WORKFLOW_ID,
-    burn_percentage: float = 0.0,
+    burn_share: float = C.BURN_SHARE,
     burn_uid: int = C.BURN_UID,
-    incentive_mode: str = C.MODE_GRADED_TOP3,
+    champion_grade: float | None = None,
     workers: int = 1,
     peer_core_results: dict[str, dict[int, bool]] | None = None,
 ) -> RunOutcome:
@@ -136,14 +134,13 @@ def evaluate_run(
             candidate reserves almost the whole card while it is served, so
             concurrency above the device count would make the packages contend
             for memory and measure each other rather than themselves.
-        incentive_mode: how the measured field is turned into weights. See
-            :func:`_weights_from`.
+        champion_grade: the reigning champion's grade, or ``None`` when the
+            throne is empty and this run fills it. A challenger is paid only by
+            exceeding it by ``CHAMPION_DETHRONE_MARGIN``.
         measure_base: measures the base model on this run's draw. The base
             model is the only permanent reference, and this loop cannot produce
-            a bar without it. It used to be a ``reference_e2e`` parameter
-            defaulting to zero, which made the graded mode's improvement term
-            equal to the candidate's raw score and let a package that beat
-            nothing collect improvement credit.
+            a bar without it — every candidate's retention is scored against
+            its probe and every candidate's improvement against its score.
         peer_core_results: other validators' core results for one shared
             candidate, when this validator has them. Used only to report
             inconsistency — a miner is not paid less because another validator
@@ -196,10 +193,10 @@ def evaluate_run(
         run_id=run_id,
         block=block,
         workflow_id=workflow_id,
-        burn_percentage=burn_percentage,
+        burn_share=burn_share,
         burn_uid=burn_uid,
-        incentive_mode=incentive_mode,
         reference_e2e=base.end_to_end,
+        champion_grade=champion_grade,
     )
     return outcome
 
@@ -291,126 +288,46 @@ def _flag_peers(
 
 def _weights_from(
     outcome: RunOutcome,
-    *,
     candidates: list[Candidate],
     run_id: int,
     block: int,
     workflow_id: str,
-    burn_percentage: float,
-    burn_uid: int,
-    incentive_mode: str = C.MODE_GRADED_TOP3,
-    reference_e2e: float = 0.0,
-) -> WeightVector:
-    """Rank what was measured and turn it into weights.
-
-    An unmeasurable candidate earns nothing and burns nothing extra: it is simply
-    absent, exactly as a miner who never submitted is absent. Paying it would
-    reward a recipe that does not reconstruct; charging the run for it would
-    let one broken submission tax everybody else.
-
-    ``resolvable`` is this validator's own figure, not the network's, and is
-    carried on each submission for audit and for :func:`tied`. Ranking itself no
-    longer consults it: submissions are ordered by measured score alone, with no
-    advantage to whoever committed first.
-    """
-    by_hotkey = {c.hotkey: c for c in candidates}
-    resolvable = minimum_detectable_effect(len(outcome.assignment))
-
-    submissions = [
-        Submission(
-            uid=by_hotkey[e.candidate_id].uid,
-            hotkey=e.candidate_id,
-            score=e.scores.qualified_score,
-            first_block=by_hotkey[e.candidate_id].first_block,
-            resolvable=resolvable,
-        )
-        for e in outcome.usable
-        if e.candidate_id in by_hotkey
-    ]
-
-    ranked = rank(submissions)
-    ordered = [(s.uid, s.hotkey) for s in ranked]
-
-    if incentive_mode == C.MODE_GRADED_CONTRIBUTION:
-        return _graded_contribution_weights(
-            outcome,
-            ranked=ranked,
-            run_id=run_id,
-            block=block,
-            workflow_id=workflow_id,
-            burn_percentage=burn_percentage,
-            burn_uid=burn_uid,
-            reference_e2e=reference_e2e,
-        )
-
-    return graded_top3(
-        ordered,
-        run_id=run_id,
-        block=block,
-        workflow_id=workflow_id,
-        burn_percentage=burn_percentage,
-        burn_uid=burn_uid,
-    )
-
-
-def _graded_contribution_weights(
-    outcome: RunOutcome,
-    *,
-    ranked: list[Submission],
-    run_id: int,
-    block: int,
-    workflow_id: str,
-    burn_percentage: float,
+    burn_share: float,
     burn_uid: int,
     reference_e2e: float,
+    champion_grade: float | None,
 ) -> WeightVector:
-    """Grade the measured field and let the graded split decide the payout.
+    """Grade what was measured and turn it into weights.
 
-    ``champion`` is deliberately ``None``. The throne is held by whoever last
-    *dethroned* the incumbent, and that is a fact about the subnet's history
-    rather than about this run — nothing in the ownerless loop carries a
-    ChampionRecord between runs, so this validator has not seen anyone take
-    it. Synthesising one from the run's own leader would crown a package for
-    winning a field of one, skip the leaderless burn entirely, and pay the full
-    champion share every run regardless of whether anything was dethroned.
+    An unmeasurable candidate earns nothing and burns nothing extra: it is
+    simply absent, exactly as a miner who never submitted is absent. Paying it
+    would reward a recipe that does not reconstruct; charging the run for it
+    would let one broken submission tax everybody else.
 
-    So the leaderless branch is the honest one, and it is also the arrangement
-    the contract describes for it: half the run burns, the best measured
-    package leads what remains on the champion's terms, and the rest of the
-    graded field splits what is left of that. Because the function pops the
-    leader out of the graded list *after* capping it, the miners sharing the
-    remainder are exactly ranks two through ten.
-
-    Grades come from the four terms the published contract already defines, over
-    scores this run produced. A candidate graded zero does not appear at all,
-    and the share nobody earned burns rather than inflating the leader's.
+    Args:
+        champion_grade: the reigning champion's grade, or ``None`` when the
+            throne is empty and this run fills it.
     """
-    scores_by_hotkey = {e.candidate_id: e.scores for e in outcome.usable}
+    by_hotkey = {c.hotkey: c for c in candidates}
 
-    contributors: list[tuple[int, str, float]] = []
-    for submission in ranked:
-        scores = scores_by_hotkey.get(submission.hotkey)
-        if scores is None:
+    graded: list[tuple[int, str, float]] = []
+    for evaluation in outcome.usable:
+        candidate = by_hotkey.get(evaluation.candidate_id)
+        if candidate is None:
             continue
         grade = contribution_score(
-            ContributionInputs(
-                scores=scores,
-                reference_e2e=reference_e2e,
-                # No throne, so proximity has no incumbent to measure against
-                # and scores one for everybody. That is the correct reading:
-                # nobody was close to a champion, because there was no champion.
-                champion_e2e=None,
-            )
+            ContributionInputs(scores=evaluation.scores, reference_e2e=reference_e2e)
         )
-        if grade > 0.0:
-            contributors.append((submission.uid, submission.hotkey, grade))
+        graded.append((candidate.uid, candidate.hotkey, grade))
 
-    return graded_contribution(
-        None,
-        contributors,
+    graded.sort(key=lambda row: -row[2])
+
+    return champion_ladder(
+        graded,
         run_id=run_id,
         block=block,
-        workflow_id=workflow_id,
-        burn_percentage=burn_percentage,
+        champion_grade=champion_grade,
         burn_uid=burn_uid,
+        burn_share=burn_share,
+        workflow_id=workflow_id,
     )

@@ -620,87 +620,54 @@ PUBLIC_PACK_INSTANCES: Final[int] = 120
 # Incentive
 # ---------------------------------------------------------------------------
 
-MODE_WINNER_TAKE_ALL: Final[str] = "winner_take_all"
-MODE_GRADED_TOP3: Final[str] = "graded_top3"
-
-#: Champion takes a fixed share; every other qualified candidate is paid in
-#: proportion to its graded contribution.
+#: Fraction of every run's emission that burns.
 #:
-#: The throne is still the prize, but almost every submission that is ever
-#: evaluated will fail to take it, and paying them all nothing discards the only
-#: information the network has about which failures were close. A recipe is one
-#: shot — a miner cannot iterate the way a code-submitting miner can — so telling
-#: a near miss apart from a distractor soup is what makes the second attempt
-#: better informed than the first.
-MODE_GRADED_CONTRIBUTION: Final[str] = "graded_contribution"
+#: The subnet buys one thing: a merged package that beats the one it already
+#: has. Emission that does not buy that is emission the network did not need to
+#: spend, so the default is to spend little and burn the rest.
+BURN_SHARE: Final[float] = 0.80
 
-ALLOWED_INCENTIVE_MODES: Final[tuple[str, ...]] = (
-    MODE_WINNER_TAKE_ALL,
-    MODE_GRADED_TOP3,
-    MODE_GRADED_CONTRIBUTION,
-)
-
-#: Share of the payable emission the champion keeps under the graded mode.
+#: How the payable fifth is split by rank.
 #:
-#: The throne is the prize and it is meant to be worth taking. At 0.90 the
-#: runners-up split what is left by rank as information about how close they
-#: came, not as a living: a miner who wants emission has to win, not place.
-CHAMPION_BASE_SHARE: Final[float] = 0.90
+#: Ranks one to five, in order. The throne takes nearly all of it: the prize is
+#: winning, and placing is information about how close a miner came rather than
+#: a living. A miner who wants emission has to take the throne.
+RANK_SHARES: Final[tuple[float, ...]] = (0.90, 0.05, 0.03, 0.01, 0.005)
 
-#: How a non-champion's grade is composed. Quality dominates: a package that
-#: does not finish workflows is not made valuable by being cheap, or by being
-#: nearly as good as something that does.
-CONTRIBUTION_WEIGHT_QUALITY: Final[float] = 0.50
-CONTRIBUTION_WEIGHT_IMPROVEMENT: Final[float] = 0.25
-CONTRIBUTION_WEIGHT_PROXIMITY: Final[float] = 0.15
+#: Split across ranks six to ten, in proportion to grade.
+#:
+#: In proportion rather than evenly, so the ordering inside the tail still says
+#: something: an even split would pay a candidate that barely qualified the same
+#: as one that nearly placed fifth.
+TAIL_SHARE: Final[float] = 0.005
+
+#: Ranks paid in one run. Below this a share is smaller than the chain's own
+#: weight quantisation, so it would be bookkeeping rather than payment.
+PAID_RANKS: Final[int] = 10
+
+#: Grade the leading candidate must exceed the champion by to take the throne.
+#:
+#: The throne changes hands on a measurable improvement, not on noise and not
+#: on a tie. Applied to the contribution grade, which is the composite the
+#: field is ranked on, so a challenger that is better on cost or breadth can
+#: win without being better on completion alone.
+#:
+#: It also decides whether the run pays at all. If the best candidate cannot
+#: clear it, the run offered the network nothing it did not already have and
+#: the whole miner share burns — nobody places behind a leader who did not win.
+CHAMPION_DETHRONE_MARGIN: Final[float] = 0.002
+
+#: How a candidate's grade is composed. Quality dominates: a package that does
+#: not finish workflows is not made valuable by being cheap, or by being nearly
+#: as good as something that does.
+#:
+#: Every term is measured against fixed points — the run's own instances and
+#: the base model — so a grade means the same thing in every run. That is what
+#: lets CHAMPION_DETHRONE_MARGIN be a fixed number: a threshold on a quantity
+#: whose scale moved between runs would be a different bar each time.
+CONTRIBUTION_WEIGHT_QUALITY: Final[float] = 0.60
+CONTRIBUTION_WEIGHT_IMPROVEMENT: Final[float] = 0.30
 CONTRIBUTION_WEIGHT_COST: Final[float] = 0.10
-
-#: Runs a qualified candidate keeps earning its graded share for.
-#:
-#: Bounded because a package's measured contribution is a statement about the
-#: run it was measured in. Paying it indefinitely would let an early miner
-#: collect rent on a result the network has moved past; paying it for one run
-#: would make the reward depend on the accident of when the engine got to it.
-CONTRIBUTION_MEMORY_RUNS: Final[int] = 7
-
-#: Fraction of a leaderless run's emission that burns.
-#:
-#: With no champion there is nobody who has beaten the field, so the run pays
-#: less than a crowned one — but it still pays. Burning the whole leader's share
-#: would mean a subnet that has never crowned anyone burns everything, which is
-#: the state every launch starts in and can sit in for weeks while the queue is
-#: worked through.
-#:
-#: Four fifths. The remaining fifth is the miner pool, and the best measured
-#: package leads it on the same terms a champion leads a crowned run: it
-#: takes CHAMPION_BASE_SHARE of the pool and the graded field splits the rest.
-#: Against the whole run that is 19% to the leader and 1% across the graded
-#: runners-up. The throne stays worth taking.
-NO_CHAMPION_BURN_SHARE: Final[float] = 0.80
-
-#: Most graded contributors paid in one run, sharing what the champion does
-#: not take. Ten rather than thirty-two: a 0.05 pool split thirty-two ways is
-#: below the noise floor of the chain's own weight quantisation, so it would be
-#: bookkeeping rather than payment.
-MAX_GRADED_CONTRIBUTORS: Final[int] = 10
-
-#: Emission split used when the graded mode is enabled. Unfilled shares are
-#: burned rather than redistributed to unqualified miners.
-GRADED_TOP3_SHARES: Final[tuple[float, float, float]] = (0.60, 0.25, 0.15)
-
-#: Share of the payable emission reserved for miners who are queued or have
-#: previously held the throne, split as a linear taper.
-#:
-#: Not generosity — deregistration protection. A miner with zero emission is
-#: what Bittensor's pruning selects first, so under a strict winner-take-all
-#: split every challenger waiting its turn is a candidate for eviction before it
-#: is ever evaluated. The engine evaluates roughly one challenger per run, so
-#: that wait is long enough to matter, and a queue that empties itself is a
-#: subnet with one participant.
-DEFAULT_TAIL_SHARE: Final[float] = 0.0
-
-#: Most miners the tail is split across.
-MAX_TAIL_ENTRIES: Final[int] = 16
 
 #: Fallback UID for burned emission when the subnet owner cannot be resolved.
 #:
@@ -711,8 +678,6 @@ MAX_TAIL_ENTRIES: Final[int] = 16
 #: tooling has a value to construct a vector with.
 BURN_UID: Final[int] = 0
 
-#: Fraction of emission routed to the burn UID as an operational safety valve.
-DEFAULT_BURN_PERCENTAGE: Final[float] = 0.0
 
 # ---------------------------------------------------------------------------
 # Sandbox execution

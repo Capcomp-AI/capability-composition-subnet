@@ -12,7 +12,6 @@ from __future__ import annotations
 import pytest
 
 from capability_subnet.common import constants as C
-from capability_subnet.common.schemas import ChampionRecord
 from capability_subnet.scoring import references as ref
 from capability_subnet.scoring.comparator import (
     ComparatorConfig,
@@ -21,11 +20,7 @@ from capability_subnet.scoring.comparator import (
     decisive_loss,
     strongest_reference,
 )
-from capability_subnet.scoring.weight_vector import (
-    apply_validator_burn,
-    graded_top3,
-    winner_take_all,
-)
+from capability_subnet.scoring.weight_vector import apply_validator_burn, champion_ladder
 from capability_subnet.testing import make_results
 
 AXES = ("stage_a", "stage_b", "stage_c")
@@ -230,95 +225,70 @@ class TestStrongestReference:
 
 
 class TestWeightVector:
-    def _champion(self, **overrides) -> ChampionRecord:
-        payload = {"candidate_id": "5Miner", "hotkey": "5Miner", "uid": 7}
+    """What survives a vector being built: normalisation, and a validator's
+    right to burn more than the engine asked for.
+
+    The split itself is checked in test_champion_ladder.py.
+    """
+
+    def _vector(self, **overrides):
+        payload = {
+            "ranked": [(7, "5A", 0.50), (9, "5B", 0.40)],
+            "run_id": 1,
+            "block": 100,
+            "champion_grade": None,
+        }
         payload.update(overrides)
-        return ChampionRecord(**payload)
-
-    def test_the_champion_takes_the_whole_share(self):
-        vector = winner_take_all(self._champion(), run_id=1, block=100)
-        assert vector.entries == [vector.entries[0]]
-        assert vector.entries[0].uid == 7
-        assert vector.entries[0].weight == pytest.approx(1.0)
-
-    def test_an_empty_throne_burns(self):
-        vector = winner_take_all(None, run_id=1, block=100)
-        assert vector.entries[0].uid == C.BURN_UID
-        assert vector.entries[0].role == "burn"
-
-    def test_a_reference_on_the_throne_earns_nothing(self):
-        # A reference holding the throne means no miner has beaten the untouched
-        # base model yet. Paying for that would be paying the operator for
-        # nothing the network produced.
-        champion = self._champion(
-            candidate_id=ref.BASE_MODEL, hotkey="5Operator", uid=3, is_reference=True
-        )
-        vector = winner_take_all(champion, run_id=1, block=100)
-
-        assert vector.entries[0].role == "burn"
-        assert vector.champion_hotkey is None
-
-    def test_the_burn_valve_splits_the_share(self):
-        vector = winner_take_all(self._champion(), run_id=1, block=100, burn_percentage=0.25)
-        by_uid = {entry.uid: entry.weight for entry in vector.entries}
-        assert by_uid[7] == pytest.approx(0.75)
-        assert by_uid[C.BURN_UID] == pytest.approx(0.25)
-
-    def test_a_champion_on_the_burn_uid_does_not_produce_a_duplicate(self):
-        # The chain rejects a repeated UID, so the two entries must merge.
-        vector = winner_take_all(
-            self._champion(uid=C.BURN_UID),
-            run_id=1,
-            block=100,
-            burn_percentage=0.3,
-        )
-        uids = [entry.uid for entry in vector.entries]
-        assert len(uids) == len(set(uids))
-        assert sum(entry.weight for entry in vector.entries) == pytest.approx(1.0)
-
-    def test_graded_mode_uses_the_published_split(self):
-        vector = graded_top3([(1, "5A"), (2, "5B"), (3, "5C")], run_id=1, block=100)
-        by_uid = {entry.uid: entry.weight for entry in vector.entries}
-        assert by_uid[1] == pytest.approx(0.60)
-        assert by_uid[2] == pytest.approx(0.25)
-        assert by_uid[3] == pytest.approx(0.15)
-
-    def test_unfilled_graded_ranks_burn_rather_than_promoting_anyone(self):
-        vector = graded_top3([(1, "5A")], run_id=1, block=100)
-        by_uid = {entry.uid: entry.weight for entry in vector.entries}
-
-        assert by_uid[1] == pytest.approx(0.60)
-        assert by_uid[C.BURN_UID] == pytest.approx(0.40)
-
-    def test_graded_mode_with_nobody_qualified_burns_everything(self):
-        vector = graded_top3([], run_id=1, block=100)
-        assert vector.entries[0].uid == C.BURN_UID
-        assert vector.entries[0].weight == pytest.approx(1.0)
+        ranked = payload.pop("ranked")
+        return champion_ladder(ranked, **payload)
 
     def test_every_vector_sums_to_one(self):
         for vector in (
-            winner_take_all(self._champion(), run_id=1, block=1),
-            winner_take_all(None, run_id=1, block=1),
-            winner_take_all(self._champion(), run_id=1, block=1, burn_percentage=0.37),
-            graded_top3([(1, "a"), (2, "b")], run_id=1, block=1),
+            self._vector(),
+            self._vector(ranked=[]),
+            self._vector(champion_grade=0.99),
+            self._vector(burn_share=0.37),
+            self._vector(burn_share=0.0),
+            self._vector(burn_share=1.0),
         ):
             assert sum(entry.weight for entry in vector.entries) == pytest.approx(1.0)
 
-    def test_a_validator_may_burn_more_but_the_vector_stays_normalised(self):
-        published = winner_take_all(self._champion(), run_id=1, block=1)
+    def test_a_validator_may_burn_more_and_gets_exactly_what_it_asked_for(self):
+        """Half again on top of what the vector already burns.
+
+        Scaling only the miners and leaving the existing burn at full weight
+        over-burns: the sum comes back to one after normalisation, so it looks
+        right, and the miners are quietly paid less than the half they are owed.
+        """
+        published = self._vector(ranked=[(7, "5A", 0.50)], burn_share=0.0)
+        before = {entry.uid: entry.weight for entry in published.entries}
         adjusted = apply_validator_burn(published, 0.5, C.BURN_UID)
 
         by_uid = {entry.uid: entry.weight for entry in adjusted.entries}
-        assert by_uid[7] == pytest.approx(0.5)
-        assert by_uid[C.BURN_UID] == pytest.approx(0.5)
+        assert by_uid[7] == pytest.approx(before[7] * 0.5)
+        assert by_uid[C.BURN_UID] == pytest.approx(before[C.BURN_UID] * 0.5 + 0.5)
         assert sum(by_uid.values()) == pytest.approx(1.0)
 
+    def test_burning_more_on_top_of_the_standard_burn_is_exact(self):
+        published = self._vector(ranked=[(7, "5A", 0.50)])
+        paid_before = next(e.weight for e in published.entries if e.role != "burn")
+        adjusted = apply_validator_burn(published, 0.5, C.BURN_UID)
+        paid_after = next(e.weight for e in adjusted.entries if e.role != "burn")
+
+        assert paid_after == pytest.approx(paid_before * 0.5)
+
     def test_zero_extra_burn_leaves_the_vector_untouched(self):
-        published = winner_take_all(self._champion(), run_id=1, block=1)
+        published = self._vector()
         assert apply_validator_burn(published, 0.0, C.BURN_UID) is published
 
     def test_uid_and_weight_lists_stay_aligned(self):
-        vector = graded_top3([(4, "5A"), (9, "5B")], run_id=1, block=1, burn_percentage=0.1)
-        uids, weights = vector.as_uid_weight_lists()
+        uids, weights = self._vector().as_uid_weight_lists()
         assert len(uids) == len(weights)
         assert sum(weights) == pytest.approx(1.0)
+
+    def test_a_repeated_uid_is_merged_rather_than_submitted_twice(self):
+        """The chain rejects a vector naming one UID twice."""
+        vector = self._vector(ranked=[(7, "5A", 0.50)], burn_share=0.8)
+
+        uids, _ = vector.as_uid_weight_lists()
+        assert len(uids) == len(set(uids))
