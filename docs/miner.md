@@ -329,6 +329,11 @@ curl https://<engine-host>/queue/<your-hotkey>
 
 The full evaluation report is published at `/reports` — every gate verdict, every per-axis comparison, the paired statistics, and the reason for the decision.
 
+**Your score appears the day after you commit; the emission the day after
+that.** A weight vector states a closed run's leaderboard, so the run that
+measures you is not the run that pays you. Seeing a report with a good score
+and no emission on the same day is the pipeline working, not a failure.
+
 ---
 
 ## Hardware

@@ -17,7 +17,19 @@ Checking this network needs no GPU and no validator registration. `capability-au
 
 ## What you are doing
 
-Each run, your validator reads the commitments on chain, fetches each miner's recipe from the URI it committed, checks the recipe against its digest, reconstructs the merged adapter locally, serves it through your own endpoint, and scores it against hidden instances it regenerates from seeds derived from a block hash. It then ranks what it measured and writes weights.
+Each run, your validator reads the commitments on chain, fetches each miner's recipe from the URI it committed, checks the recipe against its digest, reconstructs the merged adapter locally, serves it through your own endpoint, and scores it against hidden instances it regenerates from seeds derived from a block hash. It then ranks what it measured, writes the result to a run report, and submits the weights from the run **before** this one.
+
+A run is 24 hours (7200 blocks) and boundaries are anchored: run 412 opens at block 8,908,667, about 12:00 Eastern on 23 August 2026, and each run after it opens 7200 blocks later. So the pipeline is three runs deep:
+
+| | |
+|---|---|
+| **run N** | a miner commits |
+| **run N+1** | you measure it and write `runs/run-N+1.json` |
+| **run N+2** | you submit the weights that report holds |
+
+The gap is not latency for its own sake. A weight vector states a *closed* run's leaderboard. Submitting the vector you have just computed means submitting a leaderboard still being written — a candidate measured early in the run faces an empty field, one measured late a full one — so two validators that reached the queue in a different order would submit different vectors from the same evidence. Reading it back from the report also means a validator restarted between runs pays what it measured rather than starting again with nothing.
+
+If the report for the run being paid is missing, unreadable, or measured nobody, the validator burns. It never invents a vector.
 
 Validators are not required to agree on artifact bytes. Six of the seven merge methods run an SVD, and an SVD is not bitwise reproducible across devices, so agreement is on **outcomes** rather than on hashes. The artifact digest is still recorded — a validator whose digest matches another's is stronger evidence — but it is evidence, not a gate.
 
