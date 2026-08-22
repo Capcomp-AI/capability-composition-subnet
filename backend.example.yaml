@@ -48,6 +48,9 @@ recipe_dir: ""            # empty: <state_dir>/recipes
 # 12:00 Eastern. Changing this length here moves those boundaries off noon
 # without moving the anchor, so it is a protocol decision, not a local one.
 run_blocks: 7200
+run_epoch_block: 8908667
+run_epoch_id: 412
+min_commitment_age_blocks: 300
 hidden_instances: 1350
 ood_instances: 100
 

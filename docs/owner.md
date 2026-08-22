@@ -67,7 +67,10 @@ adapter_pool_dir: /var/lib/capsub/pool
 report_dir: /var/lib/capsub/state/reports
 
 workflow_id: lora_merger_logic_v1
-run_blocks: 7200           # 24h at 12s blocks; boundaries anchored to ~12:00 ET
+run_blocks: 7200           # 24h at 12s blocks
+run_epoch_block: 8908667   # run 412 opens here, ~12:00 ET on 23 Aug 2026
+run_epoch_id: 412          # everything before it is frozen history
+min_commitment_age_blocks: 300
 hidden_instances: 1350
 ood_instances: 100
 end_to_end_margin: 0.03       # 1350 instances resolve ~0.024
