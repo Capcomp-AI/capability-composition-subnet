@@ -360,11 +360,89 @@ def _block_hash_via_rpc(subtensor: bt.Subtensor, block: int) -> str:
         return ""
 
 
-def run_id_for_block(block: int, run_blocks: int) -> int:
-    """Map a block height to its evaluation run index."""
+def run_id_for_block(
+    block: int,
+    run_blocks: int,
+    *,
+    epoch_block: int = C.RUN_EPOCH_BLOCK,
+    epoch_id: int = C.RUN_EPOCH_ID,
+) -> int:
+    """Map a block height to its evaluation run index.
+
+    Two regimes, joined at the epoch.
+
+    From ``epoch_block`` on, runs are anchored: run ``epoch_id`` opens there and
+    each one after it opens ``run_blocks`` later. With a run of 7200 blocks that
+    puts every boundary at the same time of day, which is the point — a plain
+    ``block // run_blocks`` puts them wherever the arithmetic lands, and for
+    three-day runs that was 04:26 Eastern on a rotating cycle.
+
+    Before it, the old rule stands, capped one short of ``epoch_id``. Runs that
+    have already closed keep the ids they were measured and published under;
+    re-deriving them at today's length would renumber every stored run, every
+    report and every console row. Run 411 therefore runs long — it opened under
+    the old length and closes at the epoch.
+
+    Args:
+        epoch_block: where the anchored schedule begins. ``0`` removes the
+            frozen-history branch entirely, which is the unanchored rule this
+            replaced; overridable so a test can state the schedule it is
+            checking rather than depending on the deployed one.
+        epoch_id: the run that opens at ``epoch_block``.
+
+    Raises:
+        ValueError: if ``run_blocks`` is not positive.
+    """
     if run_blocks <= 0:
         raise ValueError("run_blocks must be positive")
-    return block // run_blocks
+    if block < epoch_block:
+        return min(block // C.LEGACY_RUN_BLOCKS, epoch_id - 1)
+    return epoch_id + (block - epoch_block) // run_blocks
+
+
+def run_opens_block(
+    run_id: int,
+    run_blocks: int,
+    *,
+    epoch_block: int = C.RUN_EPOCH_BLOCK,
+    epoch_id: int = C.RUN_EPOCH_ID,
+) -> int:
+    """The block a run opens at — the inverse of :func:`run_id_for_block`.
+
+    Anything computing a run's start, its end, or how far through it a block
+    sits must come through here. ``run_id * run_blocks`` was that answer for as
+    long as runs were unanchored, and it is now wrong for every run from the
+    epoch on: it is off by whatever the epoch is not a multiple of.
+
+    Raises:
+        ValueError: if ``run_blocks`` is not positive.
+    """
+    if run_blocks <= 0:
+        raise ValueError("run_blocks must be positive")
+    if run_id < epoch_id:
+        return run_id * C.LEGACY_RUN_BLOCKS
+    return epoch_block + (run_id - epoch_id) * run_blocks
+
+
+def first_run_opening_at_or_after(
+    block: int,
+    run_blocks: int,
+    *,
+    epoch_block: int = C.RUN_EPOCH_BLOCK,
+    epoch_id: int = C.RUN_EPOCH_ID,
+) -> int:
+    """The earliest run whose opening block is not before ``block``.
+
+    The ceiling half of the settling rule, written so it holds across the
+    epoch. ``ceil(block / run_blocks)`` was the same thing while every run
+    started at a multiple of its length, and silently is not once one of them
+    does not.
+    """
+    anchor = {"epoch_block": epoch_block, "epoch_id": epoch_id}
+    run_id = run_id_for_block(block, run_blocks, **anchor)
+    if run_opens_block(run_id, run_blocks, **anchor) == block:
+        return run_id
+    return run_id + 1
 
 
 def measured_in_run(
@@ -373,6 +451,8 @@ def measured_in_run(
     run_blocks: int,
     *,
     min_age_blocks: int = C.MIN_COMMITMENT_AGE_BLOCKS,
+    epoch_block: int = C.RUN_EPOCH_BLOCK,
+    epoch_id: int = C.RUN_EPOCH_ID,
 ) -> bool:
     """Whether a commitment is the business of this run.
 
@@ -413,7 +493,11 @@ def measured_in_run(
         raise ValueError("min_age_blocks cannot be negative")
 
     return run_id == measuring_run_for(
-        commitment_block, run_blocks, min_age_blocks=min_age_blocks
+        commitment_block,
+        run_blocks,
+        min_age_blocks=min_age_blocks,
+        epoch_block=epoch_block,
+        epoch_id=epoch_id,
     )
 
 
@@ -422,6 +506,8 @@ def measuring_run_for(
     run_blocks: int,
     *,
     min_age_blocks: int = C.MIN_COMMITMENT_AGE_BLOCKS,
+    epoch_block: int = C.RUN_EPOCH_BLOCK,
+    epoch_id: int = C.RUN_EPOCH_ID,
 ) -> int:
     """The single run that will measure a commitment made at this block.
 
@@ -441,9 +527,49 @@ def measuring_run_for(
     if min_age_blocks < 0:
         raise ValueError("min_age_blocks cannot be negative")
 
-    next_run = commitment_block // run_blocks + 1
-    settled_run = -(-(commitment_block + min_age_blocks) // run_blocks)
+    anchor = {"epoch_block": epoch_block, "epoch_id": epoch_id}
+    next_run = run_id_for_block(commitment_block, run_blocks, **anchor) + 1
+    settled_run = first_run_opening_at_or_after(
+        commitment_block + min_age_blocks, run_blocks, **anchor
+    )
     return max(next_run, settled_run)
+
+
+def weighting_run_for(
+    commitment_block: int,
+    run_blocks: int,
+    *,
+    min_age_blocks: int = C.MIN_COMMITMENT_AGE_BLOCKS,
+    epoch_block: int = C.RUN_EPOCH_BLOCK,
+    epoch_id: int = C.RUN_EPOCH_ID,
+) -> int:
+    """The run whose weight vector pays a commitment made at this block.
+
+    One run after the one that measures it. A weight vector is a statement
+    about a closed run's leaderboard, and the run doing the measuring does not
+    have one yet — it is still being written, so a candidate measured early in
+    it faces an empty field and one measured late faces a full one, and the
+    vector moves under both as the queue is worked through.
+
+    The whole pipeline, from a miner's side:
+
+        run N     commit
+        run N+1   measured, score recorded
+        run N+2   that score sets the weight submitted on-chain
+
+    Derived from the commitment block like everything else here, so a miner can
+    read it off the chain and two validators cannot disagree about it.
+    """
+    return (
+        measuring_run_for(
+            commitment_block,
+            run_blocks,
+            min_age_blocks=min_age_blocks,
+            epoch_block=epoch_block,
+            epoch_id=epoch_id,
+        )
+        + C.WEIGHT_LAG_RUNS
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -504,6 +630,8 @@ def run_position(
     run_blocks: int,
     *,
     min_age_blocks: int = C.MIN_COMMITMENT_AGE_BLOCKS,
+    epoch_block: int = C.RUN_EPOCH_BLOCK,
+    epoch_id: int = C.RUN_EPOCH_ID,
 ) -> RunPosition:
     """Locate ``block`` within its evaluation run.
 
@@ -517,13 +645,18 @@ def run_position(
     if block < 0:
         raise ValueError("block must not be negative")
 
-    run_id = run_id_for_block(block, run_blocks)
-    opened = run_id * run_blocks
+    anchor = {"epoch_block": epoch_block, "epoch_id": epoch_id}
+    run_id = run_id_for_block(block, run_blocks, **anchor)
+    opened = run_opens_block(run_id, run_blocks, **anchor)
+    # Not `opened + run_blocks`: the run before the epoch ran at the old length
+    # and closes at the epoch, so its span is neither length. Asking for the
+    # next run's opening block is right in both regimes and at the join.
+    closes = run_opens_block(run_id + 1, run_blocks, **anchor)
     return RunPosition(
         run_id=run_id,
         opened_block=opened,
-        closes_block=opened + run_blocks,
+        closes_block=closes,
         blocks_elapsed=block - opened,
-        blocks_remaining=opened + run_blocks - block,
-        settles_by_block=opened + run_blocks - min_age_blocks,
+        blocks_remaining=closes - block,
+        settles_by_block=closes - min_age_blocks,
     )

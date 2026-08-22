@@ -14,8 +14,26 @@ someone a run if misunderstood:
 
 from __future__ import annotations
 
+from capability_subnet.common import chain as _chain
 from capability_subnet.common import constants as C
-from capability_subnet.common.chain import measured_in_run, run_id_for_block
+
+#: These check the *rule*, so they state their own schedule rather than borrow
+#: the deployed one. ``epoch_block=0`` removes the frozen-history branch, giving
+#: the unanchored form where a run id is simply the block over the length —
+#: which is what lets a case say "run 411 starts at 411 * W" and mean it.
+#:
+#: The deployed schedule is a separate fact and is pinned separately, in
+#: test_run_schedule_is_anchored.py, against real block heights and real dates.
+UNANCHORED = {"epoch_block": 0, "epoch_id": 0}
+
+
+def measured_in_run(block, run_id, run_blocks, **kw):
+    return _chain.measured_in_run(block, run_id, run_blocks, **UNANCHORED, **kw)
+
+
+def run_id_for_block(block, run_blocks, **kw):
+    return _chain.run_id_for_block(block, run_blocks, **UNANCHORED, **kw)
+
 
 RUN_ID = 411
 RUN_BLOCKS = C.DEFAULT_RUN_BLOCKS

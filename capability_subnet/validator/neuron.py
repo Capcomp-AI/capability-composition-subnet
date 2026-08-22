@@ -44,8 +44,9 @@ from capability_subnet.common.chain import (
     current_block,
     fetch_metagraph,
     measured_in_run,
-    submit_weights,
     run_id_for_block,
+    run_opens_block,
+    submit_weights,
 )
 from capability_subnet.common.config import build_config
 from capability_subnet.common.logging import setup_logging
@@ -294,7 +295,7 @@ class ValidatorNeuron:
 
         run_blocks = C.DEFAULT_RUN_BLOCKS
         run_id = run_id_for_block(block, run_blocks)
-        opened_at = run_id * run_blocks
+        opened_at = run_opens_block(run_id, run_blocks)
 
         try:
             beacon = block_beacon(self.subtensor, opened_at)
@@ -410,8 +411,7 @@ class ValidatorNeuron:
         for row in sorted(rows, key=lambda r: -r["qualified_score"]):
             if row["usable"]:
                 log.info(
-                    "  uid %-3s score %.4f  e2e %.3f ood %.3f ret %.3f tok %.3f  "
-                    "(%s/%s instances)",
+                    "  uid %-3s score %.4f  e2e %.3f ood %.3f ret %.3f tok %.3f  (%s/%s instances)",
                     row["uid"],
                     row["qualified_score"],
                     row["end_to_end"],
@@ -489,8 +489,8 @@ class ValidatorNeuron:
         from capability_subnet.sandbox.model_client import OpenAICompatibleClient
         from capability_subnet.scoring.aggregate import EfficiencyInputs, aggregate_scores
         from capability_subnet.validator.evaluator import measure_base_model
-        from capability_subnet.validator.serving import BASE_MODEL, serve_candidate
         from capability_subnet.validator.run import BaseMeasurement
+        from capability_subnet.validator.serving import BASE_MODEL, serve_candidate
         from capability_subnet.workflows import get_workflow
 
         if not self.config.serve_url:

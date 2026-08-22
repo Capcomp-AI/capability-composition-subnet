@@ -213,9 +213,7 @@ class TestTheValidatorRefusesToPayForAFabricatedRun:
         from capability_subnet.validator.client import spot_check_run
 
         instance, trace, result = scored_run
-        ok, detail = spot_check_run(
-            self._client(disclosure_for(instance, trace, result)), run_id=7
-        )
+        ok, detail = spot_check_run(self._client(disclosure_for(instance, trace, result)), run_id=7)
         assert ok, detail
         assert "re-scored to the same result" in detail
 

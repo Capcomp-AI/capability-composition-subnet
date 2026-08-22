@@ -149,13 +149,9 @@ def evaluate_run(
             inconsistency — a miner is not paid less because another validator
             looks wrong, since the miner did not do anything.
     """
-    sample = draw_run_open(
-        run_id, beacon=beacon, hidden_count=hidden_count, ood_count=ood_count
-    )
+    sample = draw_run_open(run_id, beacon=beacon, hidden_count=hidden_count, ood_count=ood_count)
     assignment = assign(sample.hidden_seeds, hotkey=hotkey, beacon=beacon)
-    outcome = RunOutcome(
-        run_id=run_id, beacon=beacon, sample=sample, assignment=assignment
-    )
+    outcome = RunOutcome(run_id=run_id, beacon=beacon, sample=sample, assignment=assignment)
 
     # The reference first, and alone. Every candidate's retention is scored
     # against this probe and every candidate's margin against this score, so
@@ -181,7 +177,9 @@ def evaluate_run(
 
     for evaluation in outcome.evaluations:
         if evaluation.error:
-            log.warning("%s could not be measured: %s", evaluation.candidate_id[:12], evaluation.error)
+            log.warning(
+                "%s could not be measured: %s", evaluation.candidate_id[:12], evaluation.error
+            )
         elif not evaluation.usable:
             log.info(
                 "%s did not clear its gates: %s",

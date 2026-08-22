@@ -67,7 +67,7 @@ adapter_pool_dir: /var/lib/capsub/pool
 report_dir: /var/lib/capsub/state/reports
 
 workflow_id: lora_merger_logic_v1
-run_blocks: 21600          # ~72h at 12s blocks
+run_blocks: 7200           # 24h at 12s blocks; boundaries anchored to ~12:00 ET
 hidden_instances: 1350
 ood_instances: 100
 end_to_end_margin: 0.03       # 1350 instances resolve ~0.024
@@ -145,7 +145,7 @@ capsub1|lmlg|<base64url digest>|hf:<owner>/<repo>/final.json
 
 Format is `capsub1|<workflow code>|<recipe digest>|<uri>`. Validators read the commitment from chain, fetch the URI, and check the bytes against the committed digest — so the recipe cannot be swapped after commitment, and the URI only has to stay reachable.
 
-A commitment gets one evaluation, and a hotkey may resubmit once per run for another. Publishing the file is not the commitment; the on-chain payload is.
+A commitment gets one evaluation. A hotkey may replace its recipe as often as it likes — the chain keeps one commitment per hotkey, so there is no count to enforce — but only the one standing when a run opens is measured, and it must have stood for `MIN_COMMITMENT_AGE_BLOCKS` by then. That is the enforceable half of a rate limit, and it means one evaluated attempt per run. Publishing the file is not the commitment; the on-chain payload is.
 
 ---
 

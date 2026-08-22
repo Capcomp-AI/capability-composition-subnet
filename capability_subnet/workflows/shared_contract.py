@@ -51,9 +51,7 @@ def source_pool_contract(snapshot) -> dict[str, Any]:
         # one the engine would accept from — and a recipe that used one was
         # refused for naming an adapter the contract had listed.
         "adapters": list(snapshot.registry.selectable_ids),
-        "unselectable": sorted(
-            set(snapshot.adapter_ids) - set(snapshot.registry.selectable_ids)
-        ),
+        "unselectable": sorted(set(snapshot.adapter_ids) - set(snapshot.registry.selectable_ids)),
         "distractors": list(snapshot.registry.distractors()),
     }
 

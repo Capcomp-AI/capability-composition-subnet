@@ -30,8 +30,8 @@ from capability_subnet.scoring.contribution import (
 from capability_subnet.scoring.ranking import Submission, rank, tied
 from capability_subnet.scoring.references import (
     ReferencePackage,
-    build_references,
     bar_scores,
+    build_references,
     is_reference,
 )
 from capability_subnet.scoring.sampler import RunSample, build_instances, draw_run

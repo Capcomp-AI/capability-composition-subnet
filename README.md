@@ -87,7 +87,7 @@ The third bar is **off by default** (`require_beat_reference`): the highest scor
 
 The incumbent is not one of the permanent references. It gets its own smaller margin, which decays to zero over roughly thirty days.
 
-**One measurement per commitment.** A commitment is evaluated in the run after the one it was made in and earns from that measurement alone; to earn again, commit again. Nothing is terminated, and a failure that indicts the validator — an unreadable memory counter, too few scored instances — is not scored against the miner at all.
+**One measurement per commitment.** A run is a day, and the pipeline is three runs deep: commit in run N, measured in run N+1, and that score sets the weight submitted on-chain in run N+2. A commitment earns from that one measurement alone; to earn again, commit again. Weights lag the measurement by a run so that a vector is always computed from a *closed* run's final leaderboard rather than from one still being written. Nothing is terminated, and a failure that indicts the validator — an unreadable memory counter, too few scored instances — is not scored against the miner at all.
 
 ### Losing well is worth something
 

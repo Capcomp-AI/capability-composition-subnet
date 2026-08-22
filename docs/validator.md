@@ -60,12 +60,12 @@ everywhere. A larger card therefore does not run a bigger candidate; it runs the
 same one with a smaller fraction.
 
 **Why four cards.** Not the reference schedule — batched serving finishes the
-eight reference packages in about 3.7 hours on a single card, well inside a
-72-hour run. It is challenger throughput at the cadence this network is
-moving to. At the current rate a validator covers roughly 106 challengers per
-3-day run on one card and 448 on four; shorten the run to a day and one
-card covers 30, against the 29 commitments the network already carries. Four
-cards is what keeps a short run viable while the miner count grows.
+eight reference packages in about 3.7 hours on a single card, which fits a
+24-hour run with room to spare. It is challenger throughput. At the current
+rate one card covers about 35 challengers in a day-long run and four cover
+about 149, against the 29 commitments the network already carries. One card
+would be at its limit today and past it with any growth; four is what keeps a
+daily run viable.
 
 **Why the CPU and RAM are higher than they look.** Reconstruction is pinned to a
 single torch thread — byte-identical merges across machines require it — so each
@@ -79,11 +79,17 @@ time, so eight cards measure eight candidates at once and the run's throughput
 scales with the count. Two candidates sharing a card would contend for memory
 and each would measure the other's footprint as its own.
 
-| Cards | Candidates in flight | Roughly per 72 h run |
+| Cards | Candidates in flight | Roughly per 24 h run |
 |---|---|---|
-| 1 | 1 | ~23 |
-| 4 | 4 | ~94 |
-| 8 | 8 | ~188 |
+| 1 | 1 | ~35 |
+| 4 | 4 | ~149 |
+| 8 | 8 | ~299 |
+
+Not linear in the card count: the reference schedule is measured once per run
+whatever the fleet size, so the first card pays for it and the rest are pure
+challenger throughput. These are the batched-serving rates — an earlier version
+of this table carried ~23 per **72 h** run on one card, which was the
+sequential rate and is about a fifth of what the same hardware does now.
 
 One card still works and is still honest; it measures fewer candidates per
 run. A validator that cannot finish its queue should bound it with

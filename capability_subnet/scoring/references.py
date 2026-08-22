@@ -61,8 +61,7 @@ import logging
 from dataclasses import dataclass
 from typing import Literal
 
-from capability_subnet.common import constants as C
-from capability_subnet.common.schemas import CompressionSpec, MergeSpec, OutputSpec, Recipe
+from capability_subnet.common.schemas import Recipe
 from capability_subnet.registry.snapshot import PoolSnapshot
 
 log = logging.getLogger(__name__)
@@ -109,9 +108,7 @@ def build_references(snapshot: PoolSnapshot) -> list[ReferencePackage]:
     ]
 
 
-def bar_scores(
-    scores: dict[str, float], *, include_incumbent: bool = True
-) -> dict[str, float]:
+def bar_scores(scores: dict[str, float], *, include_incumbent: bool = True) -> dict[str, float]:
     """The reference scores a bar is taken from.
 
     Was ``collapse_single_adapters``, and folded the per-adapter references into

@@ -212,7 +212,11 @@ def _cmd_commitment(args: argparse.Namespace) -> int:
     rather than discovered a run later when nothing was scored.
     """
     from capability_subnet.common import constants as C
-    from capability_subnet.common.chain import run_position
+    from capability_subnet.common.chain import (
+        measuring_run_for,
+        run_position,
+        weighting_run_for,
+    )
     from capability_subnet.common.commitments import CommitmentError, encode_commitment
 
     try:
@@ -230,11 +234,16 @@ def _cmd_commitment(args: argparse.Namespace) -> int:
 
     position = run_position(args.block, C.DEFAULT_RUN_BLOCKS)
     minutes = C.MIN_COMMITMENT_AGE_BLOCKS * 12 / 60
+    # Asked, not re-derived. The rule has two halves and a copy that keeps only
+    # the obvious one is wrong exactly at the boundary this paragraph is about.
+    measured = measuring_run_for(args.block, C.DEFAULT_RUN_BLOCKS)
+    paid = weighting_run_for(args.block, C.DEFAULT_RUN_BLOCKS)
+
     if position.in_settling_window:
         print(
             f"\nrun {position.run_id} closes in {position.blocks_remaining} blocks, inside the "
             f"{minutes:.0f}-minute settling window.\n"
-            f"A commitment made now is measured in run {position.run_id + 2}, not "
+            f"A commitment made now is measured in run {measured}, not "
             f"{position.run_id + 1} — it has to have been standing for "
             f"{C.MIN_COMMITMENT_AGE_BLOCKS} blocks when a run opens to be measured by it.\n"
             f"Commit anyway and you skip a run; wait for run {position.run_id + 1} to open "
@@ -244,7 +253,7 @@ def _cmd_commitment(args: argparse.Namespace) -> int:
         return 3 if args.strict_timing else 0
 
     print(
-        f"\nrun {position.run_id}: measured in run {position.run_id + 1}. "
+        f"\nrun {position.run_id}: measured in run {measured}, paid in run {paid}. "
         f"{position.blocks_until_settling_window} blocks "
         f"(~{position.blocks_until_settling_window * 12 / 3600:.1f}h) left to change your mind.",
         file=sys.stderr,

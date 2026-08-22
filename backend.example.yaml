@@ -36,14 +36,18 @@ recipe_dir: ""            # empty: <state_dir>/recipes
 # ---------------------------------------------------------------------------
 # Runs
 # ---------------------------------------------------------------------------
-# 21600 blocks is roughly 72 hours at 12-second blocks. These three must equal the
+# 7200 blocks is 24 hours exactly at 12-second blocks. These three must equal the
 # protocol constants exactly — validators derive the run from the constants, so
 # an engine that differs measures a different run and its numbers are not
 # comparable to anyone's. The settings validator refuses to start on a mismatch.
-# Shorter runs re-measure
-# the references more often, which costs GPU time; longer ones give a champion
-# more time on one instance draw.
-run_blocks: 21600
+# Shorter runs re-measure the references more often, which costs GPU time;
+# longer ones give a champion more time on one instance draw.
+#
+# Run boundaries are anchored, not just spaced: run 412 opens at a fixed block
+# and each one after it opens 7200 later, which puts every boundary at about
+# 12:00 Eastern. Changing this length here moves those boundaries off noon
+# without moving the anchor, so it is a protocol decision, not a local one.
+run_blocks: 7200
 hidden_instances: 1350
 ood_instances: 100
 

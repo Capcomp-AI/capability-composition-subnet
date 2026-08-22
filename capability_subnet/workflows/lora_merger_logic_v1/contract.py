@@ -15,8 +15,8 @@ from capability_subnet.workflows.shared_contract import (
     ranking_contract,
     recipe_contract,
     resolve_snapshot,
-    source_pool_contract,
     runs_contract,
+    source_pool_contract,
 )
 
 

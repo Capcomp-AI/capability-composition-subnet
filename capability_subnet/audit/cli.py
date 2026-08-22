@@ -19,8 +19,8 @@ from capability_subnet.audit.verify import AuditResult, audit_run, verify_report
 from capability_subnet.common.logging import setup_logging
 from capability_subnet.common.schemas import (
     EvaluationReport,
-    WeightVector,
     RunDisclosure,
+    WeightVector,
 )
 
 

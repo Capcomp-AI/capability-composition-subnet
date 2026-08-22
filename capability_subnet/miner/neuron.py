@@ -24,6 +24,7 @@ from capability_subnet.common import constants as C
 from capability_subnet.common.chain import (
     fetch_metagraph,
     is_registered,
+    measuring_run_for,
     run_id_for_block,
     write_commitment,
 )
@@ -151,29 +152,44 @@ class MinerNeuron:
             if existing.payload.recipe_sha256 == digest:
                 log.info("this recipe is already committed; nothing to do")
                 return 0
+            # Resubmit as often as you like. There is no count to enforce: the
+            # chain keeps one commitment per hotkey and no history of what stood
+            # there before, so a limit on attempts would have to live in each
+            # validator's local state and two validators with different uptime
+            # would disagree about whose turn it was.
+            #
+            # What replacing does cost is the settling clock. Only the standing
+            # commitment is measured, and it must have stood for
+            # MIN_COMMITMENT_AGE_BLOCKS when the measuring run opens, so a
+            # replacement made inside that hour moves the recipe a run later.
+            # Say so before it happens rather than leaving the miner to notice.
             run_blocks = C.DEFAULT_RUN_BLOCKS
             existing_run = run_id_for_block(existing.block, run_blocks)
-            current_run = (
-                run_id_for_block(current_block, run_blocks)
-                if current_block is not None
-                else existing_run
-            )
-            if existing_run >= current_run:
-                log.error(
-                    "this hotkey already submitted in run %d; one submission per run. "
-                    "Resubmit once run %d opens — it is then measured in run %d.",
+            if current_block is None:
+                log.info("replacing the recipe committed in run %d", existing_run)
+            else:
+                was = measuring_run_for(existing.block, run_blocks)
+                now = measuring_run_for(current_block, run_blocks)
+                log.info(
+                    "replacing the recipe committed in run %d: this one lands in "
+                    "run %d, is measured in run %d and is paid in run %d.",
                     existing_run,
-                    current_run + 1,
-                    current_run + 2,
+                    run_id_for_block(current_block, run_blocks),
+                    now,
+                    now + C.WEIGHT_LAG_RUNS,
                 )
-                return 4
-            log.info(
-                "resubmitting: the last commitment was run %d; this one lands in run %d "
-                "and is measured in run %d.",
-                existing_run,
-                current_run,
-                current_run + 1,
-            )
+                if now > was:
+                    log.warning(
+                        "this replacement costs a run: the recipe it replaces was "
+                        "due to be measured in run %d and this one is measured in "
+                        "run %d. A commitment must stand for %d blocks (~%d min) "
+                        "before the run that measures it opens, and replacing it "
+                        "restarts that clock.",
+                        was,
+                        now,
+                        C.MIN_COMMITMENT_AGE_BLOCKS,
+                        round(C.MIN_COMMITMENT_AGE_BLOCKS * 12 / 60),
+                    )
 
         print(describe(recipe, self.snapshot))
         print(f"\ncommitment payload ({len(payload.encode())} bytes):\n  {payload}")
@@ -181,8 +197,10 @@ class MinerNeuron:
         if not self.config.confirm:
             print(
                 "\nNothing was committed. Re-run with --confirm to submit.\n"
-                "One submission per run: this replaces any earlier recipe and is "
-                "measured next run."
+                "This replaces any earlier recipe: only the one standing when a "
+                "run opens is measured, and it must have stood for "
+                f"{C.MIN_COMMITMENT_AGE_BLOCKS} blocks "
+                f"(~{round(C.MIN_COMMITMENT_AGE_BLOCKS * 12 / 60)} min) by then."
             )
             return 0
 

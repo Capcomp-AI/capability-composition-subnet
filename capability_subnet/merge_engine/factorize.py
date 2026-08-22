@@ -91,9 +91,9 @@ def _randomized_svd(
     sketch_width = min(min(rows, cols), rank + C.SVD_OVERSAMPLE)
 
     generator = generator_for(*seed_parts, rows, cols, sketch_width)
-    omega = torch.randn(
-        cols, sketch_width, generator=generator, dtype=WORK_DTYPE, device="cpu"
-    ).to(work.device)
+    omega = torch.randn(cols, sketch_width, generator=generator, dtype=WORK_DTYPE, device="cpu").to(
+        work.device
+    )
 
     sample = work @ omega
     basis, _ = torch.linalg.qr(sample)

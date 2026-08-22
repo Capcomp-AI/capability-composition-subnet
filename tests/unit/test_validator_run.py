@@ -11,8 +11,8 @@ from __future__ import annotations
 import pytest
 
 from capability_subnet.common.schemas import CandidateScores, GateVerdict
-from capability_subnet.validator.evaluator import CandidateEvaluation
 from capability_subnet.scoring.retention import ProbeOutcome
+from capability_subnet.validator.evaluator import CandidateEvaluation
 from capability_subnet.validator.run import BaseMeasurement, Candidate, evaluate_run
 
 BEACON = "0x" + "ab" * 32
@@ -55,9 +55,7 @@ def _scorer(scores: dict[str, float]):
 
 def _base(end_to_end: float = 0.0) -> BaseMeasurement:
     """A reference the fixtures can be held to."""
-    return BaseMeasurement(
-        end_to_end=end_to_end, probe=ProbeOutcome(correct=0, total=0)
-    )
+    return BaseMeasurement(end_to_end=end_to_end, probe=ProbeOutcome(correct=0, total=0))
 
 
 def _run(candidates, measure, *, measure_base=None, **kw):
@@ -333,16 +331,16 @@ class TestTheRunMeasuresWhatItClaimsTo:
         def measure(candidate, inputs):
             evaluation = _measurement(candidate.hotkey, 0.9, seeds=inputs.assignment.seeds)
             evaluation.gate_verdicts = [
-                GateVerdict(name="base_retention", passed=False, detail="0.700 against a 0.95 floor")
+                GateVerdict(
+                    name="base_retention", passed=False, detail="0.700 against a 0.95 floor"
+                )
             ]
             return evaluation
 
         out = _run([_candidate(1, r)], measure)
 
         assert out.usable == [], "a candidate that failed a gate was ranked anyway"
-        assert out.evaluations[0].gate_failures == [
-            "base_retention: 0.700 against a 0.95 floor"
-        ]
+        assert out.evaluations[0].gate_failures == ["base_retention: 0.700 against a 0.95 floor"]
 
     def test_an_evaluation_whose_gates_never_ran_does_not_compete(self, recipe_factory):
         """An empty verdict list is not a pass.

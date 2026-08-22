@@ -498,29 +498,74 @@ BOOTSTRAP_CONFIDENCE: Final[float] = 0.95
 # Continuous loop timing
 # ---------------------------------------------------------------------------
 
-#: Blocks per evaluation run. At 12s blocks this is roughly 72 hours. Hidden
-#: instances are resampled and the champion re-measured once per run.
+#: Blocks per evaluation run. At 12s blocks this is 24 hours exactly. Hidden
+#: instances are resampled and the references re-measured once per run.
 #:
-#: The work no longer needs three days. This was tripled from 7200 to pay for
-#: 1350 instances at 13.9s each — about 5.6 hours a package, and 45 hours of
-#: references before a challenger was touched. Continuous batching and a
-#: four-card fleet took the same 1350 instances to roughly half an hour a
-#: package and the whole reference schedule to about an hour, so most of the
-#: run is now idle.
+#: Three days was the price of 1350 instances at 13.9s each — about 5.6 hours a
+#: package, and 45 hours of references before a challenger was touched.
+#: Continuous batching and a four-card fleet took the same 1350 instances to
+#: roughly half an hour a package and the whole reference schedule to about an
+#: hour, so most of a three-day run sat idle. A day is enough for the work and
+#: gives a miner an answer the next day instead of the next week.
 #:
-#: Shortening it back to 7200 is therefore a cadence decision that is available,
-#: not one that has been taken — and it cannot be taken quietly. The run id
-#: is the block divided by this, so at the time of writing block 8886140 is
-#: run 411 at 21600 and run 1234 at 7200: every run renumbers, and a
-#: console, a store and a set of published reports all key off that number.
+#: Not a free parameter on a running deployment. It sets the spacing of run
+#: boundaries, and the beacon is drawn from a run's own opening block, so
+#: changing it moves the block each future beacon comes from. RunDisclosure
+#: records the value in force when a run ran, which is what lets a reader check
+#: an old beacon against the length that actually produced it rather than
+#: against whatever is configured today. Runs already closed keep the length
+#: they ran at — see RUN_EPOCH_BLOCK.
+DEFAULT_RUN_BLOCKS: Final[int] = 7200
+
+#: Where the daily schedule begins, and the run that opens there.
 #:
-#: Not a free parameter on a running deployment: the run id is the block
-#: divided by this, and the beacon is drawn from the run's own opening block,
-#: so changing it renumbers every run and moves the block each past beacon
-#: came from. RunDisclosure records the value in force when a run ran,
-#: which is what lets a reader check an old beacon against the length that
-#: actually produced it rather than against whatever is configured today.
-DEFAULT_RUN_BLOCKS: Final[int] = 21600
+#: A run id used to be the block divided by the run length, which put boundaries
+#: wherever the arithmetic landed — for three-day runs, 04:26 Eastern on a
+#: rotating three-day cycle. Nobody chose that time and it drifts across the
+#: working day, which makes "when does my submission get measured" a question
+#: with a different answer every week.
+#:
+#: Anchoring fixes it: run 412 opens at this block, which the chain reaches at
+#: approximately 12:00 Eastern on Sunday 23 August 2026, and every run after it
+#: opens one DEFAULT_RUN_BLOCKS later. Because 7200 blocks is 24 hours, every
+#: boundary lands at the same time of day.
+#:
+#: Derived, not guessed: finney held 12.0029 s/block over the 201,600 blocks to
+#: 22 August 2026, so a day's run boundary slides about 21 seconds and a month's
+#: about 10 minutes. Re-anchoring is a one-line change to this constant plus
+#: RUN_EPOCH_ID, and it is the only thing that keeps noon meaning noon.
+#:
+#: History is frozen rather than renumbered. Blocks before the epoch keep the
+#: run ids they were measured under, computed at LEGACY_RUN_BLOCKS and capped at
+#: RUN_EPOCH_ID - 1, so run 411 simply runs long — from 19 August to the epoch —
+#: instead of every published report, stored run and console row shifting to a
+#: number it was never filed under.
+RUN_EPOCH_BLOCK: Final[int] = 8_908_667
+
+#: The run that opens at RUN_EPOCH_BLOCK. Everything before it is history.
+RUN_EPOCH_ID: Final[int] = 412
+
+#: The run length in force before RUN_EPOCH_BLOCK. Not configurable: it is a
+#: fact about runs that have already closed, and the ids they were filed under.
+LEGACY_RUN_BLOCKS: Final[int] = 21600
+
+#: Runs between measuring a submission and paying for it.
+#:
+#: The pipeline is three runs deep and each stage is a whole run, so a miner
+#: knows which run does what to their recipe from the block they commit at:
+#:
+#:   run N     the recipe is committed
+#:   run N+1   it is evaluated and its score recorded
+#:   run N+2   that score sets the weight this validator submits on-chain
+#:
+#: Separating the last two is what makes the weight vector a statement about a
+#: run that has closed. Paying inside the evaluating run means paying from a
+#: leaderboard still being written: a miner measured early in the run competes
+#: against an empty field, one measured late against a full one, and the vector
+#: changes under both every time another candidate finishes. A closed run has a
+#: final leaderboard, and every validator reading the same chain computes the
+#: same vector from it.
+WEIGHT_LAG_RUNS: Final[int] = 1
 
 #: How long a commitment must stand before the run that measures it opens.
 #: 300 blocks is about an hour at 12s.

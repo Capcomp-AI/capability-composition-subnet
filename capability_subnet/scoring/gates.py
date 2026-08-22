@@ -31,9 +31,7 @@ from capability_subnet.scoring.aggregate import valid_rows
 #: A one-shot-per-hotkey rule is only defensible if the engine never charges a
 #: candidate for its own failures, so this set is consulted before any
 #: termination.
-INFRASTRUCTURE_GATES: frozenset[str] = frozenset(
-    {"sample_sufficiency", "reconstruction"}
-)
+INFRASTRUCTURE_GATES: frozenset[str] = frozenset({"sample_sufficiency", "reconstruction"})
 
 
 def gate(name: str, passed: bool, detail: str = "", **kwargs) -> GateVerdict:

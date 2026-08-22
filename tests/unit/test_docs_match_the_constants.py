@@ -34,25 +34,45 @@ HISTORICAL = re.compile(
 
 #: (what the constant says, pattern that only a contradicting statement matches)
 CHECKS = [
-    ("selected_adapters is 2-%d" % C.MAX_SELECTED_ADAPTERS,
-     r"2 (and|to) 12|at most 12 adapter|maxItems\"?:? ?12"),
-    ("retention floor is %.2f" % C.BASE_RETENTION_FLOOR,
-     r"0\.98 retention|retention floor of 0\.98|0\.98 on a held-out"),
-    ("end-to-end margin is %.2f" % C.DEFAULT_END_TO_END_MARGIN,
-     r"end_to_end_margin[`\s]*(to|:)\s*0\.0[26]\b|margin of 0\.0[26]\b"),
-    ("hidden instances are %d" % C.DEFAULT_HIDDEN_INSTANCES,
-     r"hidden_instances: (?!1350\b)\d+"),
-    ("the serving reservation is %.0f GiB" % C.SERVING_RESERVED_GIB,
-     r"\b(fixed )?\*{0,2}20 GiB\*{0,2}\b|0\.4168"),
-    ("the served context is %d" % C.SERVING_MAX_MODEL_LEN,
-     r"max_model_len: (?!8192\b)\d+"),
-    ("serving is batched at %d" % C.SANDBOX_BATCH_CONCURRENCY,
-     r"max-num-seqs 1\b|one sequence at a time"),
-    ("the validator floor is %d cards" % C.MIN_VALIDATOR_CARDS,
-     r"\*\*8 × RTX 5090 \(32 GB\)\*\*, one candidate"),
-    ("the only reference is the base model",
-     r"single_adapter_rotation` \| `|best single adapter, the standard merges"),
+    (
+        f"selected_adapters is 2-{C.MAX_SELECTED_ADAPTERS}",
+        r"2 (and|to) 12|at most 12 adapter|maxItems\"?:? ?12",
+    ),
+    (
+        f"retention floor is {C.BASE_RETENTION_FLOOR:.2f}",
+        r"0\.98 retention|retention floor of 0\.98|0\.98 on a held-out",
+    ),
+    (
+        f"end-to-end margin is {C.DEFAULT_END_TO_END_MARGIN:.2f}",
+        r"end_to_end_margin[`\s]*(to|:)\s*0\.0[26]\b|margin of 0\.0[26]\b",
+    ),
+    (f"hidden instances are {C.DEFAULT_HIDDEN_INSTANCES}", r"hidden_instances: (?!1350\b)\d+"),
+    (
+        f"the serving reservation is {C.SERVING_RESERVED_GIB:.0f} GiB",
+        r"\b(fixed )?\*{0,2}20 GiB\*{0,2}\b|0\.4168",
+    ),
+    (f"the served context is {C.SERVING_MAX_MODEL_LEN}", r"max_model_len: (?!8192\b)\d+"),
+    (
+        f"serving is batched at {C.SANDBOX_BATCH_CONCURRENCY}",
+        r"max-num-seqs 1\b|one sequence at a time",
+    ),
+    (
+        f"the validator floor is {C.MIN_VALIDATOR_CARDS} cards",
+        r"\*\*8 × RTX 5090 \(32 GB\)\*\*, one candidate",
+    ),
+    (
+        "the only reference is the base model",
+        r"single_adapter_rotation` \| `|best single adapter, the standard merges",
+    ),
     ("peak VRAM is neither gated nor scored", r"peak_vram|peak-VRAM gate"),
+    (
+        f"a run is {C.DEFAULT_RUN_BLOCKS} blocks, one day",
+        r"run_blocks:? ?`?21600|~?72 ?h(ours|-hour)?\b|3-day run|three-day run",
+    ),
+    (
+        f"weights lag the measurement by {C.WEIGHT_LAG_RUNS} run",
+        r"weights? (are|is) set in the (same|measuring) run",
+    ),
 ]
 
 DOC_GLOBS = ("*.md", "*.yml", "*.yaml")
@@ -69,9 +89,7 @@ def _doc_lines() -> list[tuple[str, int, str]]:
         ["git", "ls-files"], cwd=REPO, capture_output=True, text=True, check=True
     )
     files = [
-        REPO / name
-        for name in listed.stdout.split()
-        if name.endswith((".md", ".yml", ".yaml"))
+        REPO / name for name in listed.stdout.split() if name.endswith((".md", ".yml", ".yaml"))
     ]
     assert files, "no documentation files found; every check would pass vacuously"
 

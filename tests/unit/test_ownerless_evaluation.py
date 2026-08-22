@@ -38,9 +38,7 @@ class TestTheDrawNeedsNobodysSecret:
         assert a.probe_seed == b.probe_seed
 
     def test_it_commits_to_nothing_because_it_holds_nothing(self):
-        assert (
-            draw_run_open(1080, beacon=BEACON, hidden_count=5, ood_count=1).root_commitment == ""
-        )
+        assert draw_run_open(1080, beacon=BEACON, hidden_count=5, ood_count=1).root_commitment == ""
 
     def test_a_different_block_is_a_different_run(self):
         """A miner who has seen one run learns nothing about the next."""

@@ -200,7 +200,7 @@ def verify_beacon_against_chain(
     with a reason, on the same policy as the rest of the audit path: an outage
     must not be indistinguishable from fraud.
     """
-    from capability_subnet.common.chain import block_beacon
+    from capability_subnet.common.chain import block_beacon, run_opens_block
 
     if not disclosure.beacon:
         detail = f"run {disclosure.run_id} published no beacon to check"
@@ -208,7 +208,7 @@ def verify_beacon_against_chain(
             result.add("unbound_draw", "warning", detail, f"run {disclosure.run_id}")
         return False, detail
 
-    opened_at = disclosure.run_id * run_blocks
+    opened_at = run_opens_block(disclosure.run_id, run_blocks)
     actual = block_beacon(subtensor, opened_at)
     if not actual:
         return True, f"block {opened_at} unreadable; beacon not checked"

@@ -6,16 +6,34 @@ Your entire on-chain footprint is a single commitment. You never serve inference
 
 ---
 
-## Before anything else: a commitment is measured once
+## Before anything else: a run is a day, and the pipeline is three runs deep
 
-Your commitment is evaluated in the run **after** the one you made it in, and
-it earns from that measurement alone. It is not re-measured and it does not keep
-earning afterwards. To earn again, commit again.
+A run is **7200 blocks — 24 hours**, and boundaries are anchored: run 412 opens
+at block 8,908,667, which the chain reaches at about **12:00 Eastern on Sunday
+23 August 2026**, and every run after it opens 24 hours later. So a run opens at
+about noon Eastern, every day.
 
-That gives you one evaluated attempt per run — a floor of one run between
-attempts, because a commitment made after a run opened is not measured in it.
-Nothing is terminated: a package that loses costs you that run, not the
-hotkey.
+Your recipe then walks three runs:
+
+| | what happens |
+|---|---|
+| **run N** | you commit |
+| **run N+1** | it is evaluated and its score recorded |
+| **run N+2** | that score sets the weight the validator submits on-chain |
+
+The gap between measuring and paying is not a delay for its own sake. A weight
+vector is a statement about a **closed** run's leaderboard. Paying inside the
+run doing the measuring means paying from a leaderboard still being written — a
+candidate measured early faces an empty field, one measured late faces a full
+one, and the vector moves under both as the queue is worked through. A closed
+run has a final leaderboard, and every validator reading the same chain
+computes the same vector from it.
+
+Your commitment earns from that one measurement alone. It is not re-measured
+and it does not keep earning afterwards. To earn again, commit again — which
+gives you one evaluated attempt per day, because a commitment made after a run
+opened is not measured in it. Nothing is terminated: a package that loses costs
+you that run, not the hotkey.
 
 **You may replace your recipe as often as you like before it is measured.** The
 chain keeps one commitment per hotkey, so committing again simply overwrites the
@@ -26,8 +44,9 @@ nothing but the transaction fee. Iterate freely up to that point.
 **But do not commit again once your submission is queued.** A recipe committed
 in run N is measured in run N+1. If you commit again *during* run N+1, the
 commitment block moves into N+1 with it, so N+1 measures nothing from you and
-your new recipe waits for N+2. You did not fail a gate or lose a comparison —
-you withdrew the submission that was about to be judged, and you skip a run.
+your new recipe waits for N+2 — and its payment for N+3. You did not fail a gate
+or lose a comparison: you withdrew the submission that was about to be judged,
+and you skip a day.
 
 **And stop editing an hour before the run closes.** A commitment must have been
 standing for `MIN_COMMITMENT_AGE_BLOCKS` — 300 blocks, about an hour — when the
@@ -50,15 +69,16 @@ long you have left:
 capability-miner commitment --recipe recipe.canon.json \
     --recipe-uri <your-url> --block $(btcli subnet show --netuid 103 | grep -i block)
 
-# run 411: measured in run 412. 21290 blocks (~71.0h) left to change your mind.
+# run 412: measured in run 413, paid in run 414. 6890 blocks (~23.0h) left to
+# change your mind.
 ```
 
 Inside the closing window it says so instead:
 
 ```
-run 411 closes in 200 blocks, inside the 60-minute settling window.
-A commitment made now is measured in run 413, not 412.
-Commit anyway and you skip a run; wait for run 412 to open and you do not.
+run 412 closes in 200 blocks, inside the 60-minute settling window.
+A commitment made now is measured in run 414, not 413.
+Commit anyway and you skip a run; wait for run 413 to open and you do not.
 ```
 
 Add `--strict-timing` to make that a non-zero exit, so a script does not commit
@@ -612,11 +632,10 @@ Building and validating recipes: any machine. Reconstructing an artifact: ~32 GB
 
 ### How often can I submit?
 
-Once per run, in effect. A commitment is measured in the run after the one
-it was made in, so committing again immediately does not buy you a second
-measurement in the same run — it replaces what will be measured in the next
-one. Nothing is terminated, and a loss costs you that run rather than the
-hotkey.
+Once a day, in effect. A commitment is measured in the run after the one it was
+made in, so committing again immediately does not buy you a second measurement
+in the same run — it replaces what will be measured in the next one. Nothing is
+terminated, and a loss costs you that run rather than the hotkey.
 
 ### Doesn't that make copying cheap?
 
