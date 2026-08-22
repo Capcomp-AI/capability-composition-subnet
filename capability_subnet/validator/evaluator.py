@@ -73,6 +73,13 @@ class CandidateEvaluation:
     #: Every gate this candidate was put through. Empty means the gates never
     #: ran, which is not the same as passing them — see ``usable``.
     gate_verdicts: list[GateVerdict] = field(default_factory=list)
+    #: instance_id -> what the package replied, what it spent, and whether the
+    #: harness failed on that row. The scores above are a summary of these, and
+    #: a summary cannot answer why a package scored what it did or show that a
+    #: row was dropped for an infrastructure failure rather than a wrong answer.
+    #: This is also what a disclosure publishes, so an auditor re-scores from
+    #: the same bytes the validator scored.
+    traces: dict[str, dict] = field(default_factory=dict)
     error: str = ""
 
     @property
@@ -169,11 +176,15 @@ def evaluate_candidate(
 
         hidden_outcomes = run_batch(hidden, client, config=config, runner=flow.run_instance)
         hidden_results = [o.result for o in hidden_outcomes]
-        ood_results = (
-            [o.result for o in run_batch(ood, client, config=config, runner=flow.run_instance)]
-            if ood
-            else []
+        ood_outcomes = (
+            run_batch(ood, client, config=config, runner=flow.run_instance) if ood else []
         )
+        ood_results = [o.result for o in ood_outcomes]
+        traces = {
+            outcome.result.instance_id: outcome.trace.to_dict()
+            for outcome in (*hidden_outcomes, *ood_outcomes)
+            if getattr(outcome, "trace", None) is not None
+        }
 
         per_instance = {
             seed: bool(getattr(result, "end_to_end_success", False))
@@ -222,6 +233,7 @@ def evaluate_candidate(
             hidden_results=hidden_results,
             ood_results=ood_results,
             gate_verdicts=verdicts,
+            traces=traces,
         )
 
 
