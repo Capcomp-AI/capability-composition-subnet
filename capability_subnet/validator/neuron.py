@@ -371,8 +371,80 @@ class ValidatorNeuron:
             len(candidates),
             len(outcome.assignment),
         )
+        # Measured now, paid next run. The report is written first because it
+        # is what the next run submits from.
         self._report(outcome, candidates, run_id)
-        self._submit(outcome.weights, block)
+        self._submit_measured_earlier(run_id, block)
+
+    def _run_report_dir(self) -> Path:
+        return Path(self.config.full_path) / "runs"
+
+    def _submit_measured_earlier(self, run_id: int, block: int) -> None:
+        """Submit the vector from the run that closed, not the one just measured.
+
+        A weight vector is a statement about a *closed* run's leaderboard. This
+        used to submit the vector it had just computed, which is a leaderboard
+        still being written: a candidate measured early in the run competes
+        against an empty field, one measured late against a full one, and the
+        vector moves under both as the queue is worked through. Two validators
+        that reached the queue in a different order therefore submitted
+        different vectors from the same evidence.
+
+        So the pipeline is three runs deep — committed in N, measured in N+1,
+        paid in N+2 — and this is the last step. Read back from the run report
+        rather than kept in memory, so a validator restarted between runs pays
+        what it measured instead of starting again with nothing.
+        """
+        from capability_subnet.common.schemas import WeightEntry, WeightVector
+
+        source_run = run_id - C.WEIGHT_LAG_RUNS
+        report = self._run_report_dir() / f"run-{source_run}.json"
+
+        try:
+            payload = json.loads(report.read_text())
+            entries = payload["weights"]
+        except (OSError, ValueError, KeyError) as exc:
+            # Never invent a vector. A validator that has not measured run
+            # source_run — because it was down, or because this is its first
+            # run — has no evidence for paying anyone, and burning is what the
+            # rest of this class does when the evidence is missing.
+            self._burn(
+                block,
+                reason=(
+                    f"run {source_run} is what run {run_id} pays for, and there is no "
+                    f"report for it at {report}: {exc}"
+                ),
+            )
+            return
+
+        if not entries:
+            self._burn(
+                block,
+                reason=f"run {source_run} measured nobody who could be paid",
+            )
+            return
+
+        vector = WeightVector(
+            workflow_id=self.config.workflow_id,
+            run_id=source_run,
+            computed_at_block=block,
+            entries=[
+                WeightEntry(
+                    uid=entry["uid"],
+                    hotkey=entry.get("hotkey", ""),
+                    weight=entry["weight"],
+                    role=entry.get("role", ""),
+                )
+                for entry in entries
+            ],
+        )
+        log.info(
+            "run %d pays for run %d: %s",
+            run_id,
+            source_run,
+            ", ".join(f"uid {e.uid}={e.weight:.4f}" for e in vector.entries),
+        )
+        self._submit(vector, block)
 
     def _report(self, outcome, candidates: list, run_id: int) -> None:
         """Record what each candidate scored, and why.
@@ -442,9 +514,17 @@ class ValidatorNeuron:
                 "validator_hotkey": self.wallet.hotkey.ss58_address,
                 "instances": len(outcome.assignment),
                 "candidates": rows,
+                # Enough to rebuild the vector, because the *next* run submits
+                # from this file: a validator restarted between runs has
+                # nothing else to pay from.
                 "weights": (
                     [
-                        {"uid": e.uid, "weight": e.weight, "role": e.role}
+                        {
+                            "uid": e.uid,
+                            "hotkey": e.hotkey,
+                            "weight": e.weight,
+                            "role": e.role,
+                        }
                         for e in outcome.weights.entries
                     ]
                     if outcome.weights is not None
@@ -453,7 +533,15 @@ class ValidatorNeuron:
             }
             (directory / f"run-{run_id}.json").write_text(json.dumps(payload, indent=2))
         except Exception:  # noqa: BLE001 - reporting must never stop the run
-            log.warning("could not write the run report", exc_info=True)
+            # Louder than it was: this file is no longer only evidence. The
+            # next run submits its weights from it, so losing it costs a run's
+            # emission — which is burned rather than guessed.
+            log.error(
+                "could not write the run report; run %d will have nothing to pay from "
+                "and will burn",
+                run_id,
+                exc_info=True,
+            )
 
     def _uid_of(self, hotkey: str) -> int | None:
         try:
