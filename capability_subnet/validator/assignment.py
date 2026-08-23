@@ -30,14 +30,16 @@ import hashlib
 import random
 from dataclasses import dataclass
 
+from capability_subnet.common import constants as C
+
 #: Share of a run every validator measures. Sized so two validators share
 #: enough paired instances for their disagreement to mean something: the paired
 #: comparison needs samples, and a core far below this makes "these two disagree"
 #: indistinguishable from ordinary sampling noise.
-DEFAULT_CORE_FRACTION: float = 0.25
+DEFAULT_CORE_FRACTION: float = C.DEFAULT_CORE_FRACTION
 
 #: Share of a run each validator measures alone, drawn from outside the core.
-DEFAULT_TAIL_FRACTION: float = 0.15
+DEFAULT_TAIL_FRACTION: float = C.DEFAULT_TAIL_FRACTION
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,7 +99,7 @@ def assign(
     core = core_instances(ordered, beacon=beacon, fraction=core_fraction)
 
     remaining = [s for s in ordered if s not in set(core)]
-    tail_count = round(len(ordered) * _checked_fraction(tail_fraction, "tail"))
+    tail_count = round(len(ordered) * _checked_fraction(tail_fraction, "tail", allow_zero=True))
     tail_count = min(tail_count, len(remaining))
     tail = (
         tuple(sorted(_rng("tail", beacon, hotkey).sample(remaining, tail_count)))
@@ -107,9 +109,18 @@ def assign(
     return Assignment(core=core, tail=tail)
 
 
-def _checked_fraction(value: float, name: str) -> float:
-    if not 0.0 < value <= 1.0:
-        raise ValueError(f"{name}_fraction must be in (0, 1], got {value}")
+def _checked_fraction(value: float, name: str, *, allow_zero: bool = False) -> float:
+    """A fraction of the draw.
+
+    The core may not be zero — a host that asks none of the common instances
+    has nothing another host can compare it against. The tail may: a host
+    asking the whole draw as its core has no remainder to draw a tail from, and
+    that is what an engine scoring the field itself does.
+    """
+    low_ok = value >= 0.0 if allow_zero else value > 0.0
+    if not (low_ok and value <= 1.0):
+        bound = "[0, 1]" if allow_zero else "(0, 1]"
+        raise ValueError(f"{name}_fraction must be in {bound}, got {value}")
     return value
 
 

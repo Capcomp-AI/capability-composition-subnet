@@ -645,6 +645,20 @@ TAIL_SHARE: Final[float] = 0.005
 #: weight quantisation, so it would be bookkeeping rather than payment.
 PAID_RANKS: Final[int] = 10
 
+#: How much of a run's draw one host asks.
+#:
+#: A validator asks a core every validator has in common, so two of them can be
+#: compared on identical instances, plus a tail only it holds, so nobody can
+#: predict or shop for their set. A host measuring the whole draw — an engine
+#: scoring the field itself — asks all of it.
+#:
+#: Bound to DEFAULT_END_TO_END_MARGIN rather than free. The resolvable effect
+#: falls with the square root of the count: at DEFAULT_HIDDEN_INSTANCES the
+#: whole draw resolves 0.0241 and forty percent of it resolves 0.0381. A margin
+#: between those two is a bar that cannot be shown to have been cleared.
+DEFAULT_CORE_FRACTION: Final[float] = 0.25
+DEFAULT_TAIL_FRACTION: Final[float] = 0.15
+
 #: Grade the leading candidate must exceed the champion by to take the throne.
 #:
 #: The throne changes hands on a measurable improvement, not on noise and not

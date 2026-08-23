@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 
 from capability_subnet.common import constants as C
 from capability_subnet.common.schemas import CandidateScores, Recipe, WeightVector
+from capability_subnet.scoring.comparator import minimum_detectable_effect
 from capability_subnet.scoring.contribution import ContributionInputs, contribution_score
 from capability_subnet.scoring.retention import ProbeOutcome
 from capability_subnet.scoring.sampler import RunSample, draw_run_open
@@ -124,6 +125,8 @@ def evaluate_run(
     burn_share: float = C.BURN_SHARE,
     burn_uid: int = C.BURN_UID,
     champion_grade: float | None = None,
+    core_fraction: float = C.DEFAULT_CORE_FRACTION,
+    tail_fraction: float = C.DEFAULT_TAIL_FRACTION,
     workers: int = 1,
     peer_core_results: dict[str, dict[int, bool]] | None = None,
 ) -> RunOutcome:
@@ -137,6 +140,18 @@ def evaluate_run(
         champion_grade: the reigning champion's grade, or ``None`` when the
             throne is empty and this run fills it. A challenger is paid only by
             exceeding it by ``CHAMPION_DETHRONE_MARGIN``.
+        core_fraction, tail_fraction: how much of the draw this host asks.
+            The defaults are a validator's share — a core every validator has
+            in common plus a tail only this one holds. A host measuring the
+            whole draw passes ``1.0`` and ``0.0``.
+
+            Not cosmetic. The resolvable effect falls with the square root of
+            the count, so a fraction of the draw resolves a larger difference
+            than the whole of it: at the shipped instance count the full draw
+            resolves 0.0241 and a validator's share resolves 0.0381. A margin
+            between the two is a bar the host cannot tell a candidate has
+            cleared, so ``end_to_end_margin`` and the size of the share are one
+            decision and not two.
         measure_base: measures the base model on this run's draw. The base
             model is the only permanent reference, and this loop cannot produce
             a bar without it — every candidate's retention is scored against
@@ -147,7 +162,24 @@ def evaluate_run(
             looks wrong, since the miner did not do anything.
     """
     sample = draw_run_open(run_id, beacon=beacon, hidden_count=hidden_count, ood_count=ood_count)
-    assignment = assign(sample.hidden_seeds, hotkey=hotkey, beacon=beacon)
+    assignment = assign(
+        sample.hidden_seeds,
+        hotkey=hotkey,
+        beacon=beacon,
+        core_fraction=core_fraction,
+        tail_fraction=tail_fraction,
+    )
+    resolvable = minimum_detectable_effect(len(assignment.seeds))
+    if resolvable > C.DEFAULT_END_TO_END_MARGIN:
+        log.warning(
+            "this host asks %d of %d instances, which resolves %.4f — wider than "
+            "the %.3f margin a challenger has to clear. No candidate can be shown "
+            "to have cleared it on this many instances.",
+            len(assignment.seeds),
+            len(sample.hidden_seeds),
+            resolvable,
+            C.DEFAULT_END_TO_END_MARGIN,
+        )
     outcome = RunOutcome(run_id=run_id, beacon=beacon, sample=sample, assignment=assignment)
 
     # The reference first, and alone. Every candidate's retention is scored
