@@ -12,6 +12,7 @@ not decide.
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -87,6 +88,45 @@ class LocalResult:
         )
 
 
+#: Written beside a finished merge so it can be recognised later. Holds the
+#: recipe that produced it, because a directory alone does not say whose
+#: artifact it is.
+ARTIFACT_RECORD = ".artifact.json"
+
+
+def _existing_artifact(output_dir: Path, recipe_digest: str) -> tuple[str, int] | None:
+    """A merge already in ``output_dir`` for this recipe, if there is one."""
+    record = output_dir / ARTIFACT_RECORD
+    weights = output_dir / "adapter_model.safetensors"
+    if not record.is_file() or not weights.is_file():
+        return None
+    try:
+        payload = json.loads(record.read_text())
+    except (OSError, ValueError):
+        return None
+    if payload.get("recipe_sha256") != recipe_digest:
+        return None
+    digest, size = payload.get("artifact_sha256"), payload.get("size_bytes")
+    if not digest or not isinstance(size, int):
+        return None
+    if weights.stat().st_size <= 0:
+        return None
+    log.info("reusing the merge already built for %s", recipe_digest[:18])
+    return digest, size
+
+
+def _record_artifact(output_dir: Path, recipe_digest: str, artifact: str, size: int) -> None:
+    (output_dir / ARTIFACT_RECORD).write_text(
+        json.dumps(
+            {
+                "recipe_sha256": recipe_digest,
+                "artifact_sha256": artifact,
+                "size_bytes": size,
+            }
+        )
+    )
+
+
 def build_local_artifact(
     recipe: Recipe,
     *,
@@ -114,10 +154,25 @@ def build_local_artifact(
     precisely because of that, so choosing the fast one costs nothing here.
     """
     pool = snapshot or load_snapshot()
+
+    # A merge that has already been built is not built again. Reconstruction is
+    # the one step that costs minutes before a card can serve anything, and a
+    # caller that builds ahead — or one restarted part-way through a run — would
+    # otherwise pay it twice.
+    #
+    # Guarded on the recipe digest, not on the directory being non-empty: an
+    # artifact is only reused for the recipe that produced it, so a directory
+    # holding somebody else's merge is rebuilt rather than served as this one.
+    built = _existing_artifact(Path(output_dir), recipe.digest())
+    if built is not None:
+        artifact_sha256, size_bytes = built
+        return artifact_sha256, size_bytes, Path(output_dir)
+
     source = SafetensorsAdapterSource(pool_dir)
     result = reconstruct(recipe, pool, source, output_dir=output_dir, device=device)
     artifact_sha256, size_bytes = result.artifact_sha256, result.size_bytes
     del result
+    _record_artifact(Path(output_dir), recipe.digest(), artifact_sha256, size_bytes)
 
     # The merge allocated the base model and adapters on ``device`` to build the
     # artifact, which is now written to ``output_dir``. Release that memory
