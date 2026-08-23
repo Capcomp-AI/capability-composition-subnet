@@ -51,7 +51,7 @@ run_blocks: 7200
 run_epoch_block: 8908667
 run_epoch_id: 412
 min_commitment_age_blocks: 300
-hidden_instances: 2000
+hidden_instances: 1350
 ood_instances: 100
 
 # The secret root every run's hidden draw is derived from. Anyone who knows
@@ -118,11 +118,12 @@ disclosure_traces: 10
 # A challenger must be dominant on at least min_dominant_axes capability axes and
 # not worse on every other one, then clear the end-to-end margin against the
 # strongest reference with a paired lower confidence bound above zero.
-# A margin the instance count cannot resolve is not strictness: nothing is ever
-# crowned, and every verdict looks like an ordinary loss. 2000 hidden instances
-# resolve about 0.0198, so the margin sits just above it. Raising the margin or
-# lowering the instances is safe; lowering the margin needs more instances, and
-# more instances need a longer run — preflight checks both and says which.
+# The margin is an arithmetic bar, so any value is crossable. What the instance
+# count decides is whether the same package gets the same answer twice: 1350
+# instances resolve about 0.024, so a 0.02 bar sits inside that and a package
+# near it clears on some draws and misses on others. Preflight says so at
+# startup rather than refusing; more instances buy a steadier verdict and need
+# a longer run, which preflight also checks.
 axis_margin: 0.02             # absolute margin to count as dominant on an axis
 axis_tolerance: 0.01          # relative band that still counts as not worse
 min_dominant_axes: 1

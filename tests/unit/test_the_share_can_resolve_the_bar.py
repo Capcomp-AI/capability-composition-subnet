@@ -1,10 +1,14 @@
-"""A host must ask enough instances to tell that the bar was cleared.
+"""How much of a draw a host asks, and what that decides.
 
-The resolvable effect falls with the square root of the instance count, so how
-much of a draw a host asks and how large a margin a challenger must clear are
-one decision. Split into two, they drift: a share that resolves 0.038 cannot
-show that anything cleared 0.030, and every candidate reads as a near miss with
-no way to tell a real one from noise.
+Not whether a challenger can win. Every hard gate is arithmetic — a candidate
+clears the bar when its completion exceeds the reference's by the margin — so
+any bar is crossable at any draw size, and no statistical test stands between a
+package and the throne.
+
+What the draw size decides is whether the same package gets the same answer
+twice. The resolvable effect falls with the square root of the count, and a
+margin near or below it is settled partly by which instances came up. That is a
+trade to make deliberately, not a configuration to refuse.
 
 Nothing here needs a GPU. The arithmetic is the whole point.
 """
@@ -14,6 +18,7 @@ from __future__ import annotations
 import pytest
 
 from capability_subnet.common import constants as C
+from capability_subnet.scoring import gates
 from capability_subnet.scoring.comparator import minimum_detectable_effect
 from capability_subnet.validator.assignment import assign
 
@@ -21,25 +26,54 @@ BEACON = "0x" + "5c" * 32
 SEEDS = tuple(range(C.DEFAULT_HIDDEN_INSTANCES))
 
 
-def resolvable(count: int) -> float:
-    return minimum_detectable_effect(count)
+class TestTheBarIsArithmetic:
+    """The reason a bar below the resolvable effect is allowed at all."""
+
+    #: A hair over and a hair under the bar. Wider than a float's error at
+    #: these magnitudes, which is a real edge: subtracting the margin from a
+    #: completion rate lands a few parts in 10^17 below it, so a candidate
+    #: exactly on the bar is decided by representation. Well inside the
+    #: measurement noise either way, and not what these check.
+    OVER = C.DEFAULT_END_TO_END_MARGIN + 1e-6
+    UNDER = C.DEFAULT_END_TO_END_MARGIN - 1e-6
+
+    def test_clearing_the_margin_by_a_hair_passes(self):
+        verdict = gates.gate_beats_strongest_reference(
+            0.10 + self.OVER, "reference:base_model", 0.10, C.DEFAULT_END_TO_END_MARGIN
+        )
+        assert verdict.passed
+
+    def test_missing_it_by_a_hair_fails(self):
+        verdict = gates.gate_beats_strongest_reference(
+            0.10 + self.UNDER, "reference:base_model", 0.10, C.DEFAULT_END_TO_END_MARGIN
+        )
+        assert not verdict.passed
+
+    def test_no_statistical_test_stands_between_a_candidate_and_the_throne(self):
+        """`gate_statistics` exists and is applied nowhere.
+
+        It belonged to a paired-bootstrap dethrone rule that the grade ladder
+        replaced. While it was live, a margin under the resolvable effect
+        genuinely could never be confirmed; the constraint outlived the rule
+        and was still being enforced against configurations that work.
+        """
+        from pathlib import Path
+
+        from capability_subnet.validator import evaluator
+
+        source = Path(evaluator.__file__).read_text(encoding="utf-8")
+        applied = source[source.index("verdicts = [") :]
+        applied = applied[: applied.index("]")]
+
+        assert "gate_statistics" not in applied
+        assert "gate_beats_strongest_reference" in applied
 
 
-class TestTheWholeDrawResolvesTheMargin:
-    def test_the_shipped_instance_count_can_show_the_shipped_margin(self):
-        assert resolvable(C.DEFAULT_HIDDEN_INSTANCES) < C.DEFAULT_END_TO_END_MARGIN
-
-    def test_a_host_may_ask_all_of_it(self):
+class TestTheDrawDecidesReproducibility:
+    def test_a_host_may_ask_the_whole_draw(self):
         whole = assign(SEEDS, hotkey="5Engine", beacon=BEACON, core_fraction=1.0, tail_fraction=0.0)
 
         assert len(whole.seeds) == C.DEFAULT_HIDDEN_INSTANCES
-        assert resolvable(len(whole.seeds)) < C.DEFAULT_END_TO_END_MARGIN
-
-
-class TestAValidatorsShareIsSmallerAndSaysSo:
-    """Kept as a fact rather than a target. A validator asking a share is a
-    deliberate design — a common core makes two of them comparable — and the
-    consequence is that its own view resolves less than the whole draw does."""
 
     def test_the_default_share_is_the_core_plus_the_tail(self):
         share = assign(SEEDS, hotkey="5Validator", beacon=BEACON)
@@ -47,23 +81,33 @@ class TestAValidatorsShareIsSmallerAndSaysSo:
 
         assert len(share.seeds) == pytest.approx(expected, abs=2)
 
-    def test_the_share_resolves_less_than_the_whole(self):
+    def test_a_share_resolves_less_than_the_whole(self):
+        """So two hosts asking different amounts disagree more often, even
+        measuring the same package on the same run."""
         share = assign(SEEDS, hotkey="5Validator", beacon=BEACON)
 
-        assert resolvable(len(share.seeds)) > resolvable(C.DEFAULT_HIDDEN_INSTANCES)
-
-
-class TestTheTwoConstantsAreOneDecision:
-    def test_the_margin_sits_below_what_the_whole_draw_resolves(self):
-        """If this fails, the bar cannot be shown to have been cleared by
-        anyone, and lowering the instance count is what usually did it."""
-        assert C.DEFAULT_END_TO_END_MARGIN > resolvable(C.DEFAULT_HIDDEN_INSTANCES), (
-            f"{C.DEFAULT_HIDDEN_INSTANCES} instances resolve "
-            f"{resolvable(C.DEFAULT_HIDDEN_INSTANCES):.4f}, which is wider than the "
-            f"{C.DEFAULT_END_TO_END_MARGIN} margin a challenger has to clear"
+        assert minimum_detectable_effect(len(share.seeds)) > minimum_detectable_effect(
+            C.DEFAULT_HIDDEN_INSTANCES
         )
 
-    def test_halving_the_draw_would_break_it(self):
-        """The margin has this much room and no more, so a change to either
-        constant is a change to both."""
-        assert resolvable(C.DEFAULT_HIDDEN_INSTANCES // 2) > C.DEFAULT_END_TO_END_MARGIN
+    def test_a_zero_core_is_still_refused(self):
+        """A host sharing no instances with any other cannot be compared to one."""
+        with pytest.raises(ValueError, match="core_fraction"):
+            assign(SEEDS, hotkey="5Nobody", beacon=BEACON, core_fraction=0.0)
+
+
+def test_the_shipped_bar_sits_inside_the_shipped_noise():
+    """Recorded rather than asserted away, because it is a live trade-off.
+
+    At 1350 instances the draw resolves about 0.024 and the bar is 0.02, so a
+    package whose true edge is the bar clears on some draws and misses on
+    others. That was chosen: a lower barrier to entry, paid for in verdicts
+    that do not always reproduce. Raising the draw to about 1970 would buy the
+    reproducibility back.
+    """
+    resolvable = minimum_detectable_effect(C.DEFAULT_HIDDEN_INSTANCES)
+
+    assert C.DEFAULT_END_TO_END_MARGIN < resolvable, (
+        "the bar is now clear of the noise; the trade recorded here no longer applies"
+    )
+    assert resolvable < 0.03

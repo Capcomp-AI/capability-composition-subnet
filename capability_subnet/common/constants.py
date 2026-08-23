@@ -451,15 +451,17 @@ DEFAULT_MIN_AXIS_SAMPLES: Final[int] = 20
 #: reference, in points of completion rate. This is the bar that says
 #: "composition added value at all".
 #:
-#: Paid for rather than simply declared. See DEFAULT_HIDDEN_INSTANCES: the two
-#: are a pair, and the engine refuses a deployment that sets a margin its sample
-#: size cannot demonstrate. A bar below what the draw resolves does not make the
-#: network strict — the paired bootstrap then declines every challenger on
-#: evidence rather than merit, and no verdict ever says so.
+#: The gate is arithmetic: a candidate clears it when its completion exceeds
+#: the reference's by this much. No statistical test stands between a candidate
+#: and the throne, so any bar is crossable at any instance count.
 #:
-#: The bill is quadratic, and it is charged in instances rather than in this
-#: number: resolving 0.02 takes 1970 instances where 0.03 took 1350 and 0.055
-#: took 400. The two constants move together or not at all.
+#: What the instance count buys is *stability*, and that is the thing to weigh
+#: against a lower bar. Run-to-run variation on identical artifacts is about
+#: 0.017 — batched serving is not deterministic — so at 0.02 a package whose
+#: true edge is exactly the bar clears it roughly half the time, and one a
+#: little under it sometimes clears. See DEFAULT_HIDDEN_INSTANCES: the noise
+#: falls with the square root of the draw, so a bar this close to it is a
+#: deliberate trade of reproducibility for a lower barrier to entry.
 DEFAULT_END_TO_END_MARGIN: Final[float] = 0.02
 
 #: Margin a challenger must clear over the reigning champion, at the moment the
@@ -587,19 +589,20 @@ MIN_COMMITMENT_AGE_BLOCKS: Final[int] = 300
 
 #: Hidden instances drawn per run for the canonical comparison.
 #:
-#: Chosen together with DEFAULT_END_TO_END_MARGIN, not independently. A paired
-#: comparison over 2000 instances resolves about 0.0198, which is what makes a
-#: 0.02 margin demonstrable; 1350 resolve 0.0241 and 400 resolve 0.0443, either
-#: of which would leave the throne unwinnable at that bar. The engine refuses a
-#: configuration where the two contradict each other.
+#: What this buys is a stable verdict rather than a possible one. Nothing
+#: declines a challenger on statistical grounds — every hard gate is arithmetic
+#: — so a bar is crossable at any draw size. The draw decides how *reliably* the
+#: same package gets the same answer: 1350 instances resolve about 0.0241, 2000
+#: resolve 0.0198 and 400 resolve 0.0443, and a margin near or below that figure
+#: is decided partly by which instances came up.
 #:
-#: The resolvable edge falls with the square root of this, so each halving of
-#: the bar costs four times the evaluation. What makes that affordable is the
-#: wall clock behind it: batched across four cards the reference schedule is
-#: about an hour, against roughly 51 hours one instance at a time. The schedule
-#: preflight still refuses a run that cannot finish its own schedule, because
-#: such a run never reaches a challenger at all and the symptom is silence.
-DEFAULT_HIDDEN_INSTANCES: Final[int] = 2000
+#: The resolvable edge falls with the square root of this, so halving it costs
+#: four times the evaluation. What makes that affordable is the wall clock:
+#: batched across four cards the reference schedule is about an hour, against
+#: roughly 51 hours one instance at a time. The schedule preflight still refuses
+#: a run that cannot finish its own schedule, because such a run never reaches a
+#: challenger at all and the symptom is silence.
+DEFAULT_HIDDEN_INSTANCES: Final[int] = 1350
 
 #: Additional out-of-distribution instances drawn per run.
 DEFAULT_OOD_INSTANCES: Final[int] = 100

@@ -135,7 +135,7 @@ twelfth of the total, which is why there is no artifact cache — it would buy
 about 8%.
 
 The 540 is this validator's own slice: the shared core plus the tail drawn for
-its hotkey, out of the run's 2000 instances.
+its hotkey, out of the run's 1350 instances.
 
 > It is the package's latency gate that fails when a host is slow, so a card
 > materially slower than an RTX 5090 can fail candidates for a reason that has
