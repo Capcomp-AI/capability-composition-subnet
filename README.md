@@ -103,9 +103,15 @@ measures:
 
 | Term | Weight | What it rewards |
 |---|---|---|
-| Quality | 60% | The qualified score — completion, stage balance, OOD, retention, tokens, size |
-| Improvement | 30% | How far past the base model it got |
-| Cost | 10% | Token spend, because two packages that finish equally are not equally valuable |
+| Quality | 90% | The qualified score, which is itself 90% end-to-end completion |
+| Improvement | 7.5% | How far past the base model it got |
+| Cost | 2.5% | Token spend — the only term left that separates two equal finishers |
+
+So the number a miner is ranked and paid on is **81% end-to-end completion**.
+The subnet buys finished work, and the scoring says so. The remaining slivers
+are not decoration: every one of them is a hard gate as well as a scored term,
+so the floor is enforced whatever the weight carries. The weight decides only
+what *exceeding* a floor is worth, which is now very little.
 
 Every term is measured against fixed points — the run's own instances and the
 base model — so a grade means the same thing in every run. That is what lets

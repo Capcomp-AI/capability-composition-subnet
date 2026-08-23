@@ -295,7 +295,7 @@ So the top slot is winner-takes-most and everything below it is graded:
 
 | Term | Weight | What it rewards |
 |---|---|---|
-| Quality | 50% | The qualified score above |
+| Quality | 90% | The qualified score above |
 | Improvement | 25% | Distance past the strongest permanent reference, scaled by the headroom that remained |
 | Proximity | 15% | How close it came to the champion |
 | Cost | 10% | Token spend and latency |

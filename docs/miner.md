@@ -141,9 +141,14 @@ cleared every hard gate:
 
 | Term | Weight | What it rewards |
 |---|---|---|
-| Quality | 60% | The qualified score — completion, stage balance, OOD, retention, tokens, size |
-| Improvement | 30% | How far past the base model the package got |
-| Cost | 10% | Token spend |
+| Quality | 90% | The qualified score, which is itself 90% end-to-end completion |
+| Improvement | 7.5% | How far past the base model the package got |
+| Cost | 2.5% | Token spend |
+
+**In practice that means the grade is 81% end-to-end completion.** Finish more
+of the workflow and you rank higher; almost nothing else moves it. The other
+terms are hard gates first and scored terms second — clearing their floors is
+required, exceeding them is worth very little.
 
 Every term is measured against the run's own instances and the base model,
 never against the incumbent, so a grade means the same thing in every run.

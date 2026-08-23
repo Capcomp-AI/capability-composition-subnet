@@ -352,14 +352,19 @@ MAX_CRITICAL_UNSAFE_ACTIONS: Final[int] = 0
 # ---------------------------------------------------------------------------
 # Scoring weights
 # ---------------------------------------------------------------------------
-# Quality dominates efficiency: a cheap but unreliable artifact cannot win.
+# End-to-end completion dominates the qualified score; the other axes share
+# the remainder in proportion to their former weights so their relative
+# emphasis is unchanged.
 
-WEIGHT_END_TO_END: Final[float] = 0.55
-WEIGHT_STAGE_BALANCE: Final[float] = 0.15
-WEIGHT_OOD: Final[float] = 0.10
-WEIGHT_RETENTION: Final[float] = 0.05
+_WEIGHT_NON_E2E_SHARE: Final[float] = 0.10
+_WEIGHT_NON_E2E_OLD_SUM: Final[float] = 0.45
+
+WEIGHT_END_TO_END: Final[float] = 0.90
+WEIGHT_STAGE_BALANCE: Final[float] = 0.15 / _WEIGHT_NON_E2E_OLD_SUM * _WEIGHT_NON_E2E_SHARE
+WEIGHT_OOD: Final[float] = 0.10 / _WEIGHT_NON_E2E_OLD_SUM * _WEIGHT_NON_E2E_SHARE
+WEIGHT_RETENTION: Final[float] = 0.05 / _WEIGHT_NON_E2E_OLD_SUM * _WEIGHT_NON_E2E_SHARE
 # Latency is no longer scored, and its five points went to token efficiency
-# rather than to quality, so the documented 85/15 split is unchanged.
+# rather than to quality.
 #
 # The two were measuring the same quantity. Measured over 60 real arena
 # instances with the reasoning channel off, as production runs it: latency
@@ -378,8 +383,8 @@ WEIGHT_RETENTION: Final[float] = 0.05
 # batched at 0.67s, so 38% of an evaluation was spent on 3.4% of the instances,
 # re-deriving with more noise something the token counter already reported
 # exactly.
-WEIGHT_TOKEN_EFFICIENCY: Final[float] = 0.10
-WEIGHT_ARTIFACT_EFFICIENCY: Final[float] = 0.05
+WEIGHT_TOKEN_EFFICIENCY: Final[float] = 0.10 / _WEIGHT_NON_E2E_OLD_SUM * _WEIGHT_NON_E2E_SHARE
+WEIGHT_ARTIFACT_EFFICIENCY: Final[float] = 0.05 / _WEIGHT_NON_E2E_OLD_SUM * _WEIGHT_NON_E2E_SHARE
 
 QUALIFIED_SCORE_WEIGHTS: Final[dict[str, float]] = {
     "end_to_end": WEIGHT_END_TO_END,
@@ -665,17 +670,24 @@ DEFAULT_TAIL_FRACTION: Final[float] = 0.15
 #: the whole miner share burns — nobody places behind a leader who did not win.
 CHAMPION_DETHRONE_MARGIN: Final[float] = 0.002
 
-#: How a candidate's grade is composed. Quality dominates: a package that does
-#: not finish workflows is not made valuable by being cheap, or by being nearly
-#: as good as something that does.
+#: How a candidate's grade is composed. The qualified score dominates;
+#: improvement and token efficiency share the remainder in proportion to
+#: their former weights.
 #:
 #: Every term is measured against fixed points — the run's own instances and
 #: the base model — so a grade means the same thing in every run. That is what
 #: lets CHAMPION_DETHRONE_MARGIN be a fixed number: a threshold on a quantity
 #: whose scale moved between runs would be a different bar each time.
-CONTRIBUTION_WEIGHT_QUALITY: Final[float] = 0.60
-CONTRIBUTION_WEIGHT_IMPROVEMENT: Final[float] = 0.30
-CONTRIBUTION_WEIGHT_COST: Final[float] = 0.10
+_CONTRIBUTION_NON_QUALITY_SHARE: Final[float] = 0.10
+_CONTRIBUTION_NON_QUALITY_OLD_SUM: Final[float] = 0.40
+
+CONTRIBUTION_WEIGHT_QUALITY: Final[float] = 0.90
+CONTRIBUTION_WEIGHT_IMPROVEMENT: Final[float] = (
+    0.30 / _CONTRIBUTION_NON_QUALITY_OLD_SUM * _CONTRIBUTION_NON_QUALITY_SHARE
+)
+CONTRIBUTION_WEIGHT_COST: Final[float] = (
+    0.10 / _CONTRIBUTION_NON_QUALITY_OLD_SUM * _CONTRIBUTION_NON_QUALITY_SHARE
+)
 
 #: Fallback UID for burned emission when the subnet owner cannot be resolved.
 #:

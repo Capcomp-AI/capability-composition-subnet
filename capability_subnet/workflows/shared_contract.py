@@ -85,11 +85,14 @@ def hard_gates_contract(
 
 
 def qualified_scoring_contract() -> dict[str, Any]:
+    w = C.QUALIFIED_SCORE_WEIGHTS
     return {
-        "weights": dict(C.QUALIFIED_SCORE_WEIGHTS),
+        "weights": dict(w),
         "formula": (
-            "Q = 0.55·end_to_end + 0.15·stage_balance + 0.10·ood + "
-            "0.05·retention + 0.10·token_efficiency + 0.05·artifact_efficiency"
+            f"Q = {w['end_to_end']:.2f}·end_to_end + {w['stage_balance']:.4f}·stage_balance + "
+            f"{w['ood']:.4f}·ood + {w['retention']:.4f}·retention + "
+            f"{w['token_efficiency']:.4f}·token_efficiency + "
+            f"{w['artifact_efficiency']:.4f}·artifact_efficiency"
         ),
         "stage_balance": (
             "Geometric mean of the per-stage means. Rewards packages that are "
