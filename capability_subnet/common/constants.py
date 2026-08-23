@@ -451,23 +451,16 @@ DEFAULT_MIN_AXIS_SAMPLES: Final[int] = 20
 #: reference, in points of completion rate. This is the bar that says
 #: "composition added value at all".
 #:
-#: Halved from the original 0.06, and paid for rather than simply declared. See
-#: DEFAULT_HIDDEN_INSTANCES: the two are a pair, and the engine refuses a
-#: deployment that sets a margin its sample size cannot demonstrate. A bar below
-#: what the draw resolves does not make the network strict — the paired bootstrap
-#: then declines every challenger on evidence rather than merit, and no verdict
-#: ever says so.
+#: Paid for rather than simply declared. See DEFAULT_HIDDEN_INSTANCES: the two
+#: are a pair, and the engine refuses a deployment that sets a margin its sample
+#: size cannot demonstrate. A bar below what the draw resolves does not make the
+#: network strict — the paired bootstrap then declines every challenger on
+#: evidence rather than merit, and no verdict ever says so.
 #:
-#: The bill is quadratic. Resolving 0.03 instead of 0.055 takes 1350 instances
-#: instead of 400, which takes a 72-hour run instead of a 24-hour one. That is
-#: the real price of a lower bar and it is charged in cadence, not in this number.
-#:
-#: 0.02 was tried twice and reverted both times. At 1350 instances it sits below
-#: what the draw resolves (0.0241), so the deployment preflight refuses it — not
-#: as strictness but as a network that can never crown anyone. Reaching it costs
-#: 2000 instances, and the cadence was judged worth more than the tenth of a
-#: point. The two constants move together or not at all.
-DEFAULT_END_TO_END_MARGIN: Final[float] = 0.03
+#: The bill is quadratic, and it is charged in instances rather than in this
+#: number: resolving 0.02 takes 1970 instances where 0.03 took 1350 and 0.055
+#: took 400. The two constants move together or not at all.
+DEFAULT_END_TO_END_MARGIN: Final[float] = 0.02
 
 #: Margin a challenger must clear over the reigning champion, at the moment the
 #: champion takes the throne.
@@ -595,20 +588,18 @@ MIN_COMMITMENT_AGE_BLOCKS: Final[int] = 300
 #: Hidden instances drawn per run for the canonical comparison.
 #:
 #: Chosen together with DEFAULT_END_TO_END_MARGIN, not independently. A paired
-#: comparison over 1350 instances resolves about 0.0241, so a 0.03 margin is
-#: demonstrable with room to spare; 400 resolve only 0.0443, which would make it
-#: unprovable and the throne effectively unwinnable. The engine refuses a
+#: comparison over 2000 instances resolves about 0.0198, which is what makes a
+#: 0.02 margin demonstrable; 1350 resolve 0.0241 and 400 resolve 0.0443, either
+#: of which would leave the throne unwinnable at that bar. The engine refuses a
 #: configuration where the two contradict each other.
 #:
-#: The resolvable edge falls with the square root of this, so each halving of the
-#: bar costs four times the evaluation. That arithmetic is unchanged; what
-#: changed is the wall clock behind it. Seven reference packages over 1450
-#: instances was close to 51 hours one instance at a time, and is about an hour
-#: batched across four cards. The schedule preflight still allows a run to
-#: spend three quarters of itself on references, and a run that cannot finish
-#: its own schedule never reaches a challenger at all — that check simply has a
-#: great deal more room in it now.
-DEFAULT_HIDDEN_INSTANCES: Final[int] = 1350
+#: The resolvable edge falls with the square root of this, so each halving of
+#: the bar costs four times the evaluation. What makes that affordable is the
+#: wall clock behind it: batched across four cards the reference schedule is
+#: about an hour, against roughly 51 hours one instance at a time. The schedule
+#: preflight still refuses a run that cannot finish its own schedule, because
+#: such a run never reaches a challenger at all and the symptom is silence.
+DEFAULT_HIDDEN_INSTANCES: Final[int] = 2000
 
 #: Additional out-of-distribution instances drawn per run.
 DEFAULT_OOD_INSTANCES: Final[int] = 100

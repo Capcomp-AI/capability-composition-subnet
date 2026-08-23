@@ -71,9 +71,9 @@ run_blocks: 7200           # 24h at 12s blocks
 run_epoch_block: 8908667   # run 412 opens here, ~12:00 ET on 23 Aug 2026
 run_epoch_id: 412          # everything before it is frozen history
 min_commitment_age_blocks: 300
-hidden_instances: 1350
+hidden_instances: 2000
 ood_instances: 100
-end_to_end_margin: 0.03       # 1350 instances resolve ~0.024
+end_to_end_margin: 0.02       # 2000 instances resolve ~0.0198
 
 base_model_path: /var/lib/capsub/base-model/Qwen3-8B
 serving_gpu_uuid: "GPU-<uuid>"

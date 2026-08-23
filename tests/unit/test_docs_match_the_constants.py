@@ -43,10 +43,17 @@ CHECKS = [
         r"0\.98 retention|retention floor of 0\.98|0\.98 on a held-out",
     ),
     (
-        f"end-to-end margin is {C.DEFAULT_END_TO_END_MARGIN:.2f}",
-        r"end_to_end_margin[`\s]*(to|:)\s*0\.0[26]\b|margin of 0\.0[26]\b",
+        f"end-to-end margin is {C.DEFAULT_END_TO_END_MARGIN}",
+        # Any margin that is not the configured one. Built from the constant so
+        # the check follows it: written out by hand, the pattern goes on naming
+        # whatever the value used to be and flags the correct number instead.
+        rf"end_to_end_margin[`\s]*(to|:)\s*(?!{C.DEFAULT_END_TO_END_MARGIN}\b)0\.\d+"
+        rf"|margin of (?!{C.DEFAULT_END_TO_END_MARGIN}\b)0\.\d+",
     ),
-    (f"hidden instances are {C.DEFAULT_HIDDEN_INSTANCES}", r"hidden_instances: (?!1350\b)\d+"),
+    (
+        f"hidden instances are {C.DEFAULT_HIDDEN_INSTANCES}",
+        rf"hidden_instances: (?!{C.DEFAULT_HIDDEN_INSTANCES}\b)\d+",
+    ),
     (
         f"the serving reservation is {C.SERVING_RESERVED_GIB:.0f} GiB",
         r"\b(fixed )?\*{0,2}20 GiB\*{0,2}\b|0\.4168",

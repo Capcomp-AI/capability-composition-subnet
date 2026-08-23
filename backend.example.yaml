@@ -51,7 +51,7 @@ run_blocks: 7200
 run_epoch_block: 8908667
 run_epoch_id: 412
 min_commitment_age_blocks: 300
-hidden_instances: 1350
+hidden_instances: 2000
 ood_instances: 100
 
 # The secret root every run's hidden draw is derived from. Anyone who knows
@@ -119,15 +119,15 @@ disclosure_traces: 10
 # not worse on every other one, then clear the end-to-end margin against the
 # strongest reference with a paired lower confidence bound above zero.
 # A margin the instance count cannot resolve is not strictness: nothing is ever
-# crowned, and every verdict looks like an ordinary loss. 1350 hidden instances
-# resolve about 0.024, so the margin sits above it. Raising the margin or
+# crowned, and every verdict looks like an ordinary loss. 2000 hidden instances
+# resolve about 0.0198, so the margin sits just above it. Raising the margin or
 # lowering the instances is safe; lowering the margin needs more instances, and
 # more instances need a longer run — preflight checks both and says which.
 axis_margin: 0.02             # absolute margin to count as dominant on an axis
 axis_tolerance: 0.01          # relative band that still counts as not worse
 min_dominant_axes: 1
 min_axis_samples: 20          # fewer paired samples than this counts as worse
-end_to_end_margin: 0.03       # absolute completion margin over the strongest reference
+end_to_end_margin: 0.02       # absolute completion margin over the strongest reference
 strict_pareto: false          # true requires dominance on every axis
 
 # ---------------------------------------------------------------------------
