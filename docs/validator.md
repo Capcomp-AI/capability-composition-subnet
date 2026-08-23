@@ -285,9 +285,9 @@ win.
 Ten miners are paid at most, and a rank nobody filled burns rather than being
 promoted into the leader's share.
 
-Ranking is by grade: quality 90%, improvement over the base model 7.5%,
-cost 2.5% — and the qualified score is itself 90% end-to-end completion, so the
-grade is 81% completion. A candidate that failed a hard gate is not graded at all. Every term is
+Ranking is by grade: quality 95%, improvement over the base model 3.75%,
+cost 1.25% — and the qualified score is itself 95% stage balance, so the grade
+is 90% breadth across the twelve capability axes. A candidate that failed a hard gate is not graded at all. Every term is
 measured against the run's own instances and the base model, never against the
 incumbent, so a grade means the same thing in every run — which is what lets
 the dethrone margin be a fixed number.

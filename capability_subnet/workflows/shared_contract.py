@@ -88,11 +88,12 @@ def qualified_scoring_contract() -> dict[str, Any]:
     w = C.QUALIFIED_SCORE_WEIGHTS
     return {
         "weights": dict(w),
-        "formula": (
-            f"Q = {w['end_to_end']:.2f}·end_to_end + {w['stage_balance']:.4f}·stage_balance + "
-            f"{w['ood']:.4f}·ood + {w['retention']:.4f}·retention + "
-            f"{w['token_efficiency']:.4f}·token_efficiency + "
-            f"{w['artifact_efficiency']:.4f}·artifact_efficiency"
+        # Terms in descending weight, and every one at the same precision: a
+        # published formula a miner optimises against must not round a weight
+        # to a different number than the one applied.
+        "formula": "Q = "
+        + " + ".join(
+            f"{weight:.6f}·{axis}" for axis, weight in sorted(w.items(), key=lambda kv: -kv[1])
         ),
         "stage_balance": (
             "Geometric mean of the per-stage means. Rewards packages that are "

@@ -356,13 +356,32 @@ MAX_CRITICAL_UNSAFE_ACTIONS: Final[int] = 0
 # the remainder in proportion to their former weights so their relative
 # emphasis is unchanged.
 
-_WEIGHT_NON_E2E_SHARE: Final[float] = 0.10
-_WEIGHT_NON_E2E_OLD_SUM: Final[float] = 0.45
+# Breadth is the product. stage_balance is the geometric mean across the twelve
+# capability axes, so it asks whether a package is broadly capable rather than
+# strong on a few axes and absent on the rest — which is what a subnet buying
+# *composition* is for. The other axes, end-to-end completion included, share
+# the remaining tenth in the ratio they held before.
+# The minor axes' shares within the remainder. Token efficiency is halved
+# against the others: it already enters the grade a second time as the cost
+# term, so its weight here was counting the same quantity twice.
+_WEIGHT_MINOR_SHARE: Final[float] = 0.05
+_MINOR_PARTS: Final[dict[str, float]] = {
+    "end_to_end": 0.90,
+    "ood": 0.02,
+    "retention": 0.01,
+    "token_efficiency": 0.01,
+    "artifact_efficiency": 0.01,
+}
+_WEIGHT_MINOR_OLD_SUM: Final[float] = sum(_MINOR_PARTS.values())
 
-WEIGHT_END_TO_END: Final[float] = 0.90
-WEIGHT_STAGE_BALANCE: Final[float] = 0.15 / _WEIGHT_NON_E2E_OLD_SUM * _WEIGHT_NON_E2E_SHARE
-WEIGHT_OOD: Final[float] = 0.10 / _WEIGHT_NON_E2E_OLD_SUM * _WEIGHT_NON_E2E_SHARE
-WEIGHT_RETENTION: Final[float] = 0.05 / _WEIGHT_NON_E2E_OLD_SUM * _WEIGHT_NON_E2E_SHARE
+WEIGHT_STAGE_BALANCE: Final[float] = 0.95
+WEIGHT_END_TO_END: Final[float] = (
+    _MINOR_PARTS["end_to_end"] / _WEIGHT_MINOR_OLD_SUM * _WEIGHT_MINOR_SHARE
+)
+WEIGHT_OOD: Final[float] = _MINOR_PARTS["ood"] / _WEIGHT_MINOR_OLD_SUM * _WEIGHT_MINOR_SHARE
+WEIGHT_RETENTION: Final[float] = (
+    _MINOR_PARTS["retention"] / _WEIGHT_MINOR_OLD_SUM * _WEIGHT_MINOR_SHARE
+)
 # Latency is no longer scored, and its five points went to token efficiency
 # rather than to quality.
 #
@@ -383,8 +402,12 @@ WEIGHT_RETENTION: Final[float] = 0.05 / _WEIGHT_NON_E2E_OLD_SUM * _WEIGHT_NON_E2
 # batched at 0.67s, so 38% of an evaluation was spent on 3.4% of the instances,
 # re-deriving with more noise something the token counter already reported
 # exactly.
-WEIGHT_TOKEN_EFFICIENCY: Final[float] = 0.10 / _WEIGHT_NON_E2E_OLD_SUM * _WEIGHT_NON_E2E_SHARE
-WEIGHT_ARTIFACT_EFFICIENCY: Final[float] = 0.05 / _WEIGHT_NON_E2E_OLD_SUM * _WEIGHT_NON_E2E_SHARE
+WEIGHT_TOKEN_EFFICIENCY: Final[float] = (
+    _MINOR_PARTS["token_efficiency"] / _WEIGHT_MINOR_OLD_SUM * _WEIGHT_MINOR_SHARE
+)
+WEIGHT_ARTIFACT_EFFICIENCY: Final[float] = (
+    _MINOR_PARTS["artifact_efficiency"] / _WEIGHT_MINOR_OLD_SUM * _WEIGHT_MINOR_SHARE
+)
 
 QUALIFIED_SCORE_WEIGHTS: Final[dict[str, float]] = {
     "end_to_end": WEIGHT_END_TO_END,
@@ -678,10 +701,10 @@ CHAMPION_DETHRONE_MARGIN: Final[float] = 0.002
 #: the base model — so a grade means the same thing in every run. That is what
 #: lets CHAMPION_DETHRONE_MARGIN be a fixed number: a threshold on a quantity
 #: whose scale moved between runs would be a different bar each time.
-_CONTRIBUTION_NON_QUALITY_SHARE: Final[float] = 0.10
+_CONTRIBUTION_NON_QUALITY_SHARE: Final[float] = 0.05
 _CONTRIBUTION_NON_QUALITY_OLD_SUM: Final[float] = 0.40
 
-CONTRIBUTION_WEIGHT_QUALITY: Final[float] = 0.90
+CONTRIBUTION_WEIGHT_QUALITY: Final[float] = 0.95
 CONTRIBUTION_WEIGHT_IMPROVEMENT: Final[float] = (
     0.30 / _CONTRIBUTION_NON_QUALITY_OLD_SUM * _CONTRIBUTION_NON_QUALITY_SHARE
 )

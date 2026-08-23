@@ -103,15 +103,19 @@ measures:
 
 | Term | Weight | What it rewards |
 |---|---|---|
-| Quality | 90% | The qualified score, which is itself 90% end-to-end completion |
-| Improvement | 7.5% | How far past the base model it got |
-| Cost | 2.5% | Token spend — the only term left that separates two equal finishers |
+| Quality | 95% | The qualified score, which is itself 95% stage balance |
+| Improvement | 3.75% | How far past the base model it got |
+| Cost | 1.25% | Token spend |
 
-So the number a miner is ranked and paid on is **81% end-to-end completion**.
-The subnet buys finished work, and the scoring says so. The remaining slivers
-are not decoration: every one of them is a hard gate as well as a scored term,
-so the floor is enforced whatever the weight carries. The weight decides only
-what *exceeding* a floor is worth, which is now very little.
+So the number a miner is ranked and paid on is **90% stage balance** — the
+geometric mean of the package's score across all twelve capability axes. A
+subnet buying *composition* is buying breadth, and a geometric mean punishes
+imbalance: a package strong on ten axes and absent on two lands far below one
+that is merely good everywhere.
+
+The remaining slivers are not decoration. Every one of them is a hard gate as
+well as a scored term, so the floor is enforced whatever the weight carries.
+The weight decides only what *exceeding* a floor is worth.
 
 Every term is measured against fixed points — the run's own instances and the
 base model — so a grade means the same thing in every run. That is what lets

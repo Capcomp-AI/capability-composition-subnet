@@ -141,14 +141,17 @@ cleared every hard gate:
 
 | Term | Weight | What it rewards |
 |---|---|---|
-| Quality | 90% | The qualified score, which is itself 90% end-to-end completion |
-| Improvement | 7.5% | How far past the base model the package got |
-| Cost | 2.5% | Token spend |
+| Quality | 95% | The qualified score, which is itself 95% stage balance |
+| Improvement | 3.75% | How far past the base model the package got |
+| Cost | 1.25% | Token spend |
 
-**In practice that means the grade is 81% end-to-end completion.** Finish more
-of the workflow and you rank higher; almost nothing else moves it. The other
-terms are hard gates first and scored terms second — clearing their floors is
-required, exceeding them is worth very little.
+**In practice that means the grade is 90% stage balance** — the geometric mean
+of your score across all twelve capability axes. Being broadly capable is what
+ranks you; being strong on a few axes and absent on the rest does not, because
+a geometric mean punishes the gaps rather than averaging them away.
+
+The other terms are hard gates first and scored terms second: clearing their
+floors is required, exceeding them is worth very little.
 
 Every term is measured against the run's own instances and the base model,
 never against the incumbent, so a grade means the same thing in every run.
