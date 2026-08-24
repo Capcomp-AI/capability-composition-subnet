@@ -103,15 +103,18 @@ measures:
 
 | Term | Weight | What it rewards |
 |---|---|---|
-| Quality | 95% | The qualified score, which is itself 95% stage balance |
-| Improvement | 3.75% | How far past the base model it got |
-| Cost | 1.25% | Token spend |
+| Quality | 50% | The qualified score below |
+| Improvement | 40% | How far past the base model the package got |
+| Cost | 10% | Token spend |
 
-So the number a miner is ranked and paid on is **90% stage balance** — the
-geometric mean of the package's score across all twelve capability axes. A
-subnet buying *composition* is buying breadth, and a geometric mean punishes
-imbalance: a package strong on ten axes and absent on two lands far below one
-that is merely good everywhere.
+The qualified score is itself weighted: end-to-end completion 55%, stage
+balance 15%, out-of-distribution 10%, token efficiency 10%, base retention 5%,
+artifact efficiency 5%. So end-to-end reaches the grade twice — through quality
+and again through improvement — and is roughly two-thirds of what decides rank.
+
+Stage balance, the geometric mean across the twelve capability axes, is what
+separates a package that is competent everywhere from one that is excellent at
+one stage and broken at another.
 
 The remaining slivers are not decoration. Every one of them is a hard gate as
 well as a scored term, so the floor is enforced whatever the weight carries.

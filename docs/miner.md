@@ -147,14 +147,18 @@ cleared every hard gate:
 
 | Term | Weight | What it rewards |
 |---|---|---|
-| Quality | 95% | The qualified score, which is itself 95% stage balance |
-| Improvement | 3.75% | How far past the base model the package got |
-| Cost | 1.25% | Token spend |
+| Quality | 50% | The qualified score below |
+| Improvement | 40% | How far past the base model the package got |
+| Cost | 10% | Token spend |
 
-**In practice that means the grade is 90% stage balance** — the geometric mean
-of your score across all twelve capability axes. Being broadly capable is what
-ranks you; being strong on a few axes and absent on the rest does not, because
-a geometric mean punishes the gaps rather than averaging them away.
+The qualified score is itself weighted: end-to-end completion 55%, stage
+balance 15%, out-of-distribution 10%, token efficiency 10%, base retention 5%,
+artifact efficiency 5%. So end-to-end reaches the grade twice — through quality
+and again through improvement — and is roughly two-thirds of what decides rank.
+
+Stage balance is the geometric mean of your score across the twelve capability
+axes: it punishes gaps rather than averaging them away, so being absent on a few
+axes costs more than being merely mediocre everywhere.
 
 The other terms are hard gates first and scored terms second: clearing their
 floors is required, exceeding them is worth very little.
@@ -193,7 +197,7 @@ capcomp contract --section champion_challenge
 capcomp contract --section hard_gates
 ```
 
-The pool contains capability adapters **and controlled distractors**. The distractors are selectable on purpose: recognising that a plausible-looking adapter actively hurts is part of the composition problem. `miner.cli pool` marks them, and `miner.cli validate` warns when you select one.
+The pool contains capability adapters **and controlled distractors**. The distractors are selectable on purpose: recognising that a plausible-looking adapter actively hurts is part of the composition problem. `capcomp pool` marks them, and `capcomp validate` warns when you select one.
 
 ## 3. Understand the problem
 
@@ -293,7 +297,7 @@ from capability_subnet.miner.baseline import random_recipe
 recipe = random_recipe(seed=1, adapter_count=4)
 ```
 
-Equivalently, `miner.cli init --random`. It picks adapters at random and assigns
+Equivalently, `capcomp init --random`. It picks adapters at random and assigns
 arbitrary coefficients — enough to have something that validates, and nothing
 more. Building a search is the work.
 
@@ -495,13 +499,13 @@ yours. `examples/quickstart_miner.py` writes a valid recipe you can run.
 | `base_revision` | string | The pinned base commit. Fill it from the pool, not by hand. |
 | `source_snapshot_sha256` | string | Digest of the frozen adapter pool. Same. |
 
-Get both from `capcomp pool`, or let `miner.cli init` fill them in. A recipe declaring a different snapshot was built against a pool that no longer exists and is rejected at admission.
+Get both from `capcomp pool`, or let `capcomp init` fill them in. A recipe declaring a different snapshot was built against a pool that no longer exists and is rejected at admission.
 
 ### `selected_adapters`
 
 Between **2 and 10** adapter IDs from the frozen pool. Duplicates are rejected.
 
-All 30 pool adapters are selectable; certification no longer gates selection. The
+All 30 pool adapters are selectable; certification does not gate selection. The
 bound is `MIN_SELECTED_ADAPTERS`/`MAX_SELECTED_ADAPTERS` and is exported in the
 published JSON Schema as `minItems`/`maxItems`, so `capcomp validate`
 catches a violation before you submit.
@@ -510,7 +514,7 @@ Order does not matter — reconstruction always loads in sorted identifier order
 
 A single adapter is not a candidate; it is one of the reference baselines.
 
-> The pool contains **controlled distractors**. They are selectable on purpose. Recognising that a plausibly-relevant adapter actively hurts is part of the composition problem, and `miner.cli validate` warns when you select one.
+> The pool contains **controlled distractors**. They are selectable on purpose. Recognising that a plausibly-relevant adapter actively hurts is part of the composition problem, and `capcomp validate` warns when you select one.
 
 ### `merge`
 
@@ -736,7 +740,7 @@ This runs exactly the checks the engine runs at admission, and separates hard pr
 
 ### Why is my artifact too large?
 
-You probably chose rank 128. Against the pinned base model that produces roughly 666 MB, over the 500 MB gate. `miner.cli size` tells you in a second.
+You probably chose rank 128. Against the pinned base model that produces roughly 666 MB, over the 500 MB gate. `capcomp size` tells you in a second.
 
 ### Should I select the distractor adapters?
 

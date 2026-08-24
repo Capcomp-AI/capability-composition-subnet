@@ -293,9 +293,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
 
     hotkey = args.hotkey or _wallet(args).hotkey.ss58_address
     try:
-        response = httpx.get(
-            f"{args.api_url.rstrip('/')}/status/{hotkey}", timeout=45.0
-        )
+        response = httpx.get(f"{args.api_url.rstrip('/')}/status/{hotkey}", timeout=45.0)
         response.raise_for_status()
         payload = response.json()
     except Exception as exc:
@@ -331,8 +329,10 @@ def _cmd_status(args: argparse.Namespace) -> int:
         return 1
 
     if state == "measured":
-        print(f"  state     measured in run {admission['measured_in_run']}; "
-              f"the result opens in run {run + 2}")
+        print(
+            f"  state     measured in run {admission['measured_in_run']}; "
+            f"the result opens in run {run + 2}"
+        )
     else:
         print(f"  state     {state}, to be measured in run {admission['measured_in_run']}")
     return 0
@@ -349,8 +349,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="capcomp",
         description=(
-            "Build, check and submit composition recipes for the Capability "
-            "Composition Subnet."
+            "Build, check and submit composition recipes for the Capability Composition Subnet."
         ),
         epilog=(
             "A submission is one signed request: nothing goes on chain and "
@@ -415,20 +414,28 @@ def build_parser() -> argparse.ArgumentParser:
 
     def _add_api(sub):
         sub.add_argument(
-            "--api.url", dest="api_url",
-            default=os.environ.get(
-                "CAPSUB_API_URL", "https://api.capcomp.ai"
-            ),
+            "--api.url",
+            dest="api_url",
+            default=os.environ.get("CAPSUB_API_URL", "https://api.capcomp.ai"),
             help="Submission API. This is where a recipe goes; nothing is put on chain.",
         )
 
     def _add_wallet(sub):
-        sub.add_argument("--wallet.name", dest="wallet_name",
-                         default=os.environ.get("CAPSUB_WALLET_NAME", "default"))
-        sub.add_argument("--wallet.hotkey", dest="wallet_hotkey",
-                         default=os.environ.get("CAPSUB_WALLET_HOTKEY", "default"))
-        sub.add_argument("--wallet.path", dest="wallet_path",
-                         default=os.environ.get("CAPSUB_WALLET_PATH", "~/.bittensor/wallets"))
+        sub.add_argument(
+            "--wallet.name",
+            dest="wallet_name",
+            default=os.environ.get("CAPSUB_WALLET_NAME", "default"),
+        )
+        sub.add_argument(
+            "--wallet.hotkey",
+            dest="wallet_hotkey",
+            default=os.environ.get("CAPSUB_WALLET_HOTKEY", "default"),
+        )
+        sub.add_argument(
+            "--wallet.path",
+            dest="wallet_path",
+            default=os.environ.get("CAPSUB_WALLET_PATH", "~/.bittensor/wallets"),
+        )
 
     check = subparsers.add_parser(
         "check",
@@ -442,7 +449,8 @@ def build_parser() -> argparse.ArgumentParser:
         "status", help="What this hotkey has submitted in the current run."
     )
     status.add_argument(
-        "--hotkey", default="",
+        "--hotkey",
+        default="",
         help="An ss58 address. Defaults to the wallet's hotkey.",
     )
     _add_api(status)
@@ -453,14 +461,18 @@ def build_parser() -> argparse.ArgumentParser:
         "submit", help="Sign and send a recipe. Without --confirm, sends nothing."
     )
     submit.add_argument("--recipe", required=True)
-    submit.add_argument("--netuid", type=int,
-                        default=int(os.environ.get("CAPSUB_NETUID", "103")))
-    submit.add_argument("--subtensor.network", dest="network",
-                        default=os.environ.get("CAPSUB_NETWORK", "finney"))
-    submit.add_argument("--confirm", action="store_true",
-                        help="Actually send. Omit for a dry run that checks everything.")
-    submit.add_argument("--log.level", dest="log_level",
-                        default=os.environ.get("CAPSUB_LOG_LEVEL", "INFO"))
+    submit.add_argument("--netuid", type=int, default=int(os.environ.get("CAPSUB_NETUID", "103")))
+    submit.add_argument(
+        "--subtensor.network", dest="network", default=os.environ.get("CAPSUB_NETWORK", "finney")
+    )
+    submit.add_argument(
+        "--confirm",
+        action="store_true",
+        help="Actually send. Omit for a dry run that checks everything.",
+    )
+    submit.add_argument(
+        "--log.level", dest="log_level", default=os.environ.get("CAPSUB_LOG_LEVEL", "INFO")
+    )
     _add_api(submit)
     _add_wallet(submit)
     submit.set_defaults(func=_cmd_submit)

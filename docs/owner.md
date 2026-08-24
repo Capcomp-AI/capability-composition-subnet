@@ -148,23 +148,14 @@ Bodies are held privately until the run that pays them opens, two runs after
 the one submitted in. That is what makes copying pointless: by the time a
 recipe is readable, the run it competed in is closed and paid.
 
-This replaced on-chain commitments, and the reasons are worth keeping in mind
-when weighing the trade:
+Miners do not write to the chain at all. That is a deliberate trade: the
+submission set is this operator's record rather than something a third party can
+rebuild from a public ledger. What it buys is a recipe nobody can copy before it
+has been scored, a resubmission limit that can be enforced, and a recipe that
+stays retrievable rather than depending on a repository its author may delete.
 
-- **A commitment is public the moment it lands.** The leader's recipe could be
-  read and copied by the field competing against it, before it had been
-  measured.
-- **A commitment keeps no history.** It holds only its latest value, so a
-  resubmission limit had nothing to count against — and a run-411 recipe was
-  lost outright when its miner re-committed, recoverable only because the
-  console had kept the pointer.
-- **A pointer is somebody else's to keep.** One paid miner made their
-  repository private after being paid, and that recipe is now unrecoverable.
-
-What it costs is independent verifiability: the submission set is the operator's
-record rather than something a third party can rebuild from a public ledger.
-Validators read it from the API instead — `/run/{id}`, `/run/{id}/results`,
-`/run/{id}/weights` and `/run/{id}/instances/{hotkey}`, all of which open when
+Validators read the record from the API — `/run/{id}`, `/run/{id}/results`,
+`/run/{id}/weights` and `/run/{id}/instances/{hotkey}` — all of which open when
 the run that pays them opens.
 
 The settling rule still applies: a submission must have been in for

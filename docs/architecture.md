@@ -56,7 +56,7 @@ capability_subnet/
 ├── workflows/       workflow definitions, instance generators, deterministic scorers
 ├── sandbox/         isolated execution — agent loop, tool services, limits
 ├── scoring/         aggregation, gates, comparator, ranking, weight vector
-├── miner/           recipe construction, local evaluation, commitment
+├── miner/           recipe construction, local evaluation, submission
 ├── validator/       the thin weight-setter
 ├── audit/           independent verification of published records
 └── testing/         miniature-pool fixtures, published as a pytest plugin
@@ -72,7 +72,7 @@ Dependencies run downward. `common` depends on nothing; `merge_engine` depends o
 
 One JSON document. Everything it can express is a bounded number, a name from a frozen registry, or an enum. Unknown fields are rejected outright — an unknown field in a miner-authored document usually means something is being smuggled past the merge engine.
 
-Its digest is taken over the **canonical form of the parsed document**, not the file bytes. Pretty-printing is therefore free, but the engine re-derives the digest at admission, so a recipe whose canonical form differs from its commitment is refused. That closes the "commit one thing, publish another" gap.
+Its digest is taken over the **canonical form of the parsed document**, not the file bytes. The client serialises canonically before signing, so the digest a miner signs is the digest the engine identifies the recipe by, and formatting on disk is irrelevant.
 
 ### 2. The artifact
 
@@ -135,13 +135,13 @@ All arithmetic happens in **delta space** on the effective update `ΔW = (α/r)�
 ```
 open run   → draw fresh hidden instances, re-measure every reference and the incumbent
 admit         → validate, verify digest, check the frozen pool, anti-copy      (no GPU)
-take the head → the earliest commitment still waiting becomes the challenger
+take the head → the earliest submission still waiting becomes the challenger
 evaluate      → reconstruct, serve, run the fixed agent, score deterministically
 compare       → per-axis verdicts, end-to-end margin, paired bootstrap
 publish       → signed report, signed weight vector
 ```
 
-Role assignment is **mechanical**: the queue is ordered by the block each commitment was made at, and the head is the challenger. Nobody chooses.
+Role assignment is **mechanical**: the queue is ordered by the block each submission arrived at, and the head is the challenger. Nobody chooses.
 
 Re-measuring the references every run is the expensive part and is not optional. A challenger compared against last run's reference numbers would be compared on a different instance set, and the paired statistics would be meaningless.
 
@@ -218,7 +218,7 @@ None of them can be terminated and **none of them earn emission**. Under the str
 
 Nothing, in the sense that matters: no participant takes a number from another participant.
 
-Each validator reads the commitments on chain, fetches each recipe, reconstructs the merged adapter on its own hardware, serves it, and scores it against instances it regenerates itself. Its weights come from work it did. A validator that cannot do that work refuses to start rather than vote on measurements it does not have.
+Each validator reads the run's submissions from the API, reconstructs the merged adapter on its own hardware, serves it, and scores it against instances it regenerates itself. Its weights come from work it did. A validator that cannot do that work refuses to start rather than vote on measurements it does not have.
 
 Validators are not required to agree on artifact bytes. Six of the seven merge methods run an SVD, which is not bitwise reproducible across devices, so two honest validators on different cards build different weights from the same recipe. They are compared on **outcomes** over a shared core of instances every validator measures, with a band wide enough for device divergence and narrow enough to catch a validator that did no work. A validator inconsistent with most of its peers is reported; one that disagrees with a single peer is not, because a two-way split names the wrong party as readily as the right one.
 
@@ -234,7 +234,7 @@ That block is public, it is not any participant's to pick, and it does not exist
 
 Deriving from the run's own opening block — `run_id × run_blocks` — rather than from the moment a process happened to start is what makes it checkable and idempotent: a validator restarted mid-run re-derives the seeds it was already using instead of quietly evaluating a different test.
 
-What stops a miner tuning to the instances is not concealment but ordering. The commitment being evaluated is the one standing at the opening block, and its recipe is fixed before the instances it will face are drawn; learning them a moment later is worth nothing. A hotkey may resubmit in a later run, but each recipe still faces a draw it could not see when it was committed.
+What stops a miner tuning to the instances is ordering, and concealment now helps too. The submission being evaluated is the one standing at the opening block, and its recipe is fixed before the instances it will face are drawn; learning them a moment later is worth nothing. Recipes are also held privately until the run that pays them opens, so the field cannot read each other's while it is being measured.
 
 The draw holds no secret and commits to nothing, so there is nothing to reveal and nothing to grind. An empty beacon is refused outright rather than falling back to a fixed draw, because a fallback would silently give every run of every deployment the same instances.
 
@@ -245,7 +245,7 @@ The draw holds no secret and commits to nothing, so there is nothing to reveal a
 Recipes are public — they have to be, or nobody could verify an evaluation. So the protocol makes copying *worthless* rather than impossible:
 
 - **Earliest commit wins**, checked on the recipe digest at admission and again on the reconstructed artifact digest. Two differently-worded recipes that build the same bytes are the same package.
-- **One measurement per commitment.** Copying costs a run per attempt and buys nothing.
+- **One measurement per submission.** Copying costs a run per attempt, and there is nothing to copy until the run is paid.
 - **Defender advantage.** The throne is held by a margin, in both contracts: a challenger must beat the strongest reference — the incumbent included — by an absolute end-to-end margin, and a copy cannot beat the thing it copied by any margin. Ranking itself is by score alone and gives an earlier commitment no edge, so a copy can at most place ahead in the runner-up order on sampling noise; it can never take the crown.
 
 The third point is what makes the first two sufficient. Even a copy nobody detected cannot win.
@@ -277,11 +277,11 @@ Adapter hot-swapping is disabled. Restarting the runtime per candidate is slower
 ## Scoring
 
 ```
-Q = 0.55·end_to_end + 0.15·stage_balance + 0.10·ood + 0.05·retention
-  + 0.05·latency + 0.05·token_efficiency + 0.05·artifact_efficiency
+Q = 0.55·end_to_end + 0.15·stage_balance + 0.10·ood
+  + 0.10·token_efficiency + 0.05·retention + 0.05·artifact_efficiency
 ```
 
-Quality carries 85%, efficiency 15% — a cheap package that does not finish the job is worth less than an expensive one that does.
+Capability carries 85%, efficiency 15% — a cheap package that does not finish the job is worth less than an expensive one that does.
 
 **Token efficiency** is measured per *completed* instance, not per attempted one. Dividing by attempts would make a package that gives up after one turn the most efficient thing on the board; charging its tokens against the workflows it actually finished makes cheap failure expensive, which is the correct direction. An unfinished workflow has no value to divide a cost into.
 
@@ -289,16 +289,15 @@ Quality carries 85%, efficiency 15% — a cheap package that does not finish the
 
 ## Who gets paid
 
-Ranking decides who leads — the dethrone rule under the strict contract, the highest-score leaderboard by default. Either way it is far too blunt to also decide who gets *paid*, because almost every submission that is ever evaluated will fail to lead — and a commitment buys one measurement a run apart, so a miner cannot iterate on it the way a code-submitting miner can. Paying a miner who moved completion from 0.41 to 0.58 exactly what it pays one that submitted a soup of distractors leaves the second attempt no better informed than the first, in a network whose entire purpose is to learn which adapters compose.
+Ranking decides who leads — the dethrone rule under the strict contract, the highest-score leaderboard by default. Either way it is far too blunt to also decide who gets *paid*, because almost every submission that is ever evaluated will fail to lead — and a submission buys one measurement a run apart, so a miner cannot iterate on it the way a code-submitting miner can. Paying a miner who moved completion from 0.41 to 0.58 exactly what it pays one that submitted a soup of distractors leaves the second attempt no better informed than the first, in a network whose entire purpose is to learn which adapters compose.
 
 So the top slot is winner-takes-most and everything below it is graded:
 
 | Term | Weight | What it rewards |
 |---|---|---|
-| Quality | 95% | The qualified score above |
-| Improvement | 25% | Distance past the strongest permanent reference, scaled by the headroom that remained |
-| Proximity | 15% | How close it came to the champion |
-| Cost | 10% | Token spend and latency |
+| Quality | 50% | The qualified score above |
+| Improvement | 40% | Distance past the strongest permanent reference, scaled by the headroom that remained |
+| Cost | 10% | Token spend |
 
 Only candidates that cleared **every hard gate** are graded — this is not a consolation prize for producing something undeployable. If nobody qualifies, the graded pool burns rather than folding into the champion's share, because holding an uncontested throne is not an achievement. Each grade is published broken into its four terms, so a miner can act on it.
 
@@ -312,7 +311,7 @@ The terms decide how the miner pool is divided; the pool itself is a fifth of th
 
 Ten miners are paid at most. The burn goes to the subnet owner's UID resolved from the metagraph rather than to UID 0, which belongs to whichever neuron registered into the first slot.
 
-Proximity is not a gate. Rewarding closeness alone would pay for copying the leader, so it is one term of four and the anti-copy check runs *before* evaluation.
+Improvement is measured against the base model, not against the leader. Rewarding closeness to the leader would pay for copying it, and the anti-copy check runs *before* evaluation in any case.
 
 **Stage balance** is a geometric mean of the per-stage means, and the choice of mean is doing real work: a package scoring 1.0 on all but one axis and 0.1 on the last lands far below one scoring 0.8 everywhere, even though their arithmetic means are close. A workflow needs every axis it declares — seven for the maintenance chain, twelve for the arena — so a package that abandoned one has not solved it.
 
@@ -340,13 +339,10 @@ away general ability cannot be crowned whatever it scored. And the permanent
 reference — the untouched base model — exists so the network can discover that
 composition did *not* help rather than paying miners to not discover it.
 
-That set used to be wider: the base model, the best single adapter and three
-standard equal-weight merges. The merges were measured and never bound, scoring
-far below the base. The single adapter did bind — on this pool the best one
-beats the base — and it was removed anyway, for the card time it cost. The bar
-is therefore now "beat the untouched model" rather than "beat the best
-specialist", which is the easier of the two, and a merge worse than one adapter
-used alone can hold the throne.
+The reference is the base model alone. The bar is therefore "beat the untouched
+model" rather than "beat the best specialist" — the easier of the two, so a
+merge that scores below a single adapter used alone can hold the throne.
+Measuring more references costs card time every run and bound nothing.
 
 See the economics tab of the published dashboard for the worked arithmetic, and
 [the README](../README.md#what-a-merged-package-is-worth) for the summary.
@@ -598,7 +594,7 @@ Every score here comes from comparing a trace with truth computed before the can
 
 ### How do the layer groups work if the base model has 36 layers?
 
-There are always four groups splitting the decoder stack into quarters. The group *names* are protocol and never change; the layer ranges follow the pinned model's depth, so repinning to a model of different depth does not invalidate existing recipes. `miner.cli pool` prints the current ranges.
+There are always four groups splitting the decoder stack into quarters. The group *names* are protocol and never change; the layer ranges follow the pinned model's depth, so repinning to a model of different depth does not invalidate existing recipes. `capcomp pool` prints the current ranges.
 
 ### Why are `svd` and `cat_svd` the same thing?
 
