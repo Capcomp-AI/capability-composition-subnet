@@ -32,8 +32,8 @@ One JSON document. Not a model, not weights, not code.
 ```jsonc
 {
   "workflow_id": "lora_merger_logic_v1",
-  "base_revision": "<from: capability-miner pool>",
-  "source_snapshot_sha256": "<from: capability-miner pool>",
+  "base_revision": "<from: capcomp pool>",
+  "source_snapshot_sha256": "<from: capcomp pool>",
   "selected_adapters": ["<adapter-id>", "<adapter-id>"],
   "merge": { "combination_type": "ties_svd", "density": 0.5,
              "majority_sign_method": "total", "random_seed": 0 },
@@ -228,8 +228,8 @@ pip install -e ".[miner]"     # + reconstruction and local evaluation
 pip install -e ".[dev]"       # everything, plus test and lint tooling
 
 # What is the arena?
-python -m capability_subnet.miner.cli pool          # the frozen certified adapter pool
-python -m capability_subnet.miner.cli contract      # the full published contract
+capcomp pool          # the frozen certified adapter pool
+capcomp contract      # the full published contract
 
 # What does one problem look like?
 python -m capability_subnet.workflows.cli show --workflow lora_merger_logic_v1 --seed 42 --with-truth
@@ -239,13 +239,13 @@ python -m capability_subnet.workflows.cli show --seed 42 --with-truth   # the ma
 python -m capability_subnet.workflows.cli selftest --count 10
 
 # Build and check a recipe
-python -m capability_subnet.miner.cli init --random --out recipe.json
+capcomp init --random --out recipe.json
 
 # Or run the whole miner loop in one file: build, score, write, print the
 # submission. No GPU and no chain. Its search is deliberately naive — that is
 # the part you compete on. See examples/README.md
 python examples/quickstart_miner.py --tries 20 --out recipe.json
-python -m capability_subnet.miner.cli validate --recipe recipe.json
+capcomp validate --recipe recipe.json
 ```
 
 Then read the guide for your role:

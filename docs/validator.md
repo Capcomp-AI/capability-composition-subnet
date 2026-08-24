@@ -338,7 +338,7 @@ curl "https://<engine-host>/reports?run_id=<n>"
 A report states the recipe digest, the artifact digest, the evaluator image digest, every hard-gate verdict, every per-axis comparator verdict, the paired bootstrap bound, and the reason for the decision. If you have the published recipe and the certified pool, you can rebuild the artifact and confirm its digest matches:
 
 ```bash
-python -m capability_subnet.miner.cli digest --recipe <the-published-recipe>
+capcomp digest --recipe <the-published-recipe>
 ```
 
 ### The audit tool does this for you
@@ -529,9 +529,8 @@ python neurons/validator.py --netuid 1 \
     --neuron.pool_dir pool
 
 # Miner
-python neurons/miner.py --netuid 1 \
+capcomp submit --netuid 1 \
     --wallet.name miner --wallet.hotkey default \
-    --subtensor.chain_endpoint ws://127.0.0.1:9944 \
     --recipe recipe.json --api.url http://127.0.0.1:8081 --confirm
 ```
 

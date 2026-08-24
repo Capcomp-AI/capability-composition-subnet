@@ -9,7 +9,9 @@ because it is the one irreversible step.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
+from pathlib import Path
 
 from capability_subnet.common import constants as C
 from capability_subnet.common.hashing import canonical_json_str
@@ -244,11 +246,94 @@ def _cmd_timing(args: argparse.Namespace) -> int:
     return 0
 
 
+def _wallet(args: argparse.Namespace):
+    """The hotkey, loaded only when a command actually needs to sign."""
+    import bittensor as bt
+
+    return bt.Wallet(args.wallet_name, args.wallet_hotkey, path=args.wallet_path)
+
+
+def _cmd_check(args: argparse.Namespace) -> int:
+    """Ask the service whether a recipe would be admitted. Costs nothing.
+
+    Local `validate` already answers most of this from the shipped pool. This
+    asks the *running* engine, which is the one that decides, and needs no
+    wallet — so it can be run on any machine, as often as you like.
+    """
+    import httpx
+
+    try:
+        raw = Path(args.recipe).read_text()
+    except OSError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    try:
+        response = httpx.post(
+            f"{args.api_url.rstrip('/')}/check", json={"recipe": raw}, timeout=45.0
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as exc:
+        print(f"error: could not reach the submission API: {exc}", file=sys.stderr)
+        return 4
+
+    if payload.get("ok"):
+        print("ok — this recipe would be admitted")
+        return 0
+    for problem in payload.get("problems") or []:
+        print(f"  {problem}", file=sys.stderr)
+    print("\nThis recipe would be refused. Nothing was submitted.", file=sys.stderr)
+    return 1
+
+
+def _cmd_status(args: argparse.Namespace) -> int:
+    """What this hotkey has submitted in the current run."""
+    import httpx
+
+    hotkey = args.hotkey or _wallet(args).hotkey.ss58_address
+    try:
+        response = httpx.get(
+            f"{args.api_url.rstrip('/')}/status/{hotkey}", timeout=45.0
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as exc:
+        print(f"error: could not reach the submission API: {exc}", file=sys.stderr)
+        return 4
+
+    run = payload["run_id"]
+    if not payload.get("submitted"):
+        print(f"run {run}: nothing submitted. {payload['remaining']} attempts available.")
+        return 0
+
+    print(f"run {run}: measured in run {run + 1}, paid in run {run + 2}")
+    print(f"  holding   {payload['recipe_sha256']}")
+    print(f"  attempts  {payload['submission_count']} used, {payload['remaining']} left")
+    for old in payload.get("superseded") or []:
+        print(f"  replaced  {old}")
+    return 0
+
+
+def _cmd_submit(args: argparse.Namespace) -> int:
+    """Validate, sign and send. Without --confirm, sends nothing."""
+    from capability_subnet.miner.neuron import MinerNeuron
+
+    return MinerNeuron(config=args).submit()
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="capability-miner",
-        description="Build, validate and inspect composition recipes.",
-        epilog="Submitting a recipe is done with `python neurons/miner.py --confirm`.",
+        prog="capcomp",
+        description=(
+            "Build, check and submit composition recipes for the Capability "
+            "Composition Subnet."
+        ),
+        epilog=(
+            "A submission is one signed request: nothing goes on chain and "
+            "nothing is published anywhere. Start with `capcomp init`, then "
+            "`capcomp check`, then `capcomp submit --confirm`."
+        ),
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -284,7 +369,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     canonicalise = subparsers.add_parser(
         "canonicalise",
-        help="Rewrite a recipe in the exact form whose digest is committed.",
+        help="Rewrite a recipe in its canonical form.",
     )
     canonicalise.add_argument("--recipe", required=True)
     canonicalise.add_argument("--out", default=None)
@@ -304,6 +389,58 @@ def build_parser() -> argparse.ArgumentParser:
     pack.add_argument("--ood-count", dest="ood_count", type=int, default=30)
     pack.add_argument("--no-databases", action="store_true")
     pack.set_defaults(func=_cmd_pack)
+
+    def _add_api(sub):
+        sub.add_argument(
+            "--api.url", dest="api_url",
+            default=os.environ.get(
+                "CAPSUB_API_URL", "https://lora-merger-api-production.up.railway.app"
+            ),
+            help="Submission API. This is where a recipe goes; nothing is put on chain.",
+        )
+
+    def _add_wallet(sub):
+        sub.add_argument("--wallet.name", dest="wallet_name",
+                         default=os.environ.get("CAPSUB_WALLET_NAME", "default"))
+        sub.add_argument("--wallet.hotkey", dest="wallet_hotkey",
+                         default=os.environ.get("CAPSUB_WALLET_HOTKEY", "default"))
+        sub.add_argument("--wallet.path", dest="wallet_path",
+                         default=os.environ.get("CAPSUB_WALLET_PATH", "~/.bittensor/wallets"))
+
+    check = subparsers.add_parser(
+        "check",
+        help="Ask the engine whether a recipe would be admitted. Costs no attempt.",
+    )
+    check.add_argument("--recipe", required=True)
+    _add_api(check)
+    check.set_defaults(func=_cmd_check)
+
+    status = subparsers.add_parser(
+        "status", help="What this hotkey has submitted in the current run."
+    )
+    status.add_argument(
+        "--hotkey", default="",
+        help="An ss58 address. Defaults to the wallet's hotkey.",
+    )
+    _add_api(status)
+    _add_wallet(status)
+    status.set_defaults(func=_cmd_status)
+
+    submit = subparsers.add_parser(
+        "submit", help="Sign and send a recipe. Without --confirm, sends nothing."
+    )
+    submit.add_argument("--recipe", required=True)
+    submit.add_argument("--netuid", type=int,
+                        default=int(os.environ.get("CAPSUB_NETUID", "103")))
+    submit.add_argument("--subtensor.network", dest="network",
+                        default=os.environ.get("CAPSUB_NETWORK", "finney"))
+    submit.add_argument("--confirm", action="store_true",
+                        help="Actually send. Omit for a dry run that checks everything.")
+    submit.add_argument("--log.level", dest="log_level",
+                        default=os.environ.get("CAPSUB_LOG_LEVEL", "INFO"))
+    _add_api(submit)
+    _add_wallet(submit)
+    submit.set_defaults(func=_cmd_submit)
 
     timing = subparsers.add_parser(
         "timing", help="Which run a submission made now is measured and paid in."

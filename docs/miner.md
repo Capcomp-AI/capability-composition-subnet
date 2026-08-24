@@ -7,11 +7,8 @@ Your whole interaction with the network is one HTTP request. **Nothing goes on c
 You need a registered hotkey and nothing else: no commitment, no transaction, no fee, no wallet unlocked for anything but signing a short string. Your recipe travels in the request body, signed by that hotkey, and is held privately until the run that pays it opens — so nobody can read it, let alone copy it, while it is being measured.
 
 ```bash
-python neurons/miner.py \
-    --netuid 103 \
-    --wallet.name <coldkey> --wallet.hotkey <hotkey> \
-    --recipe recipe.json \
-    --confirm
+capcomp submit --recipe recipe.json \
+    --wallet.name <coldkey> --wallet.hotkey <hotkey> --confirm
 ```
 
 That is the entire protocol contract. The rest of this guide is about making the recipe good.
@@ -72,11 +69,11 @@ also removes the advantage of submitting at the closing block after watching the
 whole run.
 
 Ask the tooling rather than doing the arithmetic. Pass the current block and
-`capability-miner timing` says which run will measure a submission made now and
-how long you have left:
+`capcomp timing` says which run will measure a submission made now and how
+long you have left:
 
 ```bash
-capability-miner timing --block $(btcli subnet show --netuid 103 | grep -i block)
+capcomp timing --block $(btcli subnet show --netuid 103 | grep -i block)
 
 # run 412: measured in run 413, paid in run 414. 6890 blocks (~23.0h) left to
 # change your mind.
@@ -186,14 +183,14 @@ Everything you are judged on is published. None of it is secret except the speci
 
 ```bash
 # The frozen certified adapter pool
-python -m capability_subnet.miner.cli pool
+capcomp pool
 
 # The complete contract: bounds, gates, scoring weights, dethrone rule
-python -m capability_subnet.miner.cli contract
+capcomp contract
 
 # One section at a time
-python -m capability_subnet.miner.cli contract --section champion_challenge
-python -m capability_subnet.miner.cli contract --section hard_gates
+capcomp contract --section champion_challenge
+capcomp contract --section hard_gates
 ```
 
 The pool contains capability adapters **and controlled distractors**. The distractors are selectable on purpose: recognising that a plausible-looking adapter actively hurts is part of the composition problem. `miner.cli pool` marks them, and `miner.cli validate` warns when you select one.
@@ -222,7 +219,7 @@ The pack is reproducible from a published seed. Compare the printed tree digest 
 ## 4. Build a recipe
 
 ```bash
-python -m capability_subnet.miner.cli init --out recipe.json
+capcomp init --out recipe.json
 ```
 
 Then edit it. The interesting fields:
@@ -242,7 +239,7 @@ See [Recipe reference](#recipe-reference) below for every field, bound and merge
 Validate before you go further:
 
 ```bash
-python -m capability_subnet.miner.cli validate --recipe recipe.json
+capcomp validate --recipe recipe.json
 ```
 
 This runs **exactly the checks the engine runs at admission** and prints both hard problems and advisories. Advisories are not rejections — they flag choices that are legal but usually unintended, such as selecting a distractor or leaving a stochastic merge on the default seed.
@@ -250,7 +247,7 @@ This runs **exactly the checks the engine runs at admission** and prints both ha
 Check the artifact size before you build anything:
 
 ```bash
-python -m capability_subnet.miner.cli size --recipe recipe.json
+capcomp size --recipe recipe.json
 ```
 
 > Rank 128 produces roughly 666 MB against the pinned base model, which exceeds the 500 MB artifact gate. It is a legal value in the schema and an automatic rejection at evaluation. The `size` command tells you in a second.
@@ -311,13 +308,25 @@ The engine publishes a compatibility history at `/compatibility` — co-selectio
 
 ## 7. Submit
 
-There is nothing to publish and nothing to commit. Send the recipe:
+There is nothing to publish and nothing to commit.
+
+**First, ask whether it would be admitted.** This costs nothing — no signature,
+no hotkey, no attempt — and it is the engine's own contract answering, not a
+local approximation:
 
 ```bash
-python neurons/miner.py \
-    --netuid 103 \
-    --wallet.name <coldkey> --wallet.hotkey <hotkey> \
-    --recipe recipe.json
+capcomp check --recipe recipe.json
+```
+
+```
+ok — this recipe would be admitted
+```
+
+Iterate until it says that. Then send it:
+
+```bash
+capcomp submit --recipe recipe.json \
+    --wallet.name <coldkey> --wallet.hotkey <hotkey>
 ```
 
 Without `--confirm` this is a dry run: it validates the recipe, reads the run
@@ -335,7 +344,7 @@ Nothing was sent. Re-run with --confirm to submit.
 Add `--confirm` when you are sure.
 
 The digest is the canonical digest of your recipe — the same number
-`capability-miner digest` prints, and the same one the engine identifies your
+`capcomp digest` prints, and the same one the engine identifies your
 package by. You sign a string binding that digest to the run, so a signature
 cannot be replayed into a later run or against a different recipe. The client
 serialises the recipe canonically before sending, so formatting in your editor
@@ -345,6 +354,18 @@ is irrelevant and there is exactly one number to check.
 to override it.
 
 ## 8. Track it
+
+```bash
+capcomp status --wallet.name <coldkey> --wallet.hotkey <hotkey>
+```
+
+```
+run 412: measured in run 413, paid in run 414
+  holding   sha256:38f6428d…
+  attempts  1 used, 2 left
+```
+
+Or over HTTP:
 
 ```bash
 curl https://<api-host>/status/<your-hotkey>
@@ -432,8 +453,8 @@ yours. `examples/quickstart_miner.py` writes a valid recipe you can run.
 {
   "schema_version": 1,
   "workflow_id": "lora_merger_logic_v1",
-  "base_revision": "<from: capability-miner pool>",
-  "source_snapshot_sha256": "<from: capability-miner pool>",
+  "base_revision": "<from: capcomp pool>",
+  "source_snapshot_sha256": "<from: capcomp pool>",
 
   "selected_adapters": ["<adapter-id>", "<adapter-id>"],
 
@@ -474,7 +495,7 @@ yours. `examples/quickstart_miner.py` writes a valid recipe you can run.
 | `base_revision` | string | The pinned base commit. Fill it from the pool, not by hand. |
 | `source_snapshot_sha256` | string | Digest of the frozen adapter pool. Same. |
 
-Get both from `python -m capability_subnet.miner.cli pool`, or let `miner.cli init` fill them in. A recipe declaring a different snapshot was built against a pool that no longer exists and is rejected at admission.
+Get both from `capcomp pool`, or let `miner.cli init` fill them in. A recipe declaring a different snapshot was built against a pool that no longer exists and is rejected at admission.
 
 ### `selected_adapters`
 
@@ -482,7 +503,7 @@ Between **2 and 10** adapter IDs from the frozen pool. Duplicates are rejected.
 
 All 30 pool adapters are selectable; certification no longer gates selection. The
 bound is `MIN_SELECTED_ADAPTERS`/`MAX_SELECTED_ADAPTERS` and is exported in the
-published JSON Schema as `minItems`/`maxItems`, so `capability-miner validate`
+published JSON Schema as `minItems`/`maxItems`, so `capcomp validate`
 catches a violation before you submit.
 
 Order does not matter — reconstruction always loads in sorted identifier order, so the same set produces the same artifact however you wrote it.
@@ -515,7 +536,7 @@ Per-adapter coefficient at a specific depth, keyed by group then adapter. Same r
 There are always four groups, splitting the decoder stack into quarters:
 
 ```bash
-python -m capability_subnet.miner.cli pool   # prints the layer ranges
+capcomp pool   # prints the layer ranges
 ```
 
 The group *names* are part of the protocol and never change. The layer ranges behind them follow the pinned model's depth, so repinning to a model of different depth does not invalidate existing recipes.
@@ -529,7 +550,7 @@ This is where the interesting structure lives. Reading a manual and writing SQL 
 | `output_rank` | `8, 16, 32, 48, 64, 96, 128` | Artifact size and memory, paid for with reconstruction error |
 | `svd_clamp_quantile` | `0.90 … 1.00` | Caps how much one direction may dominate; `1.0` disables it |
 
-> **Rank 128 exceeds the 500 MB artifact gate against the pinned base model** (≈666 MB). It is a legal schema value and an automatic rejection at evaluation. Run `miner.cli size --recipe recipe.json` before submitting.
+> **Rank 128 exceeds the 500 MB artifact gate against the pinned base model** (≈666 MB). It is a legal schema value and an automatic rejection at evaluation. Run `capcomp size --recipe recipe.json` before submitting.
 
 Setting `svd_clamp_quantile` below `1.0` forces the full decomposition path even for `linear`, because clamping is defined on the decomposition and has no factor-space equivalent.
 
@@ -652,7 +673,7 @@ capcomp-submit:v1:<run_id>:sha256:<hex>
 ```
 
 Both are inside it, so a signature cannot be replayed into a later run or
-against a different recipe. `neurons/miner.py` does all of this; the shape is
+against a different recipe. `capcomp submit` does all of this; the shape is
 here so you can build your own client if you would rather.
 
 | | |
@@ -669,10 +690,10 @@ here so you can build your own client if you would rather.
 ## Validation
 
 ```bash
-python -m capability_subnet.miner.cli validate --recipe recipe.json   # every admission check
-python -m capability_subnet.miner.cli size     --recipe recipe.json   # predicted artifact size
-python -m capability_subnet.miner.cli digest   --recipe recipe.json   # canonical digest
-python -m capability_subnet.miner.cli canonicalise --recipe recipe.json
+capcomp validate --recipe recipe.json   # every admission check
+capcomp size     --recipe recipe.json   # predicted artifact size
+capcomp digest   --recipe recipe.json   # canonical digest
+capcomp canonicalise --recipe recipe.json
 ```
 
 `validate` reports two kinds of finding. **Problems** would cause rejection at admission. **Advisories** are legal choices that are usually unintended — selecting a distractor, omitting the retention anchor, coefficients above 1.5 in magnitude, or a stochastic merge left on the default seed.
@@ -708,7 +729,7 @@ strictly more expensive than searching properly.
 ### How do I know my recipe is valid before submitting?
 
 ```bash
-python -m capability_subnet.miner.cli validate --recipe recipe.json
+capcomp validate --recipe recipe.json
 ```
 
 This runs exactly the checks the engine runs at admission, and separates hard problems from advisories.

@@ -89,6 +89,9 @@ dev = [
 ]
 
 [project.scripts]
+# The miner CLI. `capability-miner` is kept as an alias so existing
+# scripts do not break, but `capcomp` is the name to use.
+capcomp = "capability_subnet.miner.cli:main"
 capability-miner = "capability_subnet.miner.cli:main"
 capability-validator = "capability_subnet.validator.neuron:main"
 capability-workflow = "capability_subnet.workflows.cli:main"
