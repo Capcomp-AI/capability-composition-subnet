@@ -122,33 +122,55 @@ The model needs about 15.3 GiB of weights and about 0.6 GiB of KV cache for the 
 
 ## Where miners submit recipes
 
-A miner's entire on-chain footprint is one commitment. There is no upload endpoint and nothing the owner hosts.
+To the submission API the owner runs. There is no on-chain step, no upload to a
+third party, and nothing for a miner to host.
 
-**1. Publish the recipe JSON** anywhere fetchable, under 256 KB. Three URI schemes are accepted:
-
-| Scheme | Form | Resolves to |
-|---|---|---|
-| Hugging Face | `hf:<owner>/<repo>/<path>` | `https://huggingface.co/<owner>/<repo>/resolve/main/<path>` |
-| IPFS | `ipfs:<cid>` | `https://ipfs.io/ipfs/<cid>` |
-| HTTPS | `https://...` | itself |
-
-**2. Commit the digest and the URI on chain**, under the subnet's commitment key:
-
-```bash
-capability-miner commitment \
-    --recipe recipe.json \
-    --recipe-uri hf:<owner>/<repo>/final.json
-```
-
-which prints the payload to set:
+A miner POSTs the recipe signed by their hotkey. The service checks the
+signature, that the hotkey is registered on the subnet, and that they have
+attempts left in the run, then stores it — replacing whatever it held for them.
 
 ```
-capsub1|lmlg|<base64url digest>|hf:<owner>/<repo>/final.json
+POST /submit
+{"hotkey": "5…", "recipe": "<the recipe JSON>", "signature": "0x…"}
 ```
 
-Format is `capsub1|<workflow code>|<recipe digest>|<uri>`. Validators read the commitment from chain, fetch the URI, and check the bytes against the committed digest — so the recipe cannot be swapped after commitment, and the URI only has to stay reachable.
+Signed over `capcomp-submit:v1:<run_id>:sha256:<hex>`, which binds the signature
+to both the run and the recipe so it cannot be replayed into either.
 
-A commitment gets one evaluation. A hotkey may replace its recipe as often as it likes — the chain keeps one commitment per hotkey, so there is no count to enforce — but only the one standing when a run opens is measured, and it must have stood for `MIN_COMMITMENT_AGE_BLOCKS` by then. That is the enforceable half of a rate limit, and it means one evaluated attempt per run. Publishing the file is not the commitment; the on-chain payload is.
+| | |
+|---|---|
+| Attempts per run | `RESUBMISSION_LIMIT`, currently 3; only the last is measured |
+| Identical resend | Costs no attempt |
+| Max recipe size | 256 KB |
+| Stored | The final recipe only — the rest survive as digests and a count |
+
+Bodies are held privately until the run that pays them opens, two runs after
+the one submitted in. That is what makes copying pointless: by the time a
+recipe is readable, the run it competed in is closed and paid.
+
+This replaced on-chain commitments, and the reasons are worth keeping in mind
+when weighing the trade:
+
+- **A commitment is public the moment it lands.** The leader's recipe could be
+  read and copied by the field competing against it, before it had been
+  measured.
+- **A commitment keeps no history.** It holds only its latest value, so a
+  resubmission limit had nothing to count against — and a run-411 recipe was
+  lost outright when its miner re-committed, recoverable only because the
+  console had kept the pointer.
+- **A pointer is somebody else's to keep.** One paid miner made their
+  repository private after being paid, and that recipe is now unrecoverable.
+
+What it costs is independent verifiability: the submission set is the operator's
+record rather than something a third party can rebuild from a public ledger.
+Validators read it from the API instead — `/run/{id}`, `/run/{id}/results`,
+`/run/{id}/weights` and `/run/{id}/instances/{hotkey}`, all of which open when
+the run that pays them opens.
+
+The settling rule still applies: a submission must have been in for
+`MIN_COMMITMENT_AGE_BLOCKS` when the run that would measure it opens, or it is
+held over to the run after. That is what keeps a miner from submitting at the
+closing block after watching the whole run.
 
 ---
 

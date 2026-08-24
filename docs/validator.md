@@ -532,12 +532,12 @@ python neurons/validator.py --netuid 1 \
 python neurons/miner.py --netuid 1 \
     --wallet.name miner --wallet.hotkey default \
     --subtensor.chain_endpoint ws://127.0.0.1:9944 \
-    --recipe recipe.json --recipe_uri https://example.test/recipe.json --confirm
+    --recipe recipe.json --api.url http://127.0.0.1:8081 --confirm
 ```
 
 ### What to verify before moving on
 
-- A commitment is admitted and appears in `/queue`.
+- A submission is admitted and appears in `/queue`.
 - An invalid submission is rejected with a clear reason and does **not** enter the queue.
 - A run opens, references are measured, and `/weights` appears.
 - A validator fetches, verifies and submits.

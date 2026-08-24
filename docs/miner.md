@@ -1,8 +1,20 @@
 # Miner guide
 
-You have one job: find the composition of certified adapters that completes the workflow better than anything else on the board — then commit it once.
+You have one job: find the composition of certified adapters that completes the workflow better than anything else on the board — then send it.
 
-Your entire on-chain footprint is a single commitment. You never serve inference, never answer a query, and never run a process the network talks to. How you search is your own business.
+Your whole interaction with the network is one HTTP request. **Nothing goes on chain and nothing is published anywhere.** You never serve inference, never answer a query, and never run a process the network talks to. How you search is your own business.
+
+You need a registered hotkey and nothing else: no commitment, no transaction, no fee, no wallet unlocked for anything but signing a short string. Your recipe travels in the request body, signed by that hotkey, and is held privately until the run that pays it opens — so nobody can read it, let alone copy it, while it is being measured.
+
+```bash
+python neurons/miner.py \
+    --netuid 103 \
+    --wallet.name <coldkey> --wallet.hotkey <hotkey> \
+    --recipe recipe.json \
+    --confirm
+```
+
+That is the entire protocol contract. The rest of this guide is about making the recipe good.
 
 ---
 
@@ -17,9 +29,9 @@ Your recipe then walks three runs:
 
 | | what happens |
 |---|---|
-| **run N** | you commit |
+| **run N** | you submit |
 | **run N+1** | it is evaluated and its score recorded |
-| **run N+2** | that score sets the weight the validator submits on-chain |
+| **run N+2** | that score sets the weight, and your recipe and its score become public |
 
 The gap between measuring and paying is not a delay for its own sake. A weight
 vector is a statement about a **closed** run's leaderboard. Paying inside the
@@ -29,45 +41,42 @@ one, and the vector moves under both as the queue is worked through. A closed
 run has a final leaderboard, and every validator reading the same chain
 computes the same vector from it.
 
-Your commitment earns from that one measurement alone. It is not re-measured
-and it does not keep earning afterwards. To earn again, commit again — which
-gives you one evaluated attempt per day, because a commitment made after a run
+Your submission earns from that one measurement alone. It is not re-measured
+and it does not keep earning afterwards. To earn again, submit again — which
+gives you one evaluated attempt per day, because a recipe sent after a run
 opened is not measured in it. Nothing is terminated: a package that loses costs
 you that run, not the hotkey.
 
-**You may replace your recipe as often as you like before it is measured.** The
-chain keeps one commitment per hotkey, so committing again simply overwrites the
-last one. Submit once, twice, three times inside a run — whatever stands when
-the run ends is the one that gets measured, and the earlier ones cost you
-nothing but the transaction fee. Iterate freely up to that point.
+**Three submissions per run.** Only your last one is measured, and only it is
+stored — the ones it replaced survive as digests and a count, so you can always
+check what you used. Re-sending an identical recipe does not cost an attempt, so
+retrying a request that timed out is safe.
 
-**But do not commit again once your submission is queued.** A recipe committed
-in run N is measured in run N+1. If you commit again *during* run N+1, the
-commitment block moves into N+1 with it, so N+1 measures nothing from you and
-your new recipe waits for N+2 — and its payment for N+3. You did not fail a gate
-or lose a comparison: you withdrew the submission that was about to be judged,
-and you skip a day.
+The limit is real because there is now a record to enforce it against. It is
+high enough to correct a mistake and low enough that you cannot iterate against
+the measurement: a budget you could search with would turn the run into a free
+evaluation service.
 
-**And stop editing an hour before the run closes.** A commitment must have been
-standing for `MIN_COMMITMENT_AGE_BLOCKS` — 300 blocks, about an hour — when the
-run that would measure it opens. Commit inside that last hour and you are not
+**Do not replace your recipe once the run you submitted in has closed.** A
+recipe sent in run N is measured in run N+1. Sending a new one *during* N+1
+files it under N+1, so N+1 measures nothing from you and the new recipe waits
+for N+2 — and its payment for N+3. You did not fail a gate or lose a comparison:
+you withdrew the submission that was about to be judged, and you skip a day.
+
+**And stop editing an hour before the run closes.** A submission must have been
+in for `MIN_COMMITMENT_AGE_BLOCKS` — 300 blocks, about an hour — when the run
+that would measure it opens. Submit inside that last hour and you are not
 dropped, you are held over to the run after. Every replacement restarts the
-hour, so a miner still swapping recipes at the close waits a further run.
-
-This is a rate limit that can actually be enforced. Limiting submissions by
-count would need a record of your earlier ones, and there is none: the chain
-keeps one commitment per hotkey and a validator sees only the block of the one
-standing. Age is the part that is on the chain, so the rule is "let it settle"
-rather than "submit at most hourly". It also removes the advantage of committing
-at the closing block after watching the whole run.
+hour, so a miner still swapping recipes at the close waits a further run. It
+also removes the advantage of submitting at the closing block after watching the
+whole run.
 
 Ask the tooling rather than doing the arithmetic. Pass the current block and
-`capability-miner commitment` says which run will measure the recipe and how
-long you have left:
+`capability-miner timing` says which run will measure a submission made now and
+how long you have left:
 
 ```bash
-capability-miner commitment --recipe recipe.canon.json \
-    --recipe-uri <your-url> --block $(btcli subnet show --netuid 103 | grep -i block)
+capability-miner timing --block $(btcli subnet show --netuid 103 | grep -i block)
 
 # run 412: measured in run 413, paid in run 414. 6890 blocks (~23.0h) left to
 # change your mind.
@@ -77,11 +86,11 @@ Inside the closing window it says so instead:
 
 ```
 run 412 closes in 200 blocks, inside the 60-minute settling window.
-A commitment made now is measured in run 414, not 413.
-Commit anyway and you skip a run; wait for run 413 to open and you do not.
+A submission made now is measured in run 414, not 413.
+Submit anyway and you skip a run; wait for run 413 to open and you do not.
 ```
 
-Add `--strict-timing` to make that a non-zero exit, so a script does not commit
+Add `--strict-timing` to make that a non-zero exit, so a script does not submit
 into a run that will not measure it.
 
 The rule in three lines: **replace it freely early in the run, stop an hour
@@ -89,15 +98,15 @@ before it closes, then leave it alone until you have been measured.**
 
 The floor is what keeps copying expensive. Reading a published recipe, tweaking
 it and resubmitting costs a full run per attempt, against an anti-copy check
-that compares you to every commitment already admitted and a champion whose
+that compares you to every submission already admitted and a champion whose
 margin you still have to clear.
 
-So: validate locally, evaluate locally, and only then commit — a wasted
-commitment costs you a run.
+So: validate locally, evaluate locally, and only then submit — a wasted
+attempt costs you a run.
 
 **Start from the worked example.** [`examples/quickstart_miner.py`](../examples/quickstart_miner.py)
 does the whole loop in one file — builds valid recipes, rejects the inadmissible
-ones, scores the survivors, writes the winner and prints its commitment:
+ones, scores the survivors, writes the winner and prints its digest:
 
 ```bash
 python examples/quickstart_miner.py --tries 20 --out recipe.json
@@ -105,10 +114,10 @@ python examples/quickstart_miner.py --tries 20 --out recipe.json
 
 It runs with no GPU and no chain. Its *search* is random sampling, which is the
 weakest search there is and the part you are meant to replace; everything around
-it — validation, digests, commitment encoding, local scoring — is the part you
+it — validation, digests, signing, local scoring — is the part you
 can rely on. See [examples/README.md](../examples/README.md).
 
-> An *infrastructure* failure costs you nothing beyond the run. If a validator cannot serve your package or the sandbox falls over, you are not scored down for it — you are simply not measured, exactly as if you had not committed.
+> An *infrastructure* failure costs you nothing beyond the run. If a validator cannot serve your package or the sandbox falls over, you are not scored down for it — you are simply not measured, exactly as if you had not submitted.
 
 ---
 
@@ -274,7 +283,7 @@ print(result.summary())
 
 Two things worth knowing:
 
-- **The artifact digest you compute here is the digest the engine will compute.** If they differ, your host disagrees with the engine about determinism — worth finding out before committing, not after.
+- **The artifact digest you compute here is the digest the engine will compute.** If they differ, your host disagrees with the engine about determinism — worth finding out before submitting, not after.
 - **Twenty instances is not enough to distinguish two similar recipes.** The variance of an end-to-end completion rate over a small sample is wide. If you are comparing candidates that differ by a few points, you need many more instances or a cheaper proxy metric.
 
 ## 6. Search
@@ -300,66 +309,71 @@ Things worth investigating:
 
 The engine publishes a compatibility history at `/compatibility` — co-selection frequencies, marginal contributions, method and rank effects across every evaluation the network has run. It is the accumulated answer to exactly these questions.
 
-## 7. Publish and commit
+## 7. Submit
 
-Publish the **exact recipe bytes** at an immutable, content-addressed location. Accepted pointer forms:
-
-```
-hf:<owner>/<repo>/<path>
-ipfs:<cid>
-https://<host>/<path>
-```
-
-The pointer is not trusted — the bytes are verified against your on-chain digest before anything is parsed — so a mutable host is safe from an integrity standpoint. It is not safe from an *availability* standpoint: if the engine cannot fetch your bytes, your submission is not admitted.
-
-Write the file in canonical form so its digest matches what you commit:
-
-```bash
-python -m capability_subnet.miner.cli canonicalise --recipe recipe.json
-python -m capability_subnet.miner.cli digest --recipe recipe.json
-```
-
-Preview the exact on-chain payload:
-
-```bash
-python -m capability_subnet.miner.cli commitment \
-    --recipe recipe.json \
-    --recipe-uri hf:alice/capsub-recipes/final.json
-```
-
-Then a dry run, which performs every check and touches nothing:
+There is nothing to publish and nothing to commit. Send the recipe:
 
 ```bash
 python neurons/miner.py \
-    --netuid <netuid> \
+    --netuid 103 \
     --wallet.name <coldkey> --wallet.hotkey <hotkey> \
-    --recipe recipe.json \
-    --recipe_uri hf:alice/capsub-recipes/final.json
+    --recipe recipe.json
 ```
 
-And finally, when you are sure:
+Without `--confirm` this is a dry run: it validates the recipe, reads the run
+from the API, prints the digest, says what it would replace and how many of the
+run's three attempts you would have left — and sends nothing.
 
-```bash
-python neurons/miner.py ... --confirm
 ```
+run 412: measured in run 413, paid in run 414
+digest      sha256:38f6428d92f241679146202cc68bba9372591e5916c0085fdf49f3ba3c805576
+attempts    none used, 3 available this run
+
+Nothing was sent. Re-run with --confirm to submit.
+```
+
+Add `--confirm` when you are sure.
+
+The digest is the canonical digest of your recipe — the same number
+`capability-miner digest` prints, and the same one the engine identifies your
+package by. You sign a string binding that digest to the run, so a signature
+cannot be replayed into a later run or against a different recipe. The client
+serialises the recipe canonically before sending, so formatting in your editor
+is irrelevant and there is exactly one number to check.
+
+`--api.url` (or `CAPSUB_API_URL`) points at the submission service if you need
+to override it.
 
 ## 8. Track it
 
 ```bash
-curl https://<engine-host>/queue/<your-hotkey>
+curl https://<api-host>/status/<your-hotkey>
 ```
 
-| Status | Meaning |
+```json
+{"run_id": 412, "submitted": true, "submission_count": 1,
+ "remaining": 2, "recipe_sha256": "sha256:38f6428d…", "superseded": []}
+```
+
+`superseded` lists the digests of recipes this one replaced, so the attempt
+count is checkable rather than something you are told.
+
+Your recipe, its score and the run's weight vector all become public when the
+run that pays it opens — two runs after the one you submitted in:
+
+| route | what it gives |
 |---|---|
-| `queued` | Admitted, waiting. Challengers are evaluated in commit-block order. |
-| `evaluating` | Being measured right now. |
-| `champion` | It took the throne. |
-| `terminated` | It lost, or failed a hard gate. This hotkey is finished. |
-| *404* | Not admitted. Either the engine has not read the chain yet, or admission rejected it. |
+| `GET /run/{id}` | what was submitted, and by whom |
+| `GET /run/{id}/results` | every score, gate verdict and rank |
+| `GET /run/{id}/weights` | what the run pays |
+| `GET /run/{id}/instances/{hotkey}` | what each package was asked and answered |
+
+Ask before then and they answer `released: false` with the run they open in,
+rather than an error.
 
 The full evaluation report is published at `/reports` — every gate verdict, every per-axis comparison, the paired statistics, and the reason for the decision.
 
-**Your score appears the day after you commit; the emission the day after
+**Your score appears the day after you submit; the emission the day after
 that.** A weight vector states a closed run's leaderboard, so the run that
 measures you is not the run that pays you. Seeing a report with a good score
 and no emission on the same day is the pipeline working, not a failure.
@@ -379,7 +393,7 @@ See [min_compute.yml](../min_compute.yml) for detail.
 
 ## Common mistakes
 
-**Committing a digest that does not match the canonical form.** The engine re-derives the digest from the parsed document. Use `canonicalise` and the two always agree.
+**Assuming your file's formatting matters.** It does not: the client serialises your recipe canonically before signing and sending, so the digest is the same whatever your editor did. `canonicalise` writes that form to disk if you want to see it.
 
 **Choosing rank 128.** It exceeds the artifact-size gate against the pinned base model. Run `size` first.
 
@@ -399,7 +413,7 @@ something; producing something undeployable is not. See
 worse, not better. Two packages that finish the same fraction of workflows are
 not equally valuable if one costs twice as much to run.
 
-**Committing before evaluating.** A commitment is measured once and the next attempt is a run away. There is no reason to spend one on a package you have not measured.
+**Submitting before evaluating.** Only your last recipe is measured and you get three a run. There is no reason to spend one on a package you have not measured.
 
 **Assuming a loss is the end.** It is, if you were genuinely measured and genuinely lost. It is not when the engine could not evaluate you — an unreadable memory counter or too few scored instances holds your submission for a later run rather than terminating it. While it waits it earns a small share of emission, which is what keeps it from being deregistered before its turn comes.
 
@@ -469,7 +483,7 @@ Between **2 and 10** adapter IDs from the frozen pool. Duplicates are rejected.
 All 30 pool adapters are selectable; certification no longer gates selection. The
 bound is `MIN_SELECTED_ADAPTERS`/`MAX_SELECTED_ADAPTERS` and is exported in the
 published JSON Schema as `minItems`/`maxItems`, so `capability-miner validate`
-catches a violation before you commit.
+catches a violation before you submit.
 
 Order does not matter — reconstruction always loads in sorted identifier order, so the same set produces the same artifact however you wrote it.
 
@@ -515,7 +529,7 @@ This is where the interesting structure lives. Reading a manual and writing SQL 
 | `output_rank` | `8, 16, 32, 48, 64, 96, 128` | Artifact size and memory, paid for with reconstruction error |
 | `svd_clamp_quantile` | `0.90 … 1.00` | Caps how much one direction may dominate; `1.0` disables it |
 
-> **Rank 128 exceeds the 500 MB artifact gate against the pinned base model** (≈666 MB). It is a legal schema value and an automatic rejection at evaluation. Run `miner.cli size --recipe recipe.json` before committing.
+> **Rank 128 exceeds the 500 MB artifact gate against the pinned base model** (≈666 MB). It is a legal schema value and an automatic rejection at evaluation. Run `miner.cli size --recipe recipe.json` before submitting.
 
 Setting `svd_clamp_quantile` below `1.0` forces the full decomposition path even for `linear`, because clamping is defined on the decomposition and has no factor-space equivalent.
 
@@ -594,11 +608,11 @@ Any failure zeroes the candidate.
 
 | Gate | Requirement |
 |---|---|
-| Identity | Registered hotkey with a valid commitment |
-| Digest | Recipe bytes match the on-chain digest |
+| Identity | Registered hotkey, and a signature that matches it |
+| Digest | Recipe bytes match the digest you signed |
 | Schema | Valid V1 recipe |
 | Source pool | Only adapters from the frozen snapshot |
-| Anti-copy | Not a duplicate of an earlier commitment |
+| Anti-copy | Not a duplicate of an earlier submission |
 | Reconstruction | Independent workers agree on the artifact hash |
 | Compatibility | Exact base model and module shapes |
 | Numerical | No NaN or infinity |
@@ -617,32 +631,38 @@ Any failure zeroes the candidate.
 Two of these say the validator could not measure you rather than that you fell
 short: an unreadable GPU memory counter, and too few instances scored to compare
 on. Neither is scored against you — the run simply does not pay you, and the
-next commitment is measured on its own terms.
+next submission is measured on its own terms.
 
 ---
 
-## Committing
+## Submitting
 
-The on-chain payload is compact — the digest travels as unpadded base64url rather than hex to leave room for the pointer:
+One request. The recipe is the body, signed by your hotkey:
 
 ```
-capsub1|imde|<43-char digest>|<uri>
+POST /submit
+{"hotkey": "5…", "recipe": "<the recipe JSON>", "signature": "0x…"}
 ```
 
-Maximum **128 bytes**. Accepted pointer forms:
+The signature is over this exact string, where the run is the one the API is
+currently in and the digest is your recipe's canonical digest:
 
-| Form | Example |
+```
+capcomp-submit:v1:<run_id>:sha256:<hex>
+```
+
+Both are inside it, so a signature cannot be replayed into a later run or
+against a different recipe. `neurons/miner.py` does all of this; the shape is
+here so you can build your own client if you would rather.
+
+| | |
 |---|---|
-| Hugging Face | `hf:owner/repo/path/recipe.json` |
-| IPFS | `ipfs:<cid>` |
-| HTTPS | `https://host/path/recipe.json` |
+| Attempts per run | 3, and only the last is measured |
+| Identical resend | Free — it costs no attempt |
+| Max recipe size | 256 KB |
+| Refusals | `401` signature, `403` not registered, `429` no attempts left |
 
-The pointer is not trusted — bytes are verified against the digest before parsing — so a mutable host is safe for integrity. It is not safe for availability: if the engine cannot fetch your bytes, the submission is not admitted.
-
-```bash
-python -m capability_subnet.miner.cli commitment \
-    --recipe recipe.json --recipe-uri hf:alice/recipes/final.json
-```
+`GET /contract` returns all of this as JSON.
 
 ---
 
@@ -667,20 +687,25 @@ Building and validating recipes: any machine. Reconstructing an artifact: ~32 GB
 
 ### How often can I submit?
 
-Once a day, in effect. A commitment is measured in the run after the one it was
-made in, so committing again immediately does not buy you a second measurement
-in the same run — it replaces what will be measured in the next one. Nothing is
-terminated, and a loss costs you that run rather than the hotkey.
+Three times a run, and once a day in effect. A submission is measured in the run
+after the one it was made in, so sending another immediately does not buy you a
+second measurement in the same run — it replaces what will be measured in the
+next one. Nothing is terminated, and a loss costs you that run rather than the
+hotkey.
 
 ### Doesn't that make copying cheap?
 
-It makes it slow, which is the part that matters. Reading a published recipe and
-tweaking it costs a run per attempt, and each attempt still has to clear the
-anti-copy check against every commitment already admitted and beat the champion
-by its margin. Iterating toward a win that way is strictly more expensive than
-searching properly, and it is visible the whole time.
+There is nothing to copy while it matters. Recipes are held privately and
+published two runs after they were submitted — by which point the run they
+competed in is paid and closed. A recipe you can read is one that has already
+earned what it was going to earn.
 
-### How do I know my recipe is valid before committing?
+Copying an old one is still possible and still slow: it costs a run per attempt,
+has to clear the anti-copy check against every submission already admitted, and
+has to beat the champion by its margin. Iterating toward a win that way is
+strictly more expensive than searching properly.
+
+### How do I know my recipe is valid before submitting?
 
 ```bash
 python -m capability_subnet.miner.cli validate --recipe recipe.json

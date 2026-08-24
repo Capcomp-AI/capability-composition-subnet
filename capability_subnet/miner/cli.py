@@ -203,12 +203,11 @@ def _cmd_pack(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_commitment(args: argparse.Namespace) -> int:
-    """Show the exact payload that would be written on-chain.
+def _cmd_timing(args: argparse.Namespace) -> int:
+    """Which run a submission made now would be measured and paid in.
 
-    With ``--block``, also says which run will measure it. Committing inside the
-    closing window is not refused by the chain and not an error here either —
-    but it is almost never what a miner means, so it has to be said out loud
+    Submitting inside the run's closing window is not refused — but it costs a
+    run, and it is almost never what a miner means, so it is said out loud here
     rather than discovered a run later when nothing was scored.
     """
     from capability_subnet.common import constants as C
@@ -217,46 +216,30 @@ def _cmd_commitment(args: argparse.Namespace) -> int:
         run_position,
         weighting_run_for,
     )
-    from capability_subnet.common.commitments import CommitmentError, encode_commitment
-
-    try:
-        recipe = load_recipe(args.recipe)
-        payload = encode_commitment(recipe.workflow_id, recipe.digest(), args.recipe_uri)
-    except (RecipeError, CommitmentError) as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
-
-    print(payload)
-    print(f"\n{len(payload.encode('utf-8'))} bytes", file=sys.stderr)
-
-    if args.block is None:
-        return 0
 
     position = run_position(args.block, C.DEFAULT_RUN_BLOCKS)
     minutes = C.MIN_COMMITMENT_AGE_BLOCKS * 12 / 60
     # Asked, not re-derived. The rule has two halves and a copy that keeps only
-    # the obvious one is wrong exactly at the boundary this paragraph is about.
+    # the obvious one is wrong exactly at the boundary this is about.
     measured = measuring_run_for(args.block, C.DEFAULT_RUN_BLOCKS)
     paid = weighting_run_for(args.block, C.DEFAULT_RUN_BLOCKS)
 
     if position.in_settling_window:
         print(
-            f"\nrun {position.run_id} closes in {position.blocks_remaining} blocks, inside the "
+            f"run {position.run_id} closes in {position.blocks_remaining} blocks, inside the "
             f"{minutes:.0f}-minute settling window.\n"
-            f"A commitment made now is measured in run {measured}, not "
-            f"{position.run_id + 1} — it has to have been standing for "
+            f"A submission made now is measured in run {measured}, not "
+            f"{position.run_id + 1} — it has to have been in for "
             f"{C.MIN_COMMITMENT_AGE_BLOCKS} blocks when a run opens to be measured by it.\n"
-            f"Commit anyway and you skip a run; wait for run {position.run_id + 1} to open "
-            f"and you do not.",
-            file=sys.stderr,
+            f"Submit anyway and you skip a run; wait for run {position.run_id + 1} to open "
+            f"and you do not."
         )
         return 3 if args.strict_timing else 0
 
     print(
-        f"\nrun {position.run_id}: measured in run {measured}, paid in run {paid}. "
+        f"run {position.run_id}: measured in run {measured}, paid in run {paid}. "
         f"{position.blocks_until_settling_window} blocks "
-        f"(~{position.blocks_until_settling_window * 12 / 3600:.1f}h) left to change your mind.",
-        file=sys.stderr,
+        f"(~{position.blocks_until_settling_window * 12 / 3600:.1f}h) left to change your mind."
     )
     return 0
 
@@ -265,7 +248,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="capability-miner",
         description="Build, validate and inspect composition recipes.",
-        epilog="Committing a recipe is done with `python neurons/miner.py --confirm`.",
+        epilog="Submitting a recipe is done with `python neurons/miner.py --confirm`.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -322,30 +305,28 @@ def build_parser() -> argparse.ArgumentParser:
     pack.add_argument("--no-databases", action="store_true")
     pack.set_defaults(func=_cmd_pack)
 
-    commitment = subparsers.add_parser(
-        "commitment", help="Show the exact on-chain payload for a recipe."
+    timing = subparsers.add_parser(
+        "timing", help="Which run a submission made now is measured and paid in."
     )
-    commitment.add_argument("--recipe", required=True)
-    commitment.add_argument("--recipe-uri", dest="recipe_uri", required=True)
-    commitment.add_argument(
+    timing.add_argument(
         "--block",
         type=int,
-        default=None,
+        required=True,
         help=(
-            "Current chain block. Reports which run will measure this commitment, "
-            "and warns if the run is close enough to closing that it would be held "
-            "over to the run after."
+            "Current chain block. Reports which run would measure a submission "
+            "made now, and warns when the run is close enough to closing that it "
+            "would be held over to the run after."
         ),
     )
-    commitment.add_argument(
+    timing.add_argument(
         "--strict-timing",
         action="store_true",
         help=(
             "Exit non-zero when --block falls inside the settling window, so a "
-            "script does not commit into a run that will not measure it."
+            "script does not submit into a run that will not measure it."
         ),
     )
-    commitment.set_defaults(func=_cmd_commitment)
+    timing.set_defaults(func=_cmd_timing)
 
     return parser
 

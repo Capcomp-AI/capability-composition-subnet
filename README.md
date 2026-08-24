@@ -60,12 +60,12 @@ ENGINE         admit      → validate, verify the digest, check the frozen pool
   │
 VALIDATOR      fetch weights → verify the signature → check against the chain → set_weights
   │
-CHAIN          identity, commitments, consensus, emission
+CHAIN          identity, consensus, emission
 ```
 
 ### Continuous champion-challenge
 
-There is no round ceremony. A champion holds the throne continuously; challengers are drawn from a queue **in commit order** and evaluated one at a time. Nobody chooses who challenges next — the chain does, by the order it accepted commitments.
+There is no round ceremony. A champion holds the throne continuously; challengers are drawn from a queue **in submission order** and evaluated one at a time. Nobody chooses who challenges next — the order submissions arrived does.
 
 Every run (~24 h) the engine draws a **fresh set of hidden instances** and re-measures the champion and every baseline on them. Nobody defends on data they have already been scored on, and nothing needs to be revealed, because the instances did not exist in observable form before the run opened.
 
@@ -87,7 +87,7 @@ The third bar is **off by default** (`require_beat_reference`): the highest scor
 
 The incumbent is not one of the permanent references. It gets its own smaller margin, which decays to zero over roughly thirty days.
 
-**One measurement per commitment.** A run is a day, and the pipeline is three runs deep: commit in run N, measured in run N+1, and that score sets the weight submitted on-chain in run N+2. A commitment earns from that one measurement alone; to earn again, commit again. Weights lag the measurement by a run so that a vector is always computed from a *closed* run's final leaderboard rather than from one still being written. Nothing is terminated, and a failure that indicts the validator — an unreadable memory counter, too few scored instances — is not scored against the miner at all.
+**One measurement per submission.** A run is a day, and the pipeline is three runs deep: submit in run N, measured in run N+1, and that score sets the weight submitted on-chain in run N+2. A submission earns from that one measurement alone; to earn again, submit again — up to three times a run, of which only the last is measured. Weights lag the measurement by a run so that a vector is always computed from a *closed* run's final leaderboard rather than from one still being written. Nothing is terminated, and a failure that indicts the validator — an unreadable memory counter, too few scored instances — is not scored against the miner at all.
 
 ### The run pays only if its leader takes the throne
 
@@ -242,7 +242,7 @@ python -m capability_subnet.workflows.cli selftest --count 10
 python -m capability_subnet.miner.cli init --random --out recipe.json
 
 # Or run the whole miner loop in one file: build, score, write, print the
-# commitment. No GPU and no chain. Its search is deliberately naive — that is
+# submission. No GPU and no chain. Its search is deliberately naive — that is
 # the part you compete on. See examples/README.md
 python examples/quickstart_miner.py --tries 20 --out recipe.json
 python -m capability_subnet.miner.cli validate --recipe recipe.json
@@ -259,7 +259,7 @@ Then read the guide for your role:
 
 ## How validators decide
 
-Every number a validator submits comes from work it did. It reads the commitments on chain, fetches each recipe, reconstructs the merged adapter on its own hardware, serves it through its own endpoint, and scores it against instances it regenerates from a seed derived from a block hash. It trusts nobody. It needs a 32 GB card, and measures one candidate per card in parallel across every card it has.
+Every number a validator submits comes from work it did. It reads the run's submissions from the API, takes each recipe, reconstructs the merged adapter on its own hardware, serves it through its own endpoint, and scores it against instances it regenerates from a seed derived from a block hash. It trusts nobody. It needs a 32 GB card, and measures one candidate per card in parallel across every card it has.
 
 Validators are not required to agree on artifact bytes — six of the seven merge methods run an SVD, and an SVD is not bitwise reproducible across devices — so they are compared on outcomes rather than on hashes.
 
@@ -302,7 +302,7 @@ capability_subnet/
 ├── workflows/       workflow definitions, generators and deterministic scorers
 ├── sandbox/         isolated execution: agent loop, tool services, limits
 ├── scoring/         aggregation, gates, comparator, ranking, weight vector
-├── miner/           recipe construction, local evaluation, commitment
+├── miner/           recipe construction, local evaluation, submission
 ├── validator/       the thin weight-setter
 ├── audit/           independent verification of published records
 └── testing/         miniature-pool fixtures, published as a pytest plugin

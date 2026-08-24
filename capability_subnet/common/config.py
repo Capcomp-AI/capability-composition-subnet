@@ -277,13 +277,11 @@ def add_miner_args(parser: argparse.ArgumentParser) -> None:
         help="Path to the recipe JSON file to submit.",
     )
     parser.add_argument(
-        "--recipe_uri",
+        "--api.url",
+        dest="api_url",
         type=str,
-        default=_env("CAPSUB_RECIPE_URI", ""),
-        help=(
-            "Immutable, content-addressed location where the exact recipe bytes "
-            "are published (hf:, ipfs: or https:)."
-        ),
+        default=_env("CAPSUB_API_URL", "https://lora-merger-api-production.up.railway.app"),
+        help="Submission API. This is where a recipe is sent; nothing goes on chain.",
     )
     parser.add_argument(
         "--backend.url",

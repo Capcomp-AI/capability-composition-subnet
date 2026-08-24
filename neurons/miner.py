@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """Miner entry point.
 
-Validates a recipe and, with --confirm, commits its digest on-chain.
+Validates a recipe and, with --confirm, sends it to the submission API.
 
     python neurons/miner.py \
-        --netuid <netuid> \
+        --netuid 103 \
         --wallet.name <coldkey> --wallet.hotkey <hotkey> \
         --recipe recipe.json \
-        --recipe_uri hf:<owner>/<repo>/recipe.json \
         --confirm
 
-One recipe per hotkey is final. Run without --confirm first: the miner prints
-exactly what it would commit and exits without touching the chain.
+Nothing goes on chain and nothing is published anywhere: the recipe travels in
+the request body, signed by the hotkey. Run without --confirm first — the miner
+prints exactly what it would send, what it would replace, and how many of the
+run's attempts it would use, then exits without sending anything.
 """
 
 import sys
