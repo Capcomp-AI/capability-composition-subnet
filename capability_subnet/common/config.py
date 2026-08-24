@@ -280,7 +280,7 @@ def add_miner_args(parser: argparse.ArgumentParser) -> None:
         "--api.url",
         dest="api_url",
         type=str,
-        default=_env("CAPSUB_API_URL", "https://lora-merger-api-production.up.railway.app"),
+        default=_env("CAPSUB_API_URL", "https://api.capcomp.ai"),
         help="Submission API. This is where a recipe is sent; nothing goes on chain.",
     )
     parser.add_argument(

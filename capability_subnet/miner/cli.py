@@ -310,8 +310,31 @@ def _cmd_status(args: argparse.Namespace) -> int:
     print(f"run {run}: measured in run {run + 1}, paid in run {run + 2}")
     print(f"  holding   {payload['recipe_sha256']}")
     print(f"  attempts  {payload['submission_count']} used, {payload['remaining']} left")
-    for old in payload.get("superseded") or []:
-        print(f"  replaced  {old}")
+    for superseded in payload.get("superseded") or []:
+        print(f"  replaced  {superseded}")
+
+    admission = payload.get("admission")
+    if not admission:
+        print("  state     accepted; the engine has not reached it yet")
+        return 0
+
+    state = admission.get("state")
+    if state == "rejected":
+        # Non-zero, so a script that submits and checks notices. This is the
+        # one outcome a miner has to act on, and acting on it means submitting
+        # a corrected recipe while the run is still open.
+        print(f"\n  REJECTED: {admission['reason']}")
+        print(
+            f"  Nothing will be measured for run {run} unless you submit a "
+            f"corrected recipe. {payload['remaining']} attempts left."
+        )
+        return 1
+
+    if state == "measured":
+        print(f"  state     measured in run {admission['measured_in_run']}; "
+              f"the result opens in run {run + 2}")
+    else:
+        print(f"  state     {state}, to be measured in run {admission['measured_in_run']}")
     return 0
 
 
@@ -394,7 +417,7 @@ def build_parser() -> argparse.ArgumentParser:
         sub.add_argument(
             "--api.url", dest="api_url",
             default=os.environ.get(
-                "CAPSUB_API_URL", "https://lora-merger-api-production.up.railway.app"
+                "CAPSUB_API_URL", "https://api.capcomp.ai"
             ),
             help="Submission API. This is where a recipe goes; nothing is put on chain.",
         )
