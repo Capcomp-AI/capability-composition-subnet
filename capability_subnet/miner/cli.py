@@ -230,11 +230,12 @@ def _cmd_timing(args: argparse.Namespace) -> int:
         print(
             f"run {position.run_id} closes in {position.blocks_remaining} blocks, inside the "
             f"{minutes:.0f}-minute settling window.\n"
-            f"A submission made now is measured in run {measured}, not "
-            f"{position.run_id + 1} — it has to have been in for "
-            f"{C.MIN_COMMITMENT_AGE_BLOCKS} blocks when a run opens to be measured by it.\n"
-            f"Submit anyway and you skip a run; wait for run {position.run_id + 1} to open "
-            f"and you do not."
+            f"A submission made now is refused: it has to have been in for "
+            f"{C.MIN_COMMITMENT_AGE_BLOCKS} blocks when a run opens to be measured by it, "
+            f"and it cannot be.\n"
+            f"Nothing is stored and no attempt is spent. Wait for run "
+            f"{position.run_id + 1} to open, then send it — it is measured in run "
+            f"{position.run_id + 2}."
         )
         return 3 if args.strict_timing else 0
 

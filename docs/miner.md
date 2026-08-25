@@ -60,13 +60,18 @@ files it under N+1, so N+1 measures nothing from you and the new recipe waits
 for N+2 — and its payment for N+3. You did not fail a gate or lose a comparison:
 you withdrew the submission that was about to be judged, and you skip a day.
 
-**And stop editing an hour before the run closes.** A submission must have been
+**Submissions close an hour before the run does.** A submission must have been
 in for `MIN_COMMITMENT_AGE_BLOCKS` — 300 blocks, about an hour — when the run
-that would measure it opens. Submit inside that last hour and you are not
-dropped, you are held over to the run after. Every replacement restarts the
-hour, so a miner still swapping recipes at the close waits a further run. It
-also removes the advantage of submitting at the closing block after watching the
-whole run.
+that would measure it opens. Inside that last hour the API **refuses it**:
+`409`, nothing stored, no attempt spent. Send it again once the next run opens.
+
+It used to be accepted and quietly held over to the run after, which was worse
+for everyone: you were told nothing and watched a blank row sit through a run
+you thought you had entered. Refusing says so while you can still act on it.
+
+The window also removes the advantage of submitting at the closing block after
+watching the whole run — every result published and every recipe disclosed —
+before choosing.
 
 Ask the tooling rather than doing the arithmetic. Pass the current block and
 `capcomp timing` says which run will measure a submission made now and how
@@ -83,15 +88,18 @@ Inside the closing window it says so instead:
 
 ```
 run 412 closes in 200 blocks, inside the 60-minute settling window.
-A submission made now is measured in run 414, not 413.
-Submit anyway and you skip a run; wait for run 413 to open and you do not.
+A submission made now is refused: it has to have been in for 300 blocks when a
+run opens to be measured by it, and it cannot be.
+Nothing is stored and no attempt is spent. Wait for run 413 to open, then send
+it — it is measured in run 414.
 ```
 
 Add `--strict-timing` to make that a non-zero exit, so a script does not submit
 into a run that will not measure it.
 
 The rule in three lines: **replace it freely early in the run, stop an hour
-before it closes, then leave it alone until you have been measured.**
+before it closes — after that it is refused — then leave it alone until you
+have been measured.**
 
 The floor is what keeps copying expensive. Reading a published recipe, tweaking
 it and resubmitting costs a full run per attempt, against an anti-copy check
