@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -76,7 +77,22 @@ class ModelClient(Protocol):
 
 
 class OpenAICompatibleClient:
-    """Talks to a served candidate over the chat-completions API."""
+    """Talks to a served candidate over the chat-completions API.
+
+    Holds one pooled connection set for the life of the client. Every request
+    used to go through ``httpx.post``, which builds a client, opens a socket,
+    sends one request and tears the whole thing down again — about twenty-three
+    thousand times in a run of this size. The cost is not the handshake itself
+    but what it does to the batch: the server is sized for
+    ``SANDBOX_BATCH_CONCURRENCY`` sequences at once and only four or five were
+    ever in flight, so the card ran at a seventh of the batch it was given and a
+    run took hours longer than the batching was supposed to make it.
+
+    The pool is sized to the batch for that reason. Fewer connections than
+    concurrent callers is the same bottleneck one layer down: threads would
+    queue for a socket instead of for the GPU, and the batch would stay empty
+    while every thread believed it had sent its request.
+    """
 
     def __init__(
         self,
@@ -86,12 +102,44 @@ class OpenAICompatibleClient:
         api_key: str = "not-required",
         timeout: float = 120.0,
         enable_thinking: bool = C.SANDBOX_ENABLE_THINKING,
+        concurrency: int = C.SANDBOX_BATCH_CONCURRENCY,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.api_key = api_key
         self.timeout = timeout
         self.enable_thinking = enable_thinking
+        self.concurrency = max(1, concurrency)
+        self._client: Any = None
+        self._client_lock = threading.Lock()
+
+    def _http(self) -> Any:
+        """The shared client, built once. httpx.Client is thread-safe."""
+        if self._client is None:
+            with self._client_lock:
+                if self._client is None:
+                    import httpx
+
+                    self._client = httpx.Client(
+                        timeout=self.timeout,
+                        limits=httpx.Limits(
+                            max_connections=self.concurrency,
+                            max_keepalive_connections=self.concurrency,
+                            keepalive_expiry=120.0,
+                        ),
+                    )
+        return self._client
+
+    def close(self) -> None:
+        client, self._client = self._client, None
+        if client is not None:
+            client.close()
+
+    def __enter__(self) -> OpenAICompatibleClient:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
 
     def complete(
         self,
@@ -101,8 +149,6 @@ class OpenAICompatibleClient:
         seed: int,
         max_tokens: int,
     ) -> ModelReply:
-        import httpx
-
         body: dict[str, Any] = {
             "model": self.model,
             "messages": [message.to_api() for message in messages],
@@ -129,11 +175,10 @@ class OpenAICompatibleClient:
             body["tool_choice"] = "auto"
 
         try:
-            response = httpx.post(
+            response = self._http().post(
                 f"{self.base_url}/v1/chat/completions",
                 json=body,
                 headers={"Authorization": f"Bearer {self.api_key}"},
-                timeout=self.timeout,
             )
             response.raise_for_status()
             payload = response.json()
