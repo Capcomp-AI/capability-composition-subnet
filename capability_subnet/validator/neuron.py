@@ -356,21 +356,25 @@ class ValidatorNeuron:
             )
             eligible = eligible[:limit]
 
+        # Nothing reaches this list any more, and the run burns because of it.
+        #
+        # This path took its field from the chain: a commitment named a digest
+        # and a pointer, and the recipe was fetched from that pointer. Miners
+        # submit to the API instead, so no commitment decodes into a submission
+        # and read_commitments yields nothing however full the chain looks.
+        #
+        # Said out loud rather than left to produce an empty field silently. A
+        # validator running this would otherwise burn every run and look like it
+        # had measured an empty subnet, which is the one thing that must not be
+        # indistinguishable from a subnet nobody entered.
         candidates: list[Candidate] = []
-        for commitment in eligible:
-            recipe = self._resolve(commitment)
-            if recipe is None:
-                continue
-            uid = self._uid_of(commitment.hotkey)
-            if uid is None:
-                continue
-            candidates.append(
-                Candidate(
-                    uid=uid,
-                    hotkey=commitment.hotkey,
-                    recipe=recipe,
-                    first_block=commitment.block,
-                )
+        if not eligible:
+            log.warning(
+                "run %s: no candidates. This validator measures the field it reads "
+                "from the chain, and submissions no longer go there — they go to "
+                "the submission service. Until this path reads from it, every run "
+                "here burns.",
+                run_id,
             )
 
         reigning = self._reigning_grade(run_id)
@@ -615,16 +619,6 @@ class ValidatorNeuron:
         try:
             return list(self.metagraph.hotkeys).index(hotkey)
         except ValueError:
-            return None
-
-    def _resolve(self, commitment):
-        """Fetch a committed recipe and check it against its own digest."""
-        from capability_subnet.validator.resolve import ResolutionError, resolve_recipe
-
-        try:
-            return resolve_recipe(commitment)
-        except ResolutionError as exc:
-            log.info("uid %s: %s", commitment.hotkey[:8], exc)
             return None
 
     def _measure_base(self, assignment, sample):

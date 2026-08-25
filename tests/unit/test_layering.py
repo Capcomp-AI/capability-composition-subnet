@@ -171,17 +171,20 @@ class TestNothingIsKeyedByWhicheverWorkflowIsDefault:
         assert set(available_workflows()) == registered
 
     def test_every_workflow_has_a_commitment_code(self):
-        from capability_subnet.common.commitments import WORKFLOW_CODES, decode_commitment
-        from capability_subnet.common.hashing import sha256_bytes
+        """Codes outlive the route that used them.
+
+        Nothing writes a commitment any more, but payloads written before the
+        switch are still on the chain, and a reader deciding whether one belongs
+        to this subnet resolves its code. A workflow missing from the table
+        would make its old commitments unattributable rather than merely
+        unreadable.
+        """
+        from capability_subnet.common.commitments import CODE_TO_WORKFLOW, WORKFLOW_CODES
         from capability_subnet.workflows import available_workflows
 
-        uri = "hf:alice/recipes/final.json"
         for workflow_id in available_workflows():
-            assert workflow_id in WORKFLOW_CODES, f"{workflow_id} could never be committed"
-            from capability_subnet.common.commitments import encode_commitment
-
-            payload = encode_commitment(workflow_id, sha256_bytes(b"x"), uri)
-            assert decode_commitment(payload).workflow_id == workflow_id
+            assert workflow_id in WORKFLOW_CODES, f"{workflow_id} has no commitment code"
+            assert CODE_TO_WORKFLOW[WORKFLOW_CODES[workflow_id]] == workflow_id
 
     def test_a_disclosure_must_name_its_own_workflow(self):
         """Otherwise an old disclosure is scored against whatever workflow is

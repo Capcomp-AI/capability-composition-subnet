@@ -11,7 +11,6 @@ import pytest
 
 from capability_subnet.common import constants as C
 from capability_subnet.common.commitments import (
-    MAX_PAYLOAD_BYTES,
     CommitmentError,
     decode_commitment,
     encode_commitment,
@@ -62,25 +61,34 @@ class TestCanonicalHashing:
 
 
 class TestCommitments:
+    """The commitment route is closed in both directions.
+
+    A commitment named a place to fetch a recipe from. Miners submit to the API
+    now — the recipe travels in a signed request body — so there is no pointer
+    to resolve and nothing on the chain is a submission.
+    """
+
     URI = "hf:alice/capsub-recipes/final.json"
 
-    def test_round_trip(self):
-        digest = sha256_bytes(b"recipe")
-        payload = encode_commitment(C.DEFAULT_WORKFLOW_ID, digest, self.URI)
-        decoded = decode_commitment(payload)
+    def test_a_commitment_cannot_be_built(self):
+        """The miner side: there is no valid commitment left to write."""
+        with pytest.raises(CommitmentError, match="no longer reads one"):
+            encode_commitment(C.DEFAULT_WORKFLOW_ID, sha256_bytes(b"recipe"), self.URI)
 
-        assert decoded.workflow_id == C.DEFAULT_WORKFLOW_ID
-        assert digests_equal(decoded.recipe_sha256, digest)
-        assert decoded.recipe_uri == self.URI
+    def test_a_commitment_already_on_the_chain_does_not_decode(self):
+        """The reader side, which is the half that matters.
 
-    def test_payload_fits_the_chain_field(self):
-        payload = encode_commitment(C.DEFAULT_WORKFLOW_ID, sha256_bytes(b"x"), self.URI)
-        assert len(payload.encode("utf-8")) <= MAX_PAYLOAD_BYTES
+        A payload written before the switch is still sitting on the chain. It
+        has to stop being a submission, not merely stop being written.
+        """
+        payload = "capsub1|lmlg|" + "A" * 43 + "|hf:alice/capsub-recipes/final.json"
+        with pytest.raises(CommitmentError, match="no longer reads one"):
+            decode_commitment(payload)
 
-    def test_an_oversized_pointer_is_refused_with_a_usable_message(self):
-        long_uri = "https://example.com/" + "a" * 200
-        with pytest.raises(CommitmentError, match="over the"):
-            encode_commitment(C.DEFAULT_WORKFLOW_ID, sha256_bytes(b"x"), long_uri)
+    def test_the_refusal_says_where_to_go_instead(self):
+        """A miner reading this has to learn what to do, not just that it failed."""
+        with pytest.raises(CommitmentError, match="API"):
+            validate_recipe_uri(self.URI)
 
     def test_foreign_payloads_are_not_mistaken_for_submissions(self):
         assert is_subnet_commitment("some other subnet's payload") is False
@@ -94,25 +102,20 @@ class TestCommitments:
     @pytest.mark.parametrize(
         "uri",
         [
+            # The three that used to be accepted. Hugging Face first: it is what
+            # every miner actually used, and the one this has to keep refusing.
             "hf:owner/repo/path/to/recipe.json",
             "ipfs:bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi",
             "https://example.com/recipes/final.json",
-        ],
-    )
-    def test_accepted_pointer_forms(self, uri):
-        assert validate_recipe_uri(uri) == uri
-
-    @pytest.mark.parametrize(
-        "uri",
-        [
+            # And the ones that were refused before, which must not start passing.
             "",
             "ftp://example.com/recipe.json",
             "file:///etc/passwd",
-            "hf:owner/repo",  # missing the path
-            "https://example.com/a|b",  # separator would corrupt the payload
+            "hf:owner/repo",
+            "https://example.com/a|b",
         ],
     )
-    def test_rejected_pointer_forms(self, uri):
+    def test_no_pointer_form_is_accepted(self, uri):
         with pytest.raises(CommitmentError):
             validate_recipe_uri(uri)
 

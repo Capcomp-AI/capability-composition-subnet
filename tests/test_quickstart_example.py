@@ -38,39 +38,20 @@ def test_it_produces_a_valid_recipe(tmp_path):
     assert recipe.digest() in result.stdout
 
 
-def test_it_prints_a_commitment_that_fits(tmp_path):
-    """The payload is capped at 128 bytes and the URI is most of the budget.
+def test_it_points_at_the_api_and_not_at_the_chain(tmp_path):
+    """The example is where a miner learns the route, so it has to be the real one.
 
-    A real Hugging Face resolve URL, which is where a miner publishes. The
-    budget leaves 71 characters, which rules out more hosts than it sounds
-    like: this repository's own raw URL is 79 and does not fit.
-
-    The `hf:` shorthand for the same file is 31 characters and leaves room to
-    spare, which is what it exists for — but the long form is what has to fit,
-    so that is what is pinned here.
+    It used to print an on-chain commitment payload and ask for a URL to publish
+    the recipe at. Both are gone: a recipe named on the chain is not a submission
+    and is not read, and a miner following the example would have waited a run to
+    find that out.
     """
-    uri = "https://huggingface.co/tc-liu/capsub-recipes/resolve/main/r.json"
-    result = _run(
-        "--tries",
-        "3",
-        "--seed",
-        "2",
-        "--out",
-        str(tmp_path / "r.json"),
-        "--recipe-uri",
-        uri,
-    )
+    result = _run("--tries", "3", "--seed", "2", "--out", str(tmp_path / "r.json"))
 
     assert result.returncode == 0, result.stderr[-2000:]
-    assert "capsub1|" in result.stdout, "a commitment payload must be printed"
-
-    from capability_subnet.common.commitments import MAX_PAYLOAD_BYTES, decode_commitment
-
-    line = next(x for x in result.stdout.splitlines() if "capsub1|" in x)
-    payload = line.split("capsub1|", 1)[1]
-    payload = "capsub1|" + payload.strip()
-    assert len(payload.encode()) <= MAX_PAYLOAD_BYTES
-    assert decode_commitment(payload).recipe_uri == uri
+    assert "capcomp submit" in result.stdout, "the example must show the submit command"
+    assert "capsub1|" not in result.stdout, "no commitment payload may be printed"
+    assert "--recipe-uri" not in result.stdout
 
 
 def test_it_says_the_placeholder_ranking_is_not_a_measurement(tmp_path):

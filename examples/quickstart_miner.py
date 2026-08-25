@@ -2,7 +2,7 @@
 """A working miner, start to finish, in one file.
 
 It does the whole loop — read the pool, build recipes, keep the best one, write
-it out, print the commitment — and it does the interesting part badly on
+it out, tell you how to submit it — and it does the interesting part badly on
 purpose. The search here is *random*: draw N recipes, score them, keep the
 winner. That is the part you replace. Everything around it is the part you can
 rely on.
@@ -19,12 +19,15 @@ and pass its endpoint:
 
     python examples/quickstart_miner.py --tries 20 --serve http://127.0.0.1:8000/v1
 
-Then commit the winner (this writes to the chain):
+Then submit the winner:
 
-    capability-miner commitment --recipe recipe.json --recipe-uri https://…/recipe.json
+    capcomp submit --recipe recipe.json \
+        --wallet.name <coldkey> --wallet.hotkey <hotkey> --confirm
 
-The commitment carries a digest and a pointer. The pointer has to resolve to
-the exact bytes you committed — publish the file first, commit second.
+That is one HTTP request. The recipe travels in the body, signed by your
+hotkey — nothing is written to the chain, nothing is published anywhere, and
+there is no file for anyone to fetch. A recipe hosted somewhere and named in an
+on-chain commitment is not a submission and is not read.
 """
 
 from __future__ import annotations
@@ -34,7 +37,6 @@ import random
 import sys
 
 from capability_subnet.common import constants as C
-from capability_subnet.common.commitments import MAX_PAYLOAD_BYTES, encode_commitment
 from capability_subnet.common.schemas import Recipe
 from capability_subnet.miner.recipe import advise, check_recipe, describe, new_recipe, write_recipe
 from capability_subnet.registry.snapshot import PoolSnapshot, load_snapshot
@@ -112,7 +114,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--tries", type=int, default=20, help="how many recipes to draw")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out", default="recipe.json")
-    parser.add_argument("--recipe-uri", default="", help="where you will publish the file")
     parser.add_argument("--serve", default="", help="an endpoint serving the merged adapter")
     parser.add_argument("--model", default="candidate")
     parser.add_argument("--pool", default="pool", help="certified adapters on disk")
@@ -129,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
         recipe = draw_recipe(rng, snapshot)
 
         # Never submit a recipe that fails this. Admission runs the same checks
-        # and a rejected commitment costs a run.
+        # and a rejected submission costs a run.
         problems = check_recipe(recipe, snapshot)
         if problems:
             print(f"  {attempt:3d}  invalid: {problems[0]}")
@@ -157,13 +158,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"\nwritten to {args.out}")
     print(f"digest      {recipe.digest()}")
 
-    if args.recipe_uri:
-        payload = encode_commitment(recipe.workflow_id, recipe.digest(), args.recipe_uri)
-        print(f"commitment  {payload}")
-        print(f"            {len(payload.encode())} of {MAX_PAYLOAD_BYTES} bytes")
-    else:
-        print("\nPublish the file, then commit it:")
-        print(f"  capability-miner commitment --recipe {args.out} --recipe-uri <url>")
+    print("\nSubmit it:")
+    print(f"  capcomp submit --recipe {args.out} \\")
+    print("      --wallet.name <coldkey> --wallet.hotkey <hotkey> --confirm")
 
     if not args.serve:
         print("\nThese were ranked by a placeholder, not by measurement. Serve the")

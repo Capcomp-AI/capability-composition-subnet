@@ -1,21 +1,24 @@
-"""On-chain commitment payloads.
+"""On-chain commitment payloads, and why none of them is a submission.
 
-A miner's entire on-chain footprint is one commitment string that says: "the
-recipe with this content digest, published at this location, is my submission
-for this workflow." The chain stores the digest; the recipe bytes themselves
-live off-chain at an immutable, content-addressed location.
+A miner used to enter a run by writing one string to the chain: the digest of a
+recipe, and a pointer to where the bytes were published — a Hugging Face file,
+an IPFS object, a URL. Miners submit to the API now. The recipe travels in a
+request body signed by their hotkey, with no commitment, no transaction, no fee
+and nothing hosted anywhere for the subnet to fetch.
 
-The chain's commitment field is small, so the payload is deliberately compact:
-the digest is carried as unpadded base64url (43 characters) rather than hex (64),
-which leaves useful room for the pointer.
+So this module no longer builds commitments and no longer accepts them.
+:func:`validate_recipe_uri` refuses every pointer, and both
+:func:`encode_commitment` and :func:`decode_commitment` go through it — a miner
+cannot form a valid commitment, and one already sitting on the chain does not
+decode into a submission.
+
+What is left is the grammar and the workflow-code table, kept because payloads
+written before the switch are still on the chain and a reader has to be able to
+tell they belong to this subnet before deciding they are not submissions.
 
 Payload grammar::
 
     capsub1|<workflow_code>|<digest_b64url>|<uri>
-
-Example::
-
-    capsub1|imde|3q2-7wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA|hf:alice/recipes/final.json
 """
 
 from __future__ import annotations
@@ -49,14 +52,14 @@ WORKFLOW_CODES: dict[str, str] = {
 }
 CODE_TO_WORKFLOW: dict[str, str] = {code: wf for wf, code in WORKFLOW_CODES.items()}
 
-#: Accepted pointer schemes. Each must resolve to immutable bytes: a Hugging
-#: Face repo pinned by revision, an IPFS CID, or a plain HTTPS URL whose content
-#: is verified against the digest on download.
-_URI_PATTERNS = (
-    re.compile(r"^hf:[A-Za-z0-9._\-]+/[A-Za-z0-9._\-]+/[A-Za-z0-9._/\-]+$"),
-    re.compile(r"^ipfs:[A-Za-z0-9]{46,64}$"),
-    re.compile(r"^https://[A-Za-z0-9._\-]+(:\d+)?/[A-Za-z0-9._/\-~%?=&]*$"),
-)
+#: No pointer scheme is accepted any more, and that is the whole of the rule.
+#:
+#: A commitment named a place to fetch a recipe from — a Hugging Face file, an
+#: IPFS object, a URL. Miners submit to the API instead: the recipe travels in
+#: a signed request body, and there is no pointer for anyone to resolve. A
+#: recipe hosted somewhere and named on chain is not a submission, so there is
+#: nothing left for this list to hold.
+_URI_PATTERNS: tuple[re.Pattern[str], ...] = ()
 
 
 class CommitmentError(ValueError):
@@ -92,17 +95,24 @@ def _b64_to_digest(token: str) -> str:
 
 
 def validate_recipe_uri(uri: str) -> str:
-    """Check that ``uri`` is one of the accepted immutable pointer forms."""
-    text = uri.strip()
-    if not text:
-        raise CommitmentError("recipe_uri must not be empty")
-    if SEPARATOR in text:
-        raise CommitmentError(f"recipe_uri must not contain {SEPARATOR!r}")
-    if any(pattern.match(text) for pattern in _URI_PATTERNS):
-        return text
+    """Refuse every pointer, because a pointer is no longer a submission.
+
+    Kept as the single place the rule is enforced rather than deleted with the
+    patterns: :func:`encode_commitment` and :func:`decode_commitment` both go
+    through it, so closing it here closes the route in both directions — a
+    miner cannot form a valid commitment, and a commitment already on the chain
+    does not decode into one.
+
+    Raises:
+        CommitmentError: always. Callers scanning the chain should treat this
+            the way they treat any malformed payload — not a submission, skip
+            it — which is what they already do.
+    """
     raise CommitmentError(
-        f"recipe_uri {uri!r} is not an accepted pointer. Use one of: "
-        "hf:<owner>/<repo>/<path>, ipfs:<cid>, or https://<host>/<path>"
+        f"recipe_uri {uri!r} names a place to fetch a recipe from, and the "
+        "subnet no longer reads one. Submit to the API instead: the recipe "
+        "travels in a request body signed by your hotkey, with no commitment, "
+        "no transaction and no fee."
     )
 
 
