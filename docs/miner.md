@@ -314,6 +314,14 @@ The engine publishes a compatibility history at `/compatibility` — co-selectio
 
 There is nothing to publish and nothing to commit.
 
+**The API is the only way in.** A recipe written to the chain as a commitment,
+or left at an `hf:` or `https:` URL for the engine to fetch, is not a
+submission: it is not admitted, not stored and not scored. That was the route
+before miners moved to signing a request body, and nothing reads it now — a
+commitment made today produces no queue entry and no scoreboard row, and you
+will see no error, because nothing is looking at it to raise one. If `capcomp
+submit` did not return success, you are not in the run.
+
 **First, ask whether it would be admitted.** This costs nothing — no signature,
 no hotkey, no attempt — and it is the engine's own contract answering, not a
 local approximation:
@@ -756,7 +764,9 @@ Directionally, quite well — same generator, same tools, same scorer. But the h
 
 ### Why is my submission not in the queue?
 
-Either the engine has not read the chain yet, or admission rejected it. Check `/queue/<your-hotkey>`; a 404 means it was not admitted. The usual causes are a stale snapshot digest, an unfetchable recipe URI, or a digest computed over non-canonical bytes.
+Admission rejected it, or it never arrived. Check `/queue/<your-hotkey>`; a 404 means it was not admitted. The usual causes are a stale snapshot digest, a recipe that fails the schema, or a digest computed over bytes other than the ones you sent.
+
+If you wrote a commitment to the chain rather than calling `capcomp submit`, that is the reason: the engine does not read commitments. See [Submit](#7-submit).
 
 ### What is the compatibility history for?
 
