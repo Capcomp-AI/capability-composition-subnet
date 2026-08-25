@@ -130,18 +130,18 @@ published broken into its terms.
 
 ### How a run's emission splits
 
-Four fifths of every run burns to the subnet owner's UID. The remaining fifth
-is the miner pool, split by rank among those that cleared the throne:
+Half of every run burns to the subnet owner's UID. The other half is the miner
+pool, split by rank among those that cleared the throne:
 
 | Rank | Share of the miner pool | Share of the run |
 |---|---|---|
-| Burn | — | 80% |
-| 1st | 90% | 18% |
-| 2nd | 5% | 1% |
-| 3rd | 3% | 0.6% |
-| 4th | 1% | 0.2% |
-| 5th | 0.5% | 0.1% |
-| 6th–10th | 0.5%, in proportion to grade | 0.1% |
+| Burn | — | 50% |
+| 1st | 90% | 45% |
+| 2nd | 5% | 2.5% |
+| 3rd | 3% | 1.5% |
+| 4th | 1% | 0.5% |
+| 5th | 0.5% | 0.25% |
+| 6th–10th | 0.5%, in proportion to grade | 0.25% |
 
 Ten miners are paid at most. Ranks six to ten split their share in proportion
 to grade rather than evenly, so the ordering inside the tail still says
@@ -151,24 +151,6 @@ than a contested one.
 
 The throne does not move on its own. A run nobody wins leaves it exactly where
 it was, so the next run's challengers face the same grade rather than a rising
-one.
-
-### How a run's emission splits
-
-Under `graded_contribution`, four fifths of every run burns to the subnet
-owner's UID and the remaining fifth is the miner pool. The best measured package
-takes 90% of that pool; the graded runners-up split the other 10% by rank, the
-runner-up most, tapering down the field.
-
-| Recipient | Share of the miner pool | Share of the run |
-|---|---|---|
-| Burn (subnet owner's UID) | — | 80% |
-| Best measured package | 90% | 18% |
-| Graded runners-up, ranks 2–10 | 10%, by rank | 2% |
-
-At most ten miners are paid in one run: the leader and nine graded runners-up.
-A share nobody earned burns rather than being promoted into the leader's — a
-run with one qualified package is not a bigger achievement than a contested
 one.
 
 ## Two arenas

@@ -301,7 +301,7 @@ rising or resetting.
 
 `--neuron.burn_percentage` compounds with the split above rather than replacing
 it: everything already in the vector is scaled by what remains and the extra is
-added on top, so `0.5` leaves miners a tenth of the run rather than a fifth. A
+added on top, so `0.5` leaves miners a quarter of the run rather than a half. A
 validator may burn more than the protocol asks and never less — burning less
 would let one validator quietly override the rule the rest are applying.
 
