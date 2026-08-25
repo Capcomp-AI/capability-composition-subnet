@@ -266,7 +266,7 @@ Expect roughly 15 minutes of reconstruction per candidate that uses a trimming m
 
 ### How a run's emission splits
 
-Four fifths of every run burns to the subnet owner's UID. The remaining fifth
+Half of every run burns to the subnet owner's UID. The other half
 is the miner pool, and it is paid only if the run's best candidate took the
 throne — exceeding the reigning champion's grade by `0.002`. If it did not, the
 whole miner share burns; second place does not inherit a run its leader did not
@@ -274,13 +274,13 @@ win.
 
 | Rank | Share of the run |
 |---|---|
-| Burn | 80% |
-| 1st | 18% |
-| 2nd | 1% |
-| 3rd | 0.6% |
-| 4th | 0.2% |
-| 5th | 0.1% |
-| 6th–10th | 0.1%, in proportion to grade |
+| Burn | 50% |
+| 1st | 45% |
+| 2nd | 2.5% |
+| 3rd | 1.5% |
+| 4th | 0.5% |
+| 5th | 0.25% |
+| 6th–10th | 0.25%, in proportion to grade |
 
 Ten miners are paid at most, and a rank nobody filled burns rather than being
 promoted into the leader's share.

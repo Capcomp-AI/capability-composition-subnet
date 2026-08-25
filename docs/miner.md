@@ -126,18 +126,18 @@ the field behind them is paid by rank. If the leader cannot, the run offered
 the network nothing it did not already have and the whole miner share burns —
 second place does not inherit a run its leader did not win.
 
-Four fifths of every run burns to the subnet owner's UID. The remaining fifth
+Half of every run burns to the subnet owner's UID. The other half
 is the miner pool:
 
 | Rank | Share of the miner pool | Share of the run |
 |---|---|---|
-| Burn | — | 80% |
-| 1st | 90% | 18% |
-| 2nd | 5% | 1% |
-| 3rd | 3% | 0.6% |
-| 4th | 1% | 0.2% |
-| 5th | 0.5% | 0.1% |
-| 6th–10th | 0.5%, in proportion to grade | 0.1% |
+| Burn | — | 50% |
+| 1st | 90% | 45% |
+| 2nd | 5% | 2.5% |
+| 3rd | 3% | 1.5% |
+| 4th | 1% | 0.5% |
+| 5th | 0.5% | 0.25% |
+| 6th–10th | 0.5%, in proportion to grade | 0.25% |
 
 Ten miners are paid at most, and a rank nobody filled burns rather than being
 promoted into the leader's share.

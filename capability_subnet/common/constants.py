@@ -633,7 +633,12 @@ PUBLIC_PACK_INSTANCES: Final[int] = 120
 #: The subnet buys one thing: a merged package that beats the one it already
 #: has. Emission that does not buy that is emission the network did not need to
 #: spend, so the default is to spend little and burn the rest.
-BURN_SHARE: Final[float] = 0.80
+#:
+#: Halved from 0.80 for the vector published in run 414 onwards, which is the
+#: first to pay submissions made in run 412. The miner pool goes from a fifth of
+#: every run to a half; the ladder that splits it is unchanged, so every rank's
+#: share grows by the same factor of 2.5.
+BURN_SHARE: Final[float] = 0.50
 
 #: How the payable fifth is split by rank.
 #:
