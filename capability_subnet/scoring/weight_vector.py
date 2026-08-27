@@ -14,9 +14,9 @@ The rule the vector expresses, in full:
   exceeding the reigning champion's grade by ``CHAMPION_DETHRONE_MARGIN``. A
   run whose best candidate cannot do that offered the network nothing it did
   not already have, and the whole miner share burns.
-* When the leader does take it, it is paid and nobody else is: ``PAID_RANKS``
-  is one. The winner takes ``RANK_SHARES[0]`` of the miner pool and the rest of
-  the pool burns — placing is published, not paid.
+* When the leader does take it, the miner share is split by rank across the
+  field behind them: ``RANK_SHARES`` for the first five and ``TAIL_SHARE``
+  across ranks six to ``PAID_RANKS``, in proportion to grade.
 * A permanent reference on the throne earns nothing, and an unfilled rank burns
   rather than being redistributed. "Best of a bad run" is not paid for.
 """
@@ -58,10 +58,10 @@ def rank_shares(count: int) -> list[float]:
         return []
     shares = [0.0] * count
     # Capped at PAID_RANKS, which the named shares were not. champion_ladder
-    # slices the field to PAID_RANKS before calling, so the two agreed in
-    # practice — but this said "ranks beyond PAID_RANKS receive nothing" while
-    # handing out five named shares when one rank is paid, and a second caller
-    # reading it at its word would have paid four miners who earn nothing.
+    # slices the field to PAID_RANKS before calling, so the two agree in
+    # practice — but this says "ranks beyond PAID_RANKS receive nothing" while
+    # handing out five named shares regardless, and a second caller reading the
+    # docstring at its word would pay ranks that earn nothing.
     for index in range(min(count, len(C.RANK_SHARES), C.PAID_RANKS)):
         shares[index] = C.RANK_SHARES[index]
     tail = [i for i in range(len(C.RANK_SHARES), min(count, C.PAID_RANKS))]

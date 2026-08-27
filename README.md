@@ -130,22 +130,24 @@ published broken into its terms.
 
 ### How a run's emission splits
 
-**Only the throne is paid.** Half of every run burns to the subnet owner's
-UID; the winner takes 90% of the other half, which is 45% of the run. The rest
-of the miner pool burns too, so a run in practice burns 55%.
+Half of every run burns to the subnet owner's UID. The other half is the miner
+pool, split by rank among those that cleared the throne:
 
-| Recipient | Share of the miner pool | Share of the run |
+| Rank | Share of the miner pool | Share of the run |
 |---|---|---|
-| Burn | — | 55% |
+| Burn | — | 50% |
 | 1st | 90% | 45% |
-| 2nd and below | — | — |
+| 2nd | 5% | 2.5% |
+| 3rd | 3% | 1.5% |
+| 4th | 1% | 0.5% |
+| 5th | 0.5% | 0.25% |
+| 6th–10th | 0.5%, in proportion to grade | 0.25% |
 
-The number of miners behind the winner changes nothing: whether one candidate
-qualified or fifteen did, the winner takes the same 45% and the rest is
-emission the network did not spend. It does not roll up into a bigger prize.
-
-Placing is still measured, graded and published — it is simply not paid. A
-miner who wants emission has to take the throne.
+Ten miners are paid at most. Ranks six to ten split their share in proportion
+to grade rather than evenly, so the ordering inside the tail still says
+something. A rank nobody filled burns rather than being promoted into the
+leader's share — a run with one qualified package is not a bigger achievement
+than a contested one.
 
 The throne does not move on its own. A run nobody wins leaves it exactly where
 it was, so the next run's challengers face the same grade rather than a rising

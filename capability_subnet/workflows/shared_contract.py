@@ -178,13 +178,10 @@ def incentive_contract() -> dict[str, Any]:
         "burn_uid": C.BURN_UID,
         "burn_share": round(C.BURN_SHARE, 6),
         "miner_pool_share": round(miner_pool, 6),
-        # Only what is actually payable. Publishing five shares while one rank
-        # is paid would have a miner plan for a second place that does not
-        # exist, which is the one thing this contract is for.
-        "rank_shares_of_pool": [round(share, 6) for share in C.RANK_SHARES[: C.PAID_RANKS]],
-        "rank_shares_of_run": [
-            round(share * miner_pool, 6) for share in C.RANK_SHARES[: C.PAID_RANKS]
-        ],
+        "rank_shares_of_pool": [round(share, 6) for share in C.RANK_SHARES],
+        "rank_shares_of_run": [round(share * miner_pool, 6) for share in C.RANK_SHARES],
+        "tail_share_of_pool": round(C.TAIL_SHARE, 6),
+        "tail_share_of_run": round(C.TAIL_SHARE * miner_pool, 6),
         "paid_ranks": C.PAID_RANKS,
         "champion_dethrone_margin": C.CHAMPION_DETHRONE_MARGIN,
         "contribution_weights": {
@@ -194,15 +191,17 @@ def incentive_contract() -> dict[str, Any]:
         },
         "note": (
             f"{C.BURN_SHARE:.0%} of every run burns to the subnet owner's UID. "
-            "Only the throne is paid: a candidate must exceed the reigning "
-            f"champion's grade by {C.CHAMPION_DETHRONE_MARGIN} to be paid at "
-            "all, and one that clears every gate but does not take the throne "
-            f"receives nothing. The winner takes {C.RANK_SHARES[0]:.0%} of the "
-            f"miner pool, which is {C.RANK_SHARES[0] * miner_pool:.1%} of the "
-            "run; the remainder of the pool burns rather than moving to the "
-            "winner. Grading is on quality, improvement and cost, and only "
-            "candidates clearing every hard gate are graded — placing is "
-            "published on the scoreboard, not paid."
+            "Nobody is paid without taking the throne: a candidate must exceed "
+            f"the reigning champion's grade by {C.CHAMPION_DETHRONE_MARGIN} to "
+            "be paid at all, not merely to be crowned, and a run where no "
+            "candidate does burns the whole miner share. Among those that "
+            "clear it the remaining share is split by rank — "
+            + ", ".join(f"{share:.1%}" for share in C.RANK_SHARES)
+            + f" for the first {len(C.RANK_SHARES)}, and {C.TAIL_SHARE:.1%} "
+            f"across ranks {len(C.RANK_SHARES) + 1} to {C.PAID_RANKS} in "
+            "proportion to grade. Grading is on quality, improvement and cost, "
+            "and only candidates clearing every hard gate are graded. An "
+            "unfilled rank burns rather than being redistributed."
         ),
     }
 

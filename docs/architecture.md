@@ -305,11 +305,11 @@ The terms decide how the miner pool is divided; the pool itself is half the run:
 
 | Recipient | Share of the run |
 |---|---|
-| Burn (subnet owner's UID) | 55% |
+| Burn (subnet owner's UID) | 50% |
 | Best measured package | 45% |
-| Graded runners-up | — |
+| Graded runners-up, ranks 2–10 | 2.5% |
 
-Only the throne is paid. Runners-up are measured, graded and published, and receive nothing — what they would once have taken burns rather than rolling up into the winner's share, so the winner takes the same 45% however large the field behind them. The burn goes to the subnet owner's UID resolved from the metagraph rather than to UID 0, which belongs to whichever neuron registered into the first slot.
+Ten miners are paid at most. The burn goes to the subnet owner's UID resolved from the metagraph rather than to UID 0, which belongs to whichever neuron registered into the first slot.
 
 Improvement is measured against the base model, not against the leader. Rewarding closeness to the leader would pay for copying it, and the anti-copy check runs *before* evaluation in any case.
 

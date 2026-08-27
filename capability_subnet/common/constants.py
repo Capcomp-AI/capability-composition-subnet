@@ -640,33 +640,23 @@ PUBLIC_PACK_INSTANCES: Final[int] = 120
 #: share grows by the same factor of 2.5.
 BURN_SHARE: Final[float] = 0.50
 
-#: How the payable half is split by rank.
+#: How the payable fifth is split by rank.
 #:
-#: Only the first entry is reachable while PAID_RANKS is 1; the rest are kept
-#: because they are the ladder's shape, and restoring places is changing one
-#: number rather than re-deriving five.
+#: Ranks one to five, in order. The throne takes nearly all of it: the prize is
+#: winning, and placing is information about how close a miner came rather than
+#: a living. A miner who wants emission has to take the throne.
 RANK_SHARES: Final[tuple[float, ...]] = (0.90, 0.05, 0.03, 0.01, 0.005)
 
-#: What ranks six to ten would split, in proportion to grade. Unreachable while
-#: PAID_RANKS is 1, and kept for the same reason as the shares above.
+#: Split across ranks six to ten, in proportion to grade.
+#:
+#: In proportion rather than evenly, so the ordering inside the tail still says
+#: something: an even split would pay a candidate that barely qualified the same
+#: as one that nearly placed fifth.
 TAIL_SHARE: Final[float] = 0.005
 
-#: Ranks paid in one run. One: the throne, and nobody behind it.
-#:
-#: The prize is winning. Placing was already close to unpaid — rank five drew
-#: 0.25% of a run and ranks six to ten about 0.05% each, which is not a living
-#: and was never going to become one — so the ladder said "you were close" in
-#: emission where the scoreboard already says it in numbers, and said it at a
-#: scale that could not matter to anyone.
-#:
-#: What that costs is real and worth naming: a miner who is measured, ranked
-#: and second now receives exactly what a miner who never submitted receives.
-#: The near-miss is legible only on the scoreboard.
-#:
-#: The freed share burns rather than moving to the throne. The winner's share of
-#: the run is unchanged at RANK_SHARES[0] of the miner pool; what the network
-#: does not buy, it does not spend.
-PAID_RANKS: Final[int] = 1
+#: Ranks paid in one run. Below this a share is smaller than the chain's own
+#: weight quantisation, so it would be bookkeeping rather than payment.
+PAID_RANKS: Final[int] = 10
 
 #: How much of a run's draw one host asks.
 #:

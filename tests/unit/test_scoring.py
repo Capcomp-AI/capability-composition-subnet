@@ -286,12 +286,11 @@ class TestAnEmptyThroneIsFilledRatherThanAssumed:
     FIELD = [(7, "5A", 0.50), (9, "5B", 0.40), (3, "5C", 0.30)]
 
     def test_an_empty_throne_ranks_the_field_as_it_stands(self):
-        """The leader is crowned; the field behind it is ranked and not paid."""
         vector = champion_ladder(self.FIELD, run_id=1, block=1, champion_grade=None)
 
         assert vector.champion_hotkey == "5A"
         paid = {e.uid: e.weight for e in vector.entries if e.role != "burn"}
-        assert set(paid) == {7}
+        assert set(paid) == {7, 9, 3}
 
     def test_the_leader_of_an_empty_throne_takes_the_same_share_as_a_champion(self):
         """Filling the throne is not a lesser prize than holding it."""

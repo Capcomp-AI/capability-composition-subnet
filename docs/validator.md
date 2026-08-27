@@ -272,15 +272,18 @@ throne — exceeding the reigning champion's grade by `0.002`. If it did not, th
 whole miner share burns; second place does not inherit a run its leader did not
 win.
 
-| Recipient | Share of the run |
+| Rank | Share of the run |
 |---|---|
-| Burn | 55% |
+| Burn | 50% |
 | 1st | 45% |
-| 2nd and below | — |
+| 2nd | 2.5% |
+| 3rd | 1.5% |
+| 4th | 0.5% |
+| 5th | 0.25% |
+| 6th–10th | 0.25%, in proportion to grade |
 
-Only the throne is paid. What the places would once have taken burns rather
-than rolling up into the winner's share, so the winner takes the same 45%
-whether one candidate qualified or fifteen did.
+Ten miners are paid at most, and a rank nobody filled burns rather than being
+promoted into the leader's share.
 
 Ranking is by grade: quality 50%, improvement over the base model 40%, cost
 10%. The qualified score is itself 55% end-to-end completion, 15% stage

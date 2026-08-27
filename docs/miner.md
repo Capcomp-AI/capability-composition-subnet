@@ -128,27 +128,27 @@ can rely on. See [examples/README.md](../examples/README.md).
 
 ## What a run pays
 
-**Only the winner is paid, and only if it takes the throne.** Taking it means
-exceeding the reigning champion's grade by **0.002**. If the leader cannot, the
-run offered the network nothing it did not already have and the whole miner
-share burns — second place does not inherit a run its leader did not win.
+**A run pays only if its best candidate takes the throne.** That means
+exceeding the reigning champion's grade by **0.002**. If the leader clears it,
+the field behind them is paid by rank. If the leader cannot, the run offered
+the network nothing it did not already have and the whole miner share burns —
+second place does not inherit a run its leader did not win.
 
-If the leader does take it, it is paid and **nobody behind it is**. Second
-place earns exactly what a miner who never submitted earns.
+Half of every run burns to the subnet owner's UID. The other half
+is the miner pool:
 
-| Recipient | Share of the miner pool | Share of the run |
+| Rank | Share of the miner pool | Share of the run |
 |---|---|---|
-| Burn | — | 55% |
+| Burn | — | 50% |
 | 1st | 90% | 45% |
-| 2nd and below | — | — |
+| 2nd | 5% | 2.5% |
+| 3rd | 3% | 1.5% |
+| 4th | 1% | 0.5% |
+| 5th | 0.5% | 0.25% |
+| 6th–10th | 0.5%, in proportion to grade | 0.25% |
 
-Half of every run burns to the subnet owner's UID and the winner takes 90% of
-the other half — 45% of the run. What the places would once have taken burns
-as well, so a paying run burns 55% in total. It does not roll up into a bigger
-prize for the winner: the number of miners behind them changes nothing.
-
-Your score, grade and rank are all still measured and published. They tell you
-how close you came. They do not pay.
+Ten miners are paid at most, and a rank nobody filled burns rather than being
+promoted into the leader's share.
 
 Ranking is by **grade**, one number per candidate over the packages that
 cleared every hard gate:

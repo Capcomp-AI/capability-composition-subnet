@@ -48,42 +48,39 @@ def burned(vector) -> float:
 
 
 class TestTheSplit:
-    def test_only_the_throne_is_paid(self):
-        """PAID_RANKS is one. Placing is published, not paid."""
+    def test_the_burn_takes_four_fifths(self):
         vector = champion_ladder(FIELD, run_id=412, block=1, champion_grade=None)
 
-        assert list(paid(vector)) == [FIELD[0][0]]
+        assert burned(vector) == pytest.approx(C.BURN_SHARE, abs=1e-9)
 
-    def test_the_winner_takes_its_share_of_the_pool(self):
+    def test_the_ladder_matches_the_published_shares(self):
         """Rank shares are of the *miner pool*, not of the run."""
         vector = champion_ladder(FIELD, run_id=412, block=1, champion_grade=None)
         pool = 1.0 - C.BURN_SHARE
+        weights = paid(vector)
 
-        assert paid(vector)[FIELD[0][0]] == pytest.approx(C.RANK_SHARES[0] * pool, abs=1e-9)
+        for index, share in enumerate(C.RANK_SHARES):
+            uid = FIELD[index][0]
+            assert weights[uid] == pytest.approx(share * pool, abs=1e-9), f"rank {index + 1}"
 
-    def test_what_the_places_would_have_taken_burns(self):
-        """It does not go to the winner.
-
-        The winner's share is RANK_SHARES[0] of the pool whether or not anyone
-        placed behind it, so the rest of the pool is emission the network did
-        not spend rather than a bigger prize.
-        """
+    def test_the_tail_is_split_by_grade_not_evenly(self):
         vector = champion_ladder(FIELD, run_id=412, block=1, champion_grade=None)
-        pool = 1.0 - C.BURN_SHARE
+        weights = paid(vector)
+        tail = [FIELD[i] for i in range(len(C.RANK_SHARES), C.PAID_RANKS)]
 
-        assert burned(vector) == pytest.approx(1.0 - C.RANK_SHARES[0] * pool, abs=1e-9)
-        assert burned(vector) > C.BURN_SHARE, "the unpaid places must burn, not vanish"
+        assert len(tail) == 5
+        shares = [weights[uid] for uid, _, _ in tail]
+        assert shares == sorted(shares, reverse=True), "an even split would order them arbitrarily"
+        grades = [grade for _, _, grade in tail]
+        for share, grade in zip(shares, grades, strict=True):
+            expected = C.TAIL_SHARE * (grade / sum(grades)) * (1.0 - C.BURN_SHARE)
+            assert share == pytest.approx(expected, abs=1e-9)
 
     def test_nothing_below_the_last_paid_rank_earns(self):
         vector = champion_ladder(FIELD, run_id=412, block=1, champion_grade=None)
 
         assert len(paid(vector)) == C.PAID_RANKS
         assert FIELD[C.PAID_RANKS][0] not in paid(vector)
-
-    def test_the_rank_cap_is_the_one_the_protocol_sets(self):
-        """A tripwire on a policy number. Every case in this class is written
-        for a one-rank ladder; restoring places has to fail here first."""
-        assert C.PAID_RANKS == 1, "the rank cap moved; these cases need rewriting"
 
     def test_the_whole_vector_sums_to_one(self):
         for count in range(0, len(FIELD) + 1):
@@ -122,14 +119,8 @@ class TestTheRunPaysOnlyIfItsLeaderTakesTheThrone:
         assert paid(vector) == {7: pytest.approx(C.RANK_SHARES[0] * pool, abs=1e-9)}
         assert burned(vector) == pytest.approx(1.0 - C.RANK_SHARES[0] * pool, abs=1e-9)
 
-    def test_the_field_behind_the_winner_is_paid_nothing(self):
-        """The bar is on the leader, and so is the whole prize.
-
-        uid 9 here is a good candidate by any reading — it clears the throne on
-        its own, and under a ladder that paid places it would have taken second.
-        It is paid nothing. That is the rule now: the number of eligible miners
-        behind the winner does not change what any of them receive.
-        """
+    def test_the_field_behind_the_winner_is_paid_whether_or_not_it_cleared(self):
+        """The bar is on the leader. Once it is taken, the run pays by rank."""
         vector = champion_ladder(
             [(7, "5A", 0.60), (9, "5B", 0.55), (3, "5C", 0.10)],
             run_id=413,
@@ -137,24 +128,7 @@ class TestTheRunPaysOnlyIfItsLeaderTakesTheThrone:
             champion_grade=0.50,
         )
 
-        assert set(paid(vector)) == {7}
-
-    def test_nine_eligible_behind_the_winner_are_still_paid_nothing(self):
-        """The case the shape of the old ladder makes tempting to assume.
-
-        Ten qualify, every one of them clears the throne, and nine of them
-        would have shared the tail under RANK_SHARES. One is paid.
-        """
-        # From uid 1: uid 0 is BURN_UID, and a champion sitting on it is merged
-        # into the burn entry by _normalise, which would read here as the winner
-        # taking the whole run.
-        field = [(uid, f"5{uid}", 0.60 - uid / 1000) for uid in range(1, 11)]
-        vector = champion_ladder(field, run_id=413, block=1, champion_grade=0.50)
-
-        assert set(paid(vector)) == {1}
-        pool = 1.0 - C.BURN_SHARE
-        assert paid(vector)[1] == pytest.approx(C.RANK_SHARES[0] * pool, abs=1e-9)
-        assert burned(vector) == pytest.approx(1.0 - C.RANK_SHARES[0] * pool, abs=1e-9)
+        assert set(paid(vector)) == {7, 9, 3}
 
     def test_a_strong_field_behind_a_leader_who_did_not_win_is_paid_nothing(self):
         """The converse, and the one that costs someone a run if misread.
@@ -205,13 +179,5 @@ class TestTheSharesAreWhatWasPublished:
         assert C.RANK_SHARES[-1] >= C.TAIL_SHARE
 
     def test_rank_shares_stops_at_the_last_paid_rank(self):
-        """The paid shares no longer sum to the whole pool, and must not.
-
-        With one rank paid the winner takes RANK_SHARES[0] and the remainder is
-        emission the network did not spend. Asking for more ranks than are paid
-        must not conjure the named shares back.
-        """
-        payable = sum(C.RANK_SHARES[: C.PAID_RANKS])
-        assert sum(rank_shares(C.PAID_RANKS)) == pytest.approx(payable, abs=1e-12)
-        assert sum(rank_shares(C.PAID_RANKS + 5)) == pytest.approx(payable, abs=1e-12)
-        assert all(s == 0.0 for s in rank_shares(C.PAID_RANKS + 5)[C.PAID_RANKS :])
+        assert sum(rank_shares(C.PAID_RANKS)) == pytest.approx(1.0, abs=1e-12)
+        assert sum(rank_shares(C.PAID_RANKS + 5)) == pytest.approx(1.0, abs=1e-12)
