@@ -688,7 +688,17 @@ DEFAULT_TAIL_FRACTION: Final[float] = 0.15
 #: turn the run into a free evaluation service.
 RESUBMISSION_LIMIT = 3
 
-CHAMPION_DETHRONE_MARGIN: Final[float] = 0.002
+#: Halved from 0.002. The throne had not changed hands in run 415 and the best
+#: grade in that field fell 0.034 short, so the bar was not what stopped it —
+#: but a smaller margin lets a genuine, narrow improvement take the throne
+#: rather than sitting one thousandth under it for a run.
+#:
+#: This is a threshold on the grade, whose axes are measured against fixed
+#: points, so it stays a fixed number rather than one that drifts with the
+#: field. What it does not do is become a noise floor: 0.001 of grade is still
+#: an order of magnitude above the difference two identical packages show, and
+#: a run is decided on 1350 instances rather than a handful.
+CHAMPION_DETHRONE_MARGIN: Final[float] = 0.001
 
 #: How a candidate's grade is composed. The qualified score dominates;
 #: improvement and token efficiency share the remainder in proportion to

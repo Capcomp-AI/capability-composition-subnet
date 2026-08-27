@@ -92,7 +92,7 @@ The incumbent is not one of the permanent references. It gets its own smaller ma
 ### The run pays only if its leader takes the throne
 
 The best candidate in a run takes the throne by exceeding the reigning
-champion's **grade** by **0.002**. That single test also decides whether the
+champion's **grade** by **0.001**. That single test also decides whether the
 run pays anybody. If the leader clears it, the field behind them is paid by
 rank. If the leader cannot, the run offered the network nothing it did not
 already have — nobody places behind a leader who did not win, and the whole
