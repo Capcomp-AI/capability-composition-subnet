@@ -688,17 +688,26 @@ DEFAULT_TAIL_FRACTION: Final[float] = 0.15
 #: turn the run into a free evaluation service.
 RESUBMISSION_LIMIT = 3
 
-#: Halved from 0.002. The throne had not changed hands in run 415 and the best
-#: grade in that field fell 0.034 short, so the bar was not what stopped it —
-#: but a smaller margin lets a genuine, narrow improvement take the throne
-#: rather than sitting one thousandth under it for a run.
+#: Quartered from 0.002, in two steps. A smaller margin lets a genuine, narrow
+#: improvement take the throne rather than sitting just under it for a run.
 #:
-#: This is a threshold on the grade, whose axes are measured against fixed
-#: points, so it stays a fixed number rather than one that drifts with the
-#: field. What it does not do is become a noise floor: 0.001 of grade is still
-#: an order of magnitude above the difference two identical packages show, and
-#: a run is decided on 1350 instances rather than a handful.
-CHAMPION_DETHRONE_MARGIN: Final[float] = 0.001
+#: It stays a fixed number rather than one that drifts with the field, because
+#: the grade's axes are measured against fixed points — the run's own instances
+#: and the base model.
+#:
+#: Worth knowing what this size means against a real field. In run 414's, the
+#: adjacent-rank gaps ran 0.000020 to 0.002005 with a median of 0.001084: at
+#: 0.002 the bar was about two places wide, at 0.001 about one, and at 0.0005
+#: it is narrower than the typical gap between neighbours. So the throne now
+#: changes hands on a difference smaller than the one separating most ranks.
+#:
+#: What has not been measured is how much of that is the package and how much
+#: is the measurement. Batch composition changes replies — 1 of 48 matched
+#: between batched and sequential — so the same package scored twice does not
+#: give the same number, and nothing here establishes that the spread is below
+#: 0.0005. If a throne starts changing hands on reruns rather than on new
+#: submissions, that is the thing to measure.
+CHAMPION_DETHRONE_MARGIN: Final[float] = 0.0005
 
 #: How a candidate's grade is composed. The qualified score dominates;
 #: improvement and token efficiency share the remainder in proportion to

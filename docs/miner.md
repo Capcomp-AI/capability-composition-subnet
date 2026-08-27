@@ -129,7 +129,7 @@ can rely on. See [examples/README.md](../examples/README.md).
 ## What a run pays
 
 **A run pays only if its best candidate takes the throne.** That means
-exceeding the reigning champion's grade by **0.001**. If the leader clears it,
+exceeding the reigning champion's grade by **0.0005**. If the leader clears it,
 the field behind them is paid by rank. If the leader cannot, the run offered
 the network nothing it did not already have and the whole miner share burns —
 second place does not inherit a run its leader did not win.

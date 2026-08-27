@@ -268,7 +268,7 @@ Expect roughly 15 minutes of reconstruction per candidate that uses a trimming m
 
 Half of every run burns to the subnet owner's UID. The other half
 is the miner pool, and it is paid only if the run's best candidate took the
-throne — exceeding the reigning champion's grade by `0.001`. If it did not, the
+throne — exceeding the reigning champion's grade by `0.0005`. If it did not, the
 whole miner share burns; second place does not inherit a run its leader did not
 win.
 

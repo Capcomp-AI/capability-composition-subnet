@@ -135,13 +135,30 @@ class TestTheRunPaysOnlyIfItsLeaderTakesTheThrone:
 
         Second place cannot inherit the run. If the best candidate did not beat
         what the network already has, the run bought nothing.
+
+        The leader's grade has to sit inside CHAMPION_DETHRONE_MARGIN of the
+        throne, so it moves whenever the margin does: 0.501 was inside at 0.002
+        and at 0.001, and outside at 0.0005 — at which point this stopped
+        testing the case it names. The tripwire below is what catches that.
         """
+        inside = 0.50 + C.CHAMPION_DETHRONE_MARGIN / 2
         vector = champion_ladder(
-            [(7, "5A", 0.501), (9, "5B", 0.500)], run_id=413, block=1, champion_grade=0.50
+            [(7, "5A", inside), (9, "5B", 0.500)], run_id=413, block=1, champion_grade=0.50
         )
 
         assert paid(vector) == {}
         assert burned(vector) == pytest.approx(1.0, abs=1e-9)
+
+    def test_the_margin_is_the_one_the_protocol_sets(self):
+        """A tripwire on a policy number, and one this repo did not have.
+
+        The engine pins it; here nothing did, so the margin could shrink under
+        these cases and they would pass while testing nothing. It has done that
+        twice.
+        """
+        assert C.CHAMPION_DETHRONE_MARGIN == 0.0005, (
+            "the dethrone margin moved; the grades in this file need rechecking"
+        )
 
     def test_an_empty_throne_pays_the_field_as_it_stands(self):
         """How the first throne is filled: no incumbent, so no bar."""
