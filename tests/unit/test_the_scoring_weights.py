@@ -50,6 +50,27 @@ class TestTheQualifiedScore:
         assert quality > 4 * efficiency
 
 
+class TestRetentionIsScoredAndNotGated:
+    """It carries weight in the qualified score and refuses nothing.
+
+    As a gate it was quantised into uselessness: the probe is scored k/correct
+    against the base model's own score on a set redrawn each run, so on forty
+    items the reachable values sit about three points apart and a fixed floor
+    always fell between two of them. Run 415 drew a base score of 34, so 26 of
+    36 candidates landed on 0.9412 — one question short — including the two
+    highest-completion packages in the field.
+    """
+
+    def test_it_still_carries_its_published_weight(self):
+        assert C.QUALIFIED_SCORE_WEIGHTS["retention"] == pytest.approx(0.05)
+
+    def test_it_refuses_nothing(self):
+        assert C.BASE_RETENTION_FLOOR == pytest.approx(0.0)
+
+    def test_it_is_still_measured_and_reported(self):
+        assert "retention" in CandidateScores.model_fields
+
+
 class TestTheGrade:
     def test_quality_carries_half(self):
         assert C.CONTRIBUTION_WEIGHT_QUALITY == pytest.approx(0.50)

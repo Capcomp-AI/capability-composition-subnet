@@ -450,7 +450,7 @@ See [min_compute.yml](../min_compute.yml) for detail.
 
 **Choosing rank 128.** It exceeds the artifact-size gate against the pinned base model. Run `size` first.
 
-**Omitting the retention adapter.** The base-retention gate rejects packages that traded away general ability for workflow score. It is measured on a held-out probe of short, exactly-scored general instructions — arithmetic, ordering, exact formats, answering in the language you were addressed in — so a package can score well on the workflow and still fail it. The retention anchor exists for exactly that.
+**Omitting the retention adapter.** Retention no longer refuses a package, but it still costs you score — 5% of the qualified score. It is measured on a held-out probe of short, exactly-scored general instructions (arithmetic, ordering, exact formats, answering in the language you were addressed in), so a package can score well on the workflow and still lose ground here. The retention anchor exists for exactly that.
 
 **Tuning to the public pack.** The hidden set is drawn fresh each run and includes out-of-distribution mutations — renamed components, converted units, aliased database columns, reformatted fault codes. A package that memorised surface patterns fails on those, and out-of-distribution robustness carries 10% of the qualified score directly.
 
@@ -559,7 +559,7 @@ Supplying a parameter a method does not use is an error, not a silent ignore. Th
 
 Per-adapter coefficient across the whole model. Range **`-2.0 … 2.0`**. Unlisted adapters default to `1.0`. Only selected adapters may appear.
 
-Negative coefficients are legal and occasionally useful — subtracting an adapter's update is a real operation — but they interact badly with the base-retention gate, which measures general instruction-following on a held-out probe rather than anything about this workflow.
+Negative coefficients are legal and occasionally useful — subtracting an adapter's update is a real operation — but they are hard on retention, which measures general instruction-following on a held-out probe rather than anything about this workflow. It no longer gates, so it will not refuse the package; it is scored and published, so you can see what the subtraction cost.
 
 ### `layer_group_overrides`
 
@@ -776,7 +776,7 @@ Almost certainly not — but they are selectable on purpose. One is a German leg
 
 ### Can I use negative coefficients?
 
-Yes, within `-2.0 … 2.0`. Subtracting an adapter's update is a real operation. It interacts badly with the base-retention gate — which measures general instruction-following on a held-out probe, not anything about this workflow — so measure it.
+Yes, within `-2.0 … 2.0`. Subtracting an adapter's update is a real operation. It is hard on retention — which measures general instruction-following on a held-out probe, not anything about this workflow — so measure it. Retention is scored, not gated, so it costs you rather than refusing you.
 
 ### How much do local scores predict hidden scores?
 

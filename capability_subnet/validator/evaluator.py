@@ -214,7 +214,6 @@ def evaluate_candidate(
             gates.gate_agent_limits(hidden_results),
             gates.gate_safety(hidden_results),
             gates.gate_stage_floors(scores, flow.stage_floors, min_samples=min_valid_samples),
-            gates.gate_base_retention(scores.retention),
             gates.gate_beats_strongest_reference(
                 scores.end_to_end,
                 reference_id or "no reference",

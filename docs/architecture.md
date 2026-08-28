@@ -333,7 +333,7 @@ score.
 
 Both are measured rather than assumed. Latency, token efficiency and artifact
 size carry 15% of the qualified score, so cost is priced into who wins. Base
-retention is a hard gate at 0.95 on a held-out probe, so a package that traded
+retention is measured on a held-out probe and scored, though not gated, so a package that traded
 away general ability cannot be crowned whatever it scored. And the permanent
 reference — the untouched base model — exists so the network can discover that
 composition did *not* help rather than paying miners to not discover it.

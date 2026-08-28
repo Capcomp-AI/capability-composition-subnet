@@ -339,7 +339,27 @@ MAX_OUTPUT_TOKENS: Final[int] = 8192
 #: between 0.951 and 0.975 is the same rule as 0.95; anything above 0.975 is the
 #: same rule as 1.0. Raising RETENTION_PROBE_ITEMS is the only way to make the
 #: number finer-grained than that.
-BASE_RETENTION_FLOOR: Final[float] = 0.95
+#: Retained general capability below which a package is refused.
+#:
+#: Zero, which disables the gate. Retention is still measured, still weighted in
+#: the qualified score, and still published on every candidate — what it no
+#: longer does is refuse one.
+#:
+#: The probe is scored ``k/correct``, where ``correct`` is the base model's own
+#: score on a probe redrawn every run. On a forty-item probe that puts the
+#: reachable values about three points apart, and a fixed floor always fell
+#: between two of them: a package was one drawn question from qualifying or not.
+#: Run 415 drew a base score of 34, so only 0.9706 and 1.0 could pass a 0.95
+#: floor, and 26 of 36 candidates landed on 0.9412 — including uid 7 at 0.1484
+#: and uid 73 at 0.1483, the two highest end-to-end packages in the field, both
+#: of which would have graded above the candidate that won.
+#:
+#: Measured across runs 411-415 it was also the one axis whose value moved more
+#: with the draw than with the merge, so as a gate it was refusing packages on
+#: something the miner did not control. Widening RETENTION_PROBE_ITEMS is what
+#: would make a floor here mean something; until then there is no floor worth
+#: setting.
+BASE_RETENTION_FLOOR: Final[float] = 0.0
 
 #: Items drawn per run for the general-capability probe. Small because each
 #: item is a few tokens and the probe runs once per package per run, and

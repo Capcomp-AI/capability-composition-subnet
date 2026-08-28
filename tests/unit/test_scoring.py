@@ -182,12 +182,12 @@ class TestGates:
     def test_summarise_names_every_failure(self):
         verdicts = [
             gates.gate_artifact_size(C.MAX_ARTIFACT_BYTES + 1),
-            gates.gate_base_retention(0.5),
+            gates.gate_sample_sufficiency([], minimum=C.DEFAULT_MIN_AXIS_SAMPLES),
         ]
         passed, detail = gates.summarise(verdicts)
 
         assert passed is False
-        assert "artifact_size" in detail and "base_retention" in detail
+        assert "artifact_size" in detail and "sample_sufficiency" in detail
 
 
 class TestPairedBootstrap:

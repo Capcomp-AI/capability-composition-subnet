@@ -332,7 +332,7 @@ Cost is not a claim here: latency, token efficiency and artifact size are 15% of
 
 - **Efficient multi-adapter serving is genuinely good.** S-LoRA and Punica amortise adapter swapping well. Where your router is a cheap classifier rather than a model, the token argument shrinks to a latency and operations argument.
 - **A specialist can simply be better.** If one adapter dominates your traffic, merging trades capability for convenience you may not need. On the current pool, no merge has beaten the best single adapter.
-- **Merging can destroy general ability** before it destroys task score, which is why a 0.95 retention floor on a held-out probe is a hard gate rather than a scored term.
+- **Merging can destroy general ability** before it destroys task score, which is why a held-out probe measures it separately and it carries 5% of the qualified score. It is not a gate. The probe is scored k/correct against the base model's own score on a set redrawn each run, so on forty items the reachable values sit about three points apart and any fixed floor falls between two of them — qualification turned on a single drawn question. In run 415 that disqualified 26 of 36 candidates, including the two highest-completion packages in the field.
 
 ## Scope
 

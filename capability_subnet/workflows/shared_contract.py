@@ -136,9 +136,12 @@ def ranking_contract() -> dict[str, Any]:
             "confidence bound above zero against that reference."
         ),
         "always_enforced": (
-            "The base-retention floor applies in both modes. A package that "
-            "destroyed the base model's general ability is not deployable whatever "
-            "it scored."
+            "Artifact size, sample sufficiency, agent limits, safety and the "
+            "stage floors apply in both modes. Base retention is measured and "
+            "scored in both and gates neither: the probe is scored against the "
+            "base model's own score on a set redrawn each run, so a fixed floor "
+            "fell between two reachable values and decided qualification on one "
+            "drawn question."
         ),
     }
 
