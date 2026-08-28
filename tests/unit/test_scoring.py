@@ -315,8 +315,8 @@ class TestAnEmptyThroneIsFilledRatherThanAssumed:
         assert [e.role for e in vector.entries] == ["burn"]
         assert vector.entries[0].weight == pytest.approx(1.0)
 
-    def test_a_field_that_trails_the_incumbent_is_paid(self):
+    def test_a_field_that_trails_the_incumbent_is_paid_but_crowns_nobody(self):
         vector = champion_ladder(self.FIELD, run_id=2, block=1, champion_grade=0.90)
 
-        assert vector.champion_hotkey == "5A"
         assert {e.uid for e in vector.entries if e.role != "burn"} == {7, 9, 3}
+        assert vector.champion_hotkey is None

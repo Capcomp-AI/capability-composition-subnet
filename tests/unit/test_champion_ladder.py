@@ -135,7 +135,18 @@ class TestTheRunPaysWhatClearedItsGates:
         vector = champion_ladder(FIELD, run_id=413, block=1, champion_grade=champion)
 
         assert paid(vector) != {}
-        assert vector.champion_hotkey == FIELD[0][1]
+
+    def test_being_paid_the_champion_share_is_not_holding_the_throne(self):
+        """Rank one always carries the "champion" role — it takes the
+        champion's share — and holds the throne only if it beat the reigning
+        grade. Conflating the two records every run's leader as having taken a
+        throne it did not take, and the next run is then measured against a bar
+        nobody actually cleared."""
+        champion = FIELD[0][2]
+        vector = champion_ladder(FIELD, run_id=413, block=1, champion_grade=champion)
+
+        assert any(e.role == "champion" for e in vector.entries)
+        assert vector.champion_hotkey is None
 
     def test_matching_the_margin_exactly_does_not_take_the_throne_but_is_paid(self):
         """A tie is not an improvement, and neither is the margin itself.

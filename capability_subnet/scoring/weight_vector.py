@@ -188,7 +188,14 @@ def champion_ladder(
         computed_at_block=block,
         burn_percentage=burn_share,
         entries=_normalise(entries),
-        champion_hotkey=qualifying[0][1] if qualifying else None,
+        # The throne, not the pay slot. Rank one always carries the
+        # "champion" role because it takes the champion's share, but the
+        # throne only changes hands when the leader actually beats the
+        # reigning grade — so this is None on a run that paid a full ladder
+        # and dethroned nobody. Setting it to the leader regardless would
+        # record every run's best candidate as having taken a throne it did
+        # not take, and the next run would be measured against the wrong bar.
+        champion_hotkey=qualifying[0][1] if (qualifying and took_the_throne) else None,
     )
 
 
