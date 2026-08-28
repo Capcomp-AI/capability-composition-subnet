@@ -266,24 +266,24 @@ Expect roughly 15 minutes of reconstruction per candidate that uses a trimming m
 
 ### How a run's emission splits
 
-Half of every run burns to the subnet owner's UID. The other half
-is the miner pool, and it is paid only if the run's best candidate took the
-throne — exceeding the reigning champion's grade by `0.0005`. If it did not, the
-whole miner share burns; second place does not inherit a run its leader did not
-win.
+No fixed share of a run burns. The whole run is the miner pool, and it is paid
+only if the run's best candidate took the throne — exceeding the reigning
+champion's grade by `0.0005`. If it did not, all of it burns; second place does
+not inherit a run its leader did not win.
 
 | Rank | Share of the run |
 |---|---|
-| Burn | 50% |
-| 1st | 45% |
-| 2nd | 2.5% |
-| 3rd | 1.5% |
-| 4th | 0.5% |
-| 5th | 0.25% |
-| 6th–10th | 0.25%, in proportion to grade |
+| 1st | 90% |
+| 2nd | 5% |
+| 3rd | 3% |
+| 4th | 1% |
+| 5th | 0.5% |
+| 6th–10th | 0.5%, in proportion to grade |
 
-Ten miners are paid at most, and a rank nobody filled burns rather than being
-promoted into the leader's share.
+Ten miners are paid at most. An unfilled rank in the first five burns rather
+than being promoted into the leader's share, so a field of five pays 99.5% and
+burns 0.5%. The sixth-to-tenth share is split across whoever occupies those
+ranks, so it is paid in full as soon as any one of them is filled.
 
 Ranking is by grade: quality 50%, improvement over the base model 40%, cost
 10%. The qualified score is itself 55% end-to-end completion, 15% stage

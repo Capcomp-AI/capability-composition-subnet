@@ -190,18 +190,29 @@ def incentive_contract() -> dict[str, Any]:
             "cost": C.CONTRIBUTION_WEIGHT_COST,
         },
         "note": (
-            f"{C.BURN_SHARE:.0%} of every run burns to the subnet owner's UID. "
-            "Nobody is paid without taking the throne: a candidate must exceed "
-            f"the reigning champion's grade by {C.CHAMPION_DETHRONE_MARGIN} to "
-            "be paid at all, not merely to be crowned, and a run where no "
-            "candidate does burns the whole miner share. Among those that "
-            "clear it the remaining share is split by rank — "
+            (
+                "No fixed share of a run burns: a run that produces a new "
+                "champion and fills every paid rank pays its whole emission to "
+                "miners. "
+                if C.BURN_SHARE == 0
+                else f"{C.BURN_SHARE:.0%} of every run burns to the subnet owner's UID. "
+            )
+            + "Nobody is paid without taking the throne: a candidate must "
+            f"exceed the reigning champion's grade by "
+            f"{C.CHAMPION_DETHRONE_MARGIN} to be paid at all, not merely to be "
+            "crowned, and a run where no candidate does burns the whole miner "
+            "share. Among those that clear it the pool is split by rank — "
             + ", ".join(f"{share:.1%}" for share in C.RANK_SHARES)
             + f" for the first {len(C.RANK_SHARES)}, and {C.TAIL_SHARE:.1%} "
             f"across ranks {len(C.RANK_SHARES) + 1} to {C.PAID_RANKS} in "
             "proportion to grade. Grading is on quality, improvement and cost, "
             "and only candidates clearing every hard gate are graded. An "
-            "unfilled rank burns rather than being redistributed."
+            f"unfilled rank in the first {len(C.RANK_SHARES)} burns rather than "
+            f"being redistributed, so a field of {len(C.RANK_SHARES)} pays "
+            f"{sum(C.RANK_SHARES):.1%} of the pool and burns the rest; the "
+            f"tail share is split across whoever occupies ranks "
+            f"{len(C.RANK_SHARES) + 1} to {C.PAID_RANKS}, so it is paid in full "
+            "once any one of them is filled."
         ),
     }
 

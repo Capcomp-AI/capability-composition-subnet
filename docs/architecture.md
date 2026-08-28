@@ -301,15 +301,14 @@ So the top slot is winner-takes-most and everything below it is graded:
 
 Only candidates that cleared **every hard gate** are graded — this is not a consolation prize for producing something undeployable. If nobody qualifies, the graded pool burns rather than folding into the champion's share, because holding an uncontested throne is not an achievement. Each grade is published broken into its four terms, so a miner can act on it.
 
-The terms decide how the miner pool is divided; the pool itself is half the run:
+The terms decide how the miner pool is divided, and the pool is the whole run — no fixed share burns:
 
 | Recipient | Share of the run |
 |---|---|
-| Burn (subnet owner's UID) | 50% |
-| Best measured package | 45% |
-| Graded runners-up, ranks 2–10 | 2.5% |
+| Best measured package | 90% |
+| Graded runners-up, ranks 2–10 | 10% |
 
-Ten miners are paid at most. The burn goes to the subnet owner's UID resolved from the metagraph rather than to UID 0, which belongs to whichever neuron registered into the first slot.
+Ten miners are paid at most. A run still burns when no candidate takes the throne, and an unfilled rank among the first five burns rather than being promoted into the leader's share. Burned emission goes to the subnet owner's UID resolved from the metagraph rather than to UID 0, which belongs to whichever neuron registered into the first slot.
 
 Improvement is measured against the base model, not against the leader. Rewarding closeness to the leader would pay for copying it, and the anti-copy check runs *before* evaluation in any case.
 

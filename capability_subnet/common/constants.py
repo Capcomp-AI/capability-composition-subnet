@@ -628,19 +628,32 @@ PUBLIC_PACK_INSTANCES: Final[int] = 120
 # Incentive
 # ---------------------------------------------------------------------------
 
-#: Fraction of every run's emission that burns.
+#: Fraction of every run's emission that burns before the ladder is paid.
 #:
-#: The subnet buys one thing: a merged package that beats the one it already
-#: has. Emission that does not buy that is emission the network did not need to
-#: spend, so the default is to spend little and burn the rest.
+#: Zero from run 417 onwards: a run that produces a new champion now pays its
+#: whole emission to the miners that earned it. 0.80 until run 414, 0.50 until
+#: 417. The ladder that splits the pool is unchanged, so every rank's share
+#: doubles again relative to the 0.50 era.
 #:
-#: Halved from 0.80 for the vector published in run 414 onwards, which is the
-#: first to pay submissions made in run 412. The miner pool goes from a fifth of
-#: every run to a half; the ladder that splits it is unchanged, so every rank's
-#: share grows by the same factor of 2.5.
-BURN_SHARE: Final[float] = 0.50
+#: This is the *unconditional* burn, and setting it to zero does not mean a run
+#: can never burn. Two rules still send emission to the burn UID, and both are
+#: deliberate:
+#:
+#: * A run whose leader does not take the throne pays nobody, so all of it
+#:   burns. The subnet buys one thing — a package better than the one it
+#:   already has — and a run that did not produce one is not bought.
+#: * An unfilled rank among the first five burns rather than being promoted
+#:   into the ranks above. ``RANK_SHARES`` names those five, and a share nobody
+#:   occupies is not redistributed. ``TAIL_SHARE`` is different: it is split
+#:   across whoever holds ranks six to ``PAID_RANKS``, so it is paid in full as
+#:   soon as any one of them is filled.
+#:
+#: So "100% to eligible miners" holds from six qualifiers upwards, not from ten.
+#: Below that the first-five shortfall burns: five qualifiers pay 0.995, one
+#: qualifier pays 0.90. That shortfall is the ladder's shape, not this constant.
+BURN_SHARE: Final[float] = 0.0
 
-#: How the payable fifth is split by rank.
+#: How the payable pool is split by rank.
 #:
 #: Ranks one to five, in order. The throne takes nearly all of it: the prize is
 #: winning, and placing is information about how close a miner came rather than

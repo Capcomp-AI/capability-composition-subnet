@@ -134,21 +134,27 @@ the field behind them is paid by rank. If the leader cannot, the run offered
 the network nothing it did not already have and the whole miner share burns —
 second place does not inherit a run its leader did not win.
 
-Half of every run burns to the subnet owner's UID. The other half
-is the miner pool:
+No fixed share of a run burns. A run that produces a new champion and fills
+every paid rank pays its **whole emission** to miners:
 
-| Rank | Share of the miner pool | Share of the run |
-|---|---|---|
-| Burn | — | 50% |
-| 1st | 90% | 45% |
-| 2nd | 5% | 2.5% |
-| 3rd | 3% | 1.5% |
-| 4th | 1% | 0.5% |
-| 5th | 0.5% | 0.25% |
-| 6th–10th | 0.5%, in proportion to grade | 0.25% |
+| Rank | Share of the run |
+|---|---|
+| 1st | 90% |
+| 2nd | 5% |
+| 3rd | 3% |
+| 4th | 1% |
+| 5th | 0.5% |
+| 6th–10th | 0.5%, in proportion to grade |
 
-Ten miners are paid at most, and a rank nobody filled burns rather than being
-promoted into the leader's share.
+Ten miners are paid at most. A run can still burn, in two ways, and both are
+deliberate:
+
+- **No throne, nothing paid.** If no candidate clears the reigning grade the
+  entire run burns.
+- **An unfilled rank in the first five burns** rather than being promoted into
+  the leader's share, so a field of five pays 99.5% and burns 0.5%. The
+  sixth-to-tenth share is different: it is split across whoever occupies those
+  ranks, so it is paid in full as soon as any one of them is filled.
 
 Ranking is by **grade**, one number per candidate over the packages that
 cleared every hard gate:

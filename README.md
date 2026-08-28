@@ -130,24 +130,28 @@ published broken into its terms.
 
 ### How a run's emission splits
 
-Half of every run burns to the subnet owner's UID. The other half is the miner
-pool, split by rank among those that cleared the throne:
+No fixed share of a run burns. The whole run is the miner pool, split by rank
+among those that cleared the throne:
 
-| Rank | Share of the miner pool | Share of the run |
-|---|---|---|
-| Burn | — | 50% |
-| 1st | 90% | 45% |
-| 2nd | 5% | 2.5% |
-| 3rd | 3% | 1.5% |
-| 4th | 1% | 0.5% |
-| 5th | 0.5% | 0.25% |
-| 6th–10th | 0.5%, in proportion to grade | 0.25% |
+| Rank | Share of the run |
+|---|---|
+| 1st | 90% |
+| 2nd | 5% |
+| 3rd | 3% |
+| 4th | 1% |
+| 5th | 0.5% |
+| 6th–10th | 0.5%, in proportion to grade |
 
 Ten miners are paid at most. Ranks six to ten split their share in proportion
 to grade rather than evenly, so the ordering inside the tail still says
-something. A rank nobody filled burns rather than being promoted into the
-leader's share — a run with one qualified package is not a bigger achievement
-than a contested one.
+something, and because it is split across whoever is there it is paid in full
+once any one of those ranks is filled.
+
+A run can still burn. If nobody takes the throne the entire run burns. And a
+rank nobody filled among the first five burns rather than being promoted into
+the leader's share — a run with one qualified package is not a bigger
+achievement than a contested one — so a field of five pays 99.5% and burns the
+remaining 0.5%.
 
 The throne does not move on its own. A run nobody wins leaves it exactly where
 it was, so the next run's challengers face the same grade rather than a rising
