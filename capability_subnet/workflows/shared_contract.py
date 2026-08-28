@@ -197,11 +197,14 @@ def incentive_contract() -> dict[str, Any]:
                 if C.BURN_SHARE == 0
                 else f"{C.BURN_SHARE:.0%} of every run burns to the subnet owner's UID. "
             )
-            + "Nobody is paid without taking the throne: a candidate must "
-            f"exceed the reigning champion's grade by "
-            f"{C.CHAMPION_DETHRONE_MARGIN} to be paid at all, not merely to be "
-            "crowned, and a run where no candidate does burns the whole miner "
-            "share. Among those that clear it the pool is split by rank — "
+            + "Every candidate that clears the hard gates is paid; the bar is "
+            "the entry gate, an absolute margin of end-to-end completion over "
+            "the strongest permanent reference, so it is a statement about the "
+            "package rather than about the incumbent. A run where nothing "
+            f"clears it burns entirely. Exceeding the champion's grade by "
+            f"{C.CHAMPION_DETHRONE_MARGIN} takes the throne, which records who "
+            "leads the network and does not change what anyone is paid. The "
+            "pool is split by rank — "
             + ", ".join(f"{share:.1%}" for share in C.RANK_SHARES)
             + f" for the first {len(C.RANK_SHARES)}, and {C.TAIL_SHARE:.1%} "
             f"across ranks {len(C.RANK_SHARES) + 1} to {C.PAID_RANKS} in "

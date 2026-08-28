@@ -128,11 +128,17 @@ can rely on. See [examples/README.md](../examples/README.md).
 
 ## What a run pays
 
-**A run pays only if its best candidate takes the throne.** That means
-exceeding the reigning champion's grade by **0.0005**. If the leader clears it,
-the field behind them is paid by rank. If the leader cannot, the run offered
-the network nothing it did not already have and the whole miner share burns —
-second place does not inherit a run its leader did not win.
+**A run pays whatever cleared its hard gates.** Clear them and you are ranked
+by grade and paid by rank. The bar that matters is the entry gate — **0.02** of
+end-to-end completion over the strongest permanent reference — and it is
+absolute, so whether you earn depends on your package rather than on how strong
+some earlier run happened to be. A run where nothing clears the gates burns
+entirely.
+
+**Taking the throne is a separate thing**, and it does not change what you are
+paid. The leader takes it by exceeding the reigning champion's grade by
+**0.0005**; that decides who is recorded as champion for the network, and
+nothing else.
 
 No fixed share of a run burns. A run that produces a new champion and fills
 every paid rank pays its **whole emission** to miners:

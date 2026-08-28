@@ -10,15 +10,23 @@ stake — agree to write it.
 The rule the vector expresses, in full:
 
 * ``BURN_SHARE`` of every run burns. What is left is the miner share.
-* The run pays nothing unless its leader takes the throne, which means
-  exceeding the reigning champion's grade by ``CHAMPION_DETHRONE_MARGIN``. A
-  run whose best candidate cannot do that offered the network nothing it did
-  not already have, and the whole miner share burns.
-* When the leader does take it, the miner share is split by rank across the
-  field behind them: ``RANK_SHARES`` for the first five and ``TAIL_SHARE``
-  across ranks six to ``PAID_RANKS``, in proportion to grade.
-* A permanent reference on the throne earns nothing, and an unfilled rank burns
-  rather than being redistributed. "Best of a bad run" is not paid for.
+* A run pays whatever cleared its hard gates. The bar is absolute — the entry
+  gate requires ``DEFAULT_END_TO_END_MARGIN`` of completion over the strongest
+  permanent reference — so it is a statement about the package rather than
+  about whoever happens to hold the throne. A field where nobody clears it
+  bought nothing, and the whole miner share burns.
+* The miner share is split by rank: ``RANK_SHARES`` for the first five and
+  ``TAIL_SHARE`` across ranks six to ``PAID_RANKS``, in proportion to grade.
+* A permanent reference is not a competitor, and an unfilled rank among the
+  first five burns rather than being redistributed.
+
+Payment used to require dethroning the incumbent by
+``CHAMPION_DETHRONE_MARGIN``. That made emission depend on a number no
+candidate in the run could see or affect — the grade of a package measured on a
+different draw — so a field that cleared every absolute bar was paid nothing
+because a previous run had been strong. Run 415 burned entirely with five
+qualified packages in it. The throne is still recorded, and the margin still
+decides whether it changes hands; it no longer decides whether anyone is paid.
 """
 
 from __future__ import annotations
@@ -115,13 +123,16 @@ def champion_ladder(
             "position, so an unsorted field pays the wrong miners"
         )
 
-    # The bar is on the leader, and on the leader alone. Either the run
-    # produced something better than what the network already has, in which
-    # case the field behind the winner is paid by rank, or it did not, in which
-    # case the run bought nothing and pays nobody.
+    # The bar is the hard gates, which every entry in `ranked` has already
+    # cleared, and the entry gate among them is an absolute margin over the
+    # strongest permanent reference. So a non-empty field is by construction a
+    # field that beat the bar, and it is paid.
+    #
+    # `champion_grade` no longer gates payment. It still says whether the
+    # throne changes hands, which is recorded and carried into the next run.
     threshold = dethrone_threshold(champion_grade)
     took_the_throne = bool(ranked) and ranked[0][2] > threshold
-    qualifying = ranked[: C.PAID_RANKS] if took_the_throne else []
+    qualifying = ranked[: C.PAID_RANKS]
 
     pool = 1.0 - burn_share
     entries: list[WeightEntry] = []
@@ -155,13 +166,19 @@ def champion_ladder(
     if burned > 0.0:
         entries.append(burn_entry(burned, burn_uid))
 
-    if not took_the_throne:
-        best = f"{ranked[0][2]:.6f}" if ranked else "no measured candidate"
+    if not ranked:
         log.info(
-            "run %d: the leading grade was %s against a throne at %.6f; "
-            "nobody took it, so the whole miner share burns",
+            "run %d: no candidate cleared every hard gate, so the whole miner share burns",
             run_id,
-            best,
+        )
+    elif not took_the_throne:
+        log.info(
+            "run %d: %d candidate(s) cleared the gates and are paid; the leading "
+            "grade was %.6f against a throne at %.6f, so the throne does not "
+            "change hands",
+            run_id,
+            len(qualifying),
+            ranked[0][2],
             threshold,
         )
 

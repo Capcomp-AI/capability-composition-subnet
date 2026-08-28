@@ -89,28 +89,78 @@ class TestTheSplit:
             assert total == pytest.approx(1.0, abs=1e-9), f"{count} candidates"
 
 
-class TestTheRunPaysOnlyIfItsLeaderTakesTheThrone:
-    def test_a_field_that_cannot_clear_the_bar_pays_nothing(self):
+class TestTheThroneIsARecordAndNotACondition:
+    """``dethrone_threshold`` still decides who is recorded as champion.
+
+    It stopped deciding who is paid. Keeping the two apart is the point of the
+    rule, so both halves are asserted: the threshold still behaves exactly as it
+    did, and the ladder no longer consults it before paying.
+    """
+
+    def test_an_empty_throne_has_a_threshold_of_zero(self):
+        """How the first throne is filled: the field is ranked as it stands."""
+        assert dethrone_threshold(None) == 0.0
+
+    def test_a_held_throne_adds_the_margin(self):
+        assert dethrone_threshold(0.40) == pytest.approx(0.40 + C.CHAMPION_DETHRONE_MARGIN)
+
+    def test_the_threshold_does_not_change_what_is_paid(self):
+        """The same field, against an empty throne and against an unbeatable
+        one, is paid identically."""
+        field = [(7, "5A", 0.30), (9, "5B", 0.29)]
+        empty = champion_ladder(field, run_id=413, block=1, champion_grade=None)
+        held = champion_ladder(field, run_id=413, block=1, champion_grade=0.99)
+
+        assert paid(empty) == paid(held)
+
+
+class TestTheRunPaysWhatClearedItsGates:
+    """Payment follows the hard gates, not the incumbent.
+
+    It used to follow the incumbent: a run paid nothing unless its leader
+    exceeded the reigning grade by ``CHAMPION_DETHRONE_MARGIN``. That made
+    emission depend on a quantity no candidate in the run could see or affect —
+    a grade earned on a different draw — so a field that cleared every absolute
+    bar could be paid nothing because an earlier run happened to be strong. Run
+    415 burned entirely with five qualified packages in it.
+
+    The entry gate is the bar now, and it is absolute: completion over the
+    strongest permanent reference by ``DEFAULT_END_TO_END_MARGIN``. Everything
+    reaching ``champion_ladder`` has already cleared it.
+    """
+
+    def test_a_field_below_the_incumbent_is_still_paid(self):
+        """The case that motivated the change."""
         champion = FIELD[0][2]
         vector = champion_ladder(FIELD, run_id=413, block=1, champion_grade=champion)
+
+        assert paid(vector) != {}
+        assert vector.champion_hotkey == FIELD[0][1]
+
+    def test_matching_the_margin_exactly_does_not_take_the_throne_but_is_paid(self):
+        """A tie is not an improvement, and neither is the margin itself.
+
+        The throne is a record of who leads the network; it still needs beating
+        outright. Being paid for this run is a separate question.
+        """
+        champion = 0.40
+        exactly = [(7, "5A", champion + C.CHAMPION_DETHRONE_MARGIN)]
+        vector = champion_ladder(exactly, run_id=413, block=1, champion_grade=champion)
+
+        assert paid(vector) == {7: pytest.approx(C.RANK_SHARES[0] * (1.0 - C.BURN_SHARE))}
+
+    def test_an_empty_field_still_pays_nobody(self):
+        """The one case that must keep burning.
+
+        Nothing cleared the gates, so nothing was bought. This is the whole of
+        what a total burn now means, and it is a statement about the packages
+        rather than about the throne.
+        """
+        vector = champion_ladder([], run_id=413, block=1, champion_grade=0.50)
 
         assert paid(vector) == {}
         assert burned(vector) == pytest.approx(1.0, abs=1e-9)
         assert vector.champion_hotkey is None
-
-    def test_matching_the_margin_exactly_is_not_enough(self):
-        """A tie is not an improvement, and neither is the margin itself."""
-        champion = 0.40
-        exactly = [(7, "5A", champion + C.CHAMPION_DETHRONE_MARGIN)]
-
-        assert paid(champion_ladder(exactly, run_id=413, block=1, champion_grade=champion)) == {}
-
-    def test_clearing_the_margin_by_the_smallest_amount_is_enough(self):
-        champion = 0.40
-        over = [(7, "5A", champion + C.CHAMPION_DETHRONE_MARGIN + 1e-9)]
-
-        vector = champion_ladder(over, run_id=413, block=1, champion_grade=champion)
-        assert vector.champion_hotkey == "5A"
 
     def test_a_winner_alone_in_the_field_takes_the_first_share_and_the_rest_burns(self):
         vector = champion_ladder([(7, "5A", 0.60)], run_id=413, block=1, champion_grade=0.50)
@@ -119,8 +169,7 @@ class TestTheRunPaysOnlyIfItsLeaderTakesTheThrone:
         assert paid(vector) == {7: pytest.approx(C.RANK_SHARES[0] * pool, abs=1e-9)}
         assert burned(vector) == pytest.approx(1.0 - C.RANK_SHARES[0] * pool, abs=1e-9)
 
-    def test_the_field_behind_the_winner_is_paid_whether_or_not_it_cleared(self):
-        """The bar is on the leader. Once it is taken, the run pays by rank."""
+    def test_the_whole_field_is_paid_by_rank(self):
         vector = champion_ladder(
             [(7, "5A", 0.60), (9, "5B", 0.55), (3, "5C", 0.10)],
             run_id=413,
@@ -130,42 +179,19 @@ class TestTheRunPaysOnlyIfItsLeaderTakesTheThrone:
 
         assert set(paid(vector)) == {7, 9, 3}
 
-    def test_a_strong_field_behind_a_leader_who_did_not_win_is_paid_nothing(self):
-        """The converse, and the one that costs someone a run if misread.
+    def test_a_strong_field_behind_a_leader_who_did_not_win_is_paid(self):
+        """The converse of the old rule, and the point of the change.
 
-        Second place cannot inherit the run. If the best candidate did not beat
-        what the network already has, the run bought nothing.
-
-        The leader's grade has to sit inside CHAMPION_DETHRONE_MARGIN of the
-        throne, so it moves whenever the margin does: 0.501 was inside at 0.002
-        and at 0.001, and outside at 0.0005 — at which point this stopped
-        testing the case it names. The tripwire below is what catches that.
+        Second place still cannot inherit the leader's share — the ladder pays
+        position — but the field is no longer unpaid because the run failed to
+        beat a package measured on another draw.
         """
-        inside = 0.50 + C.CHAMPION_DETHRONE_MARGIN / 2
-        vector = champion_ladder(
-            [(7, "5A", inside), (9, "5B", 0.500)], run_id=413, block=1, champion_grade=0.50
-        )
+        field = [(7, "5A", 0.30), (9, "5B", 0.29), (3, "5C", 0.28)]
+        vector = champion_ladder(field, run_id=413, block=1, champion_grade=0.90)
+        pool = 1.0 - C.BURN_SHARE
 
-        assert paid(vector) == {}
-        assert burned(vector) == pytest.approx(1.0, abs=1e-9)
-
-    def test_the_margin_is_the_one_the_protocol_sets(self):
-        """A tripwire on a policy number, and one this repo did not have.
-
-        The engine pins it; here nothing did, so the margin could shrink under
-        these cases and they would pass while testing nothing. It has done that
-        twice.
-        """
-        assert C.CHAMPION_DETHRONE_MARGIN == 0.0005, (
-            "the dethrone margin moved; the grades in this file need rechecking"
-        )
-
-    def test_an_empty_throne_pays_the_field_as_it_stands(self):
-        """How the first throne is filled: no incumbent, so no bar."""
-        assert dethrone_threshold(None) == 0.0
-
-        vector = champion_ladder(FIELD, run_id=412, block=1, champion_grade=None)
-        assert vector.champion_hotkey == "5A"
+        assert set(paid(vector)) == {7, 9, 3}
+        assert paid(vector)[7] == pytest.approx(C.RANK_SHARES[0] * pool, abs=1e-9)
 
 
 class TestItRefusesRatherThanPayingTheWrongMiner:

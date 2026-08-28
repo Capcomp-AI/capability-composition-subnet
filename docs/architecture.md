@@ -308,7 +308,7 @@ The terms decide how the miner pool is divided, and the pool is the whole run â€
 | Best measured package | 90% |
 | Graded runners-up, ranks 2â€“10 | 10% |
 
-Ten miners are paid at most. A run still burns when no candidate takes the throne, and an unfilled rank among the first five burns rather than being promoted into the leader's share. Burned emission goes to the subnet owner's UID resolved from the metagraph rather than to UID 0, which belongs to whichever neuron registered into the first slot.
+Ten miners are paid at most. A run burns entirely when nothing clears the hard gates, and an unfilled rank among the first five burns rather than being promoted into the leader's share. Taking the throne is a record of who leads the network and is not a condition of payment. Burned emission goes to the subnet owner's UID resolved from the metagraph rather than to UID 0, which belongs to whichever neuron registered into the first slot.
 
 Improvement is measured against the base model, not against the leader. Rewarding closeness to the leader would pay for copying it, and the anti-copy check runs *before* evaluation in any case.
 

@@ -89,14 +89,20 @@ The incumbent is not one of the permanent references. It gets its own smaller ma
 
 **One measurement per submission.** A run is a day, and the pipeline is three runs deep: submit in run N, measured in run N+1, and that score sets the weight submitted on-chain in run N+2. A submission earns from that one measurement alone; to earn again, submit again — up to three times a run, of which only the last is measured. Weights lag the measurement by a run so that a vector is always computed from a *closed* run's final leaderboard rather than from one still being written. Nothing is terminated, and a failure that indicts the validator — an unreadable memory counter, too few scored instances — is not scored against the miner at all.
 
-### The run pays only if its leader takes the throne
+### A run pays whatever cleared its gates
 
-The best candidate in a run takes the throne by exceeding the reigning
-champion's **grade** by **0.0005**. That single test also decides whether the
-run pays anybody. If the leader clears it, the field behind them is paid by
-rank. If the leader cannot, the run offered the network nothing it did not
-already have — nobody places behind a leader who did not win, and the whole
-miner share burns.
+Every candidate that clears the hard gates is ranked by grade and paid by rank.
+The bar is the entry gate — **0.02** of end-to-end completion over the strongest
+permanent reference — and it is absolute: a statement about the package, not
+about whoever happens to hold the throne. A run where nothing clears it bought
+nothing, and the whole miner share burns.
+
+Taking the throne is separate. The best candidate takes it by exceeding the
+reigning champion's **grade** by **0.0005**, and that decides who the network
+records as champion, not who earns. Payment used to hang on it, and that made a
+miner's emission depend on a number nobody in the run could see or affect —
+a grade earned on a different draw, in an earlier run. A field of five qualified
+packages was paid nothing because an earlier run had been strong.
 
 The grade is one number per candidate, from three terms the evaluation already
 measures:
@@ -147,7 +153,7 @@ to grade rather than evenly, so the ordering inside the tail still says
 something, and because it is split across whoever is there it is paid in full
 once any one of those ranks is filled.
 
-A run can still burn. If nobody takes the throne the entire run burns. And a
+A run can still burn. If nothing clears the hard gates the entire run burns. And a
 rank nobody filled among the first five burns rather than being promoted into
 the leader's share — a run with one qualified package is not a bigger
 achievement than a contested one — so a field of five pays 99.5% and burns the
