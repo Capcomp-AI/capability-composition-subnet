@@ -79,7 +79,10 @@ def hard_gates_contract(
         if max_output_tokens is None
         else max_output_tokens,
         "critical_unsafe_actions": C.MAX_CRITICAL_UNSAFE_ACTIONS,
-        "base_retention_floor": C.BASE_RETENTION_FLOOR,
+        # None, not 0.0. A floor of zero still reads as a floor — a miner
+        # seeing it asks what happens at 0.001. There is no floor: retention is
+        # measured and published on every candidate and refuses nothing.
+        "base_retention_floor": C.BASE_RETENTION_FLOOR or None,
         "stage_floors": dict(stage_floors or {}),
     }
 
@@ -186,7 +189,12 @@ def incentive_contract() -> dict[str, Any]:
         "tail_share_of_pool": round(C.TAIL_SHARE, 6),
         "tail_share_of_run": round(C.TAIL_SHARE * miner_pool, 6),
         "paid_ranks": C.PAID_RANKS,
-        "champion_dethrone_margin": C.CHAMPION_DETHRONE_MARGIN,
+        # Absent from the contract on purpose. It is not a threshold a miner
+        # has to clear for anything they earn: payment is decided by the entry
+        # gate above, and this margin only moves a record of who leads.
+        # Publishing it beside the shares invites it to be read as a second bar
+        # on being paid, which is what it was until payment moved to the gates.
+        "champion_dethrone_margin": None,
         "contribution_weights": {
             "quality": C.CONTRIBUTION_WEIGHT_QUALITY,
             "improvement": C.CONTRIBUTION_WEIGHT_IMPROVEMENT,
@@ -194,9 +202,9 @@ def incentive_contract() -> dict[str, Any]:
         },
         "note": (
             (
-                "No fixed share of a run burns: a run that produces a new "
-                "champion and fills every paid rank pays its whole emission to "
-                "miners. "
+                "No fixed share of a run burns: a run that fills every paid "
+                "rank pays its whole emission to miners, whether or not it "
+                "crowns anybody. "
                 if C.BURN_SHARE == 0
                 else f"{C.BURN_SHARE:.0%} of every run burns to the subnet owner's UID. "
             )
@@ -204,10 +212,10 @@ def incentive_contract() -> dict[str, Any]:
             "the entry gate, an absolute margin of end-to-end completion over "
             "the strongest permanent reference, so it is a statement about the "
             "package rather than about the incumbent. A run where nothing "
-            f"clears it burns entirely. Exceeding the champion's grade by "
-            f"{C.CHAMPION_DETHRONE_MARGIN} takes the throne, which records who "
-            "leads the network and does not change what anyone is paid. The "
-            "pool is split by rank — "
+            "clears it burns entirely. A separate margin decides whether the "
+            "throne changes hands; it records who leads the network and "
+            "changes nothing about what anyone is paid, so it is not published "
+            "here as a bar to clear. The pool is split by rank — "
             + ", ".join(f"{share:.1%}" for share in C.RANK_SHARES)
             + f" for the first {len(C.RANK_SHARES)}, and {C.TAIL_SHARE:.1%} "
             f"across ranks {len(C.RANK_SHARES) + 1} to {C.PAID_RANKS} in "
