@@ -3,7 +3,9 @@
 One number per candidate, in [0, 1], and it is what everything downstream
 decides on: who holds the throne, who is paid, and in what order. A candidate
 takes the throne by exceeding the reigning grade by
-``CHAMPION_DETHRONE_MARGIN``, and nobody is paid without clearing that bar.
+``CHAMPION_DETHRONE_MARGIN``. Being paid is a separate question and a lower
+bar: everything clearing the hard gates is ranked by this number and paid by
+rank, so a run that crowns nobody still pays its field.
 
 Three terms the evaluation already measures:
 

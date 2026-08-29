@@ -712,9 +712,11 @@ DEFAULT_TAIL_FRACTION: Final[float] = 0.15
 #: field is ranked on, so a challenger that is better on cost or breadth can
 #: win without being better on completion alone.
 #:
-#: It also decides whether the run pays at all. If the best candidate cannot
-#: clear it, the run offered the network nothing it did not already have and
-#: the whole miner share burns — nobody places behind a leader who did not win.
+#: It does not decide whether the run pays. The hard gates do, and the entry
+#: gate among them is an absolute margin over the strongest permanent
+#: reference, so a field is paid on what it is rather than on how strong an
+#: earlier run happened to be. This margin decides only whether the throne
+#: changes hands.
 #: How many times a hotkey may submit in one run, the first included. Only the
 #: last is measured. High enough to correct a mistake, low enough that a miner
 #: cannot iterate against the measurement — a limit you could search with would

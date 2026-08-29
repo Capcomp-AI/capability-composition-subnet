@@ -410,17 +410,33 @@ def verify_weight_vector(
                 subject,
             )
 
-    # Nobody is paid without taking the throne, so a vector that pays anyone
-    # must name the champion it paid. One without a champion has paid a field
-    # that did not clear the bar.
-    if paid and any(entry.role != "burn" for entry in paid) and not vector.champion_hotkey:
-        result.add(
-            "paid_without_a_throne",
-            "error",
-            "the vector pays miners but names no champion; nobody is paid "
-            "without exceeding the reigning grade",
-            subject,
-        )
+    # A vector that pays miners and names no champion is now the ordinary case,
+    # not an error. Payment follows the hard gates -- the entry gate among them
+    # is an absolute margin over the strongest permanent reference -- while the
+    # throne still costs CHAMPION_DETHRONE_MARGIN over the reigning grade and
+    # frequently does not move. Runs 416, 417 and 418 each paid a full ladder
+    # and crowned nobody.
+    #
+    # What is still worth refusing is the reverse: a champion named who was not
+    # paid, or was not paid the leading share. The throne is a record of who
+    # leads, so a vector naming one who is absent from its own ladder is
+    # describing a run it did not compute.
+    if vector.champion_hotkey:
+        crowned = next((e for e in paid if e.hotkey == vector.champion_hotkey), None)
+        if crowned is None:
+            result.add(
+                "champion_not_paid",
+                "error",
+                f"the vector names {vector.champion_hotkey[:16]}… as champion but pays it nothing",
+                subject,
+            )
+        elif any(e.weight > crowned.weight for e in paid if e.role != "burn"):
+            result.add(
+                "champion_not_the_leading_share",
+                "error",
+                f"{vector.champion_hotkey[:16]}… is named champion but another entry is paid more",
+                subject,
+            )
 
     return result
 

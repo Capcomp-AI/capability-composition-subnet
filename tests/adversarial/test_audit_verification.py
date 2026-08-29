@@ -383,15 +383,51 @@ class TestOnlyAGradedQualifierMayBePaid:
 
         assert [f.code for f in result.errors] == ["unsigned"]
 
-    def test_paying_anyone_without_naming_a_champion_is_caught(self):
-        """Nobody is paid without taking the throne, so a paying vector has one."""
+    def test_paying_without_naming_a_champion_is_the_ordinary_case(self):
+        """A run that pays a full ladder and crowns nobody is not an error.
+
+        It used to be: payment required dethroning, so a paying vector with no
+        champion described a field that had not cleared the bar. Payment now
+        follows the hard gates and the throne moves on its own margin, so the
+        two come apart routinely -- runs 416, 417 and 418 each paid ten miners
+        and moved no throne. The audit refusing that would refuse every vector
+        this subnet now publishes.
+        """
         vector = self._vector(
             champion_hotkey=None,
             entries=[WeightEntry(uid=7, hotkey="5Challenger", weight=1.0, role="runner_up")],
         )
         result = verify_weight_vector(vector, [report()])
 
-        assert any(f.code == "paid_without_a_throne" for f in result.errors)
+        assert not any(f.code == "paid_without_a_throne" for f in result.errors)
+
+    def test_a_champion_who_is_not_paid_is_caught(self):
+        """The reverse, which is still wrong.
+
+        The throne records who leads the run that paid. Naming a champion the
+        vector does not pay describes a run it did not compute.
+        """
+        vector = self._vector(
+            champion_hotkey="5Absent",
+            entries=[WeightEntry(uid=7, hotkey="5Challenger", weight=1.0, role="runner_up")],
+        )
+        result = verify_weight_vector(vector, [report()])
+
+        assert any(f.code == "champion_not_paid" for f in result.errors)
+
+    def test_a_champion_paid_less_than_a_runner_up_is_caught(self):
+        """Rank one takes the leading share; a champion below it is a ladder
+        that was built in the wrong order."""
+        vector = self._vector(
+            champion_hotkey="5Challenger",
+            entries=[
+                WeightEntry(uid=7, hotkey="5Challenger", weight=0.2, role="champion"),
+                WeightEntry(uid=9, hotkey="5Other", weight=0.8, role="runner_up"),
+            ],
+        )
+        result = verify_weight_vector(vector, [report()])
+
+        assert any(f.code == "champion_not_the_leading_share" for f in result.errors)
 
     def test_a_wholly_burned_vector_needs_no_champion(self):
         vector = self._vector(
