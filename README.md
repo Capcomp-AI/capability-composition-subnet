@@ -45,7 +45,7 @@ One JSON document. Not a model, not weights, not code.
 
 Everything a recipe can express is a bounded number, a name drawn from a frozen registry, or an enum. That is what makes it safe to reconstruct inside the evaluation engine without ever executing anything a miner wrote.
 
-A miner searches the composition space **privately** — any method, any hardware, no reporting. The network judges the artifact, not the research process.
+A miner searches the composition space **privately** — any method, no reporting. The network judges the artifact, not the research process. Searching means evaluating merges locally, which needs a 32 GB card.
 
 ## How it works
 
@@ -99,10 +99,8 @@ nothing, and the whole miner share burns.
 
 Taking the throne is separate. The best candidate takes it by exceeding the
 reigning champion's **grade** by **0.0005**, and that decides who the network
-records as champion, not who earns. Payment used to hang on it, and that made a
-miner's emission depend on a number nobody in the run could see or affect —
-a grade earned on a different draw, in an earlier run. A field of five qualified
-packages was paid nothing because an earlier run had been strong.
+records as champion, not who earns. What you are paid depends only on your own
+package clearing the gates, never on how strong an earlier run happened to be.
 
 The grade is one number per candidate, from three terms the evaluation already
 measures:
@@ -237,8 +235,8 @@ python -m capability_subnet.workflows.cli selftest --count 10
 capcomp init --random --out recipe.json
 
 # Or run the whole miner loop in one file: build, score, write, print the
-# submission. No GPU and no chain. Its search is deliberately naive — that is
-# the part you compete on. See examples/README.md
+# submission. Runs without a chain; scoring wants a GPU. Its search is
+# deliberately naive — that is the part you compete on. See examples/README.md
 python examples/quickstart_miner.py --tries 20 --out recipe.json
 capcomp validate --recipe recipe.json
 ```
@@ -247,7 +245,7 @@ Then read the guide for your role:
 
 | You are a… | Read | You need |
 |---|---|---|
-| **Miner** | [docs/miner.md](docs/miner.md) | Any hardware. A GPU only if you want to evaluate locally. |
+| **Miner** | [docs/miner.md](docs/miner.md) | **A 32 GB GPU.** Nothing stops you submitting a recipe from a laptop, and nothing good comes of it — see the guide. |
 | **Pool operator** | [`scripts/import_public_adapters.py`](scripts/import_public_adapters.py) | Materialises the certified pool from its pinned upstream sources. |
 | **Validator** | [docs/validator.md](docs/validator.md) | **32 GB GPUs**, as many as you have — one candidate per card, in parallel. Validators measure every candidate themselves. |
 | **Subnet owner** | [docs/owner.md](docs/owner.md) | Publishes the pool. The engine and console are optional. |

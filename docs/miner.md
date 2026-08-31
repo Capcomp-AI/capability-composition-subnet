@@ -65,9 +65,8 @@ in for `MIN_COMMITMENT_AGE_BLOCKS` — 300 blocks, about an hour — when the ru
 that would measure it opens. Inside that last hour the API **refuses it**:
 `409`, nothing stored, no attempt spent. Send it again once the next run opens.
 
-It used to be accepted and quietly held over to the run after, which was worse
-for everyone: you were told nothing and watched a blank row sit through a run
-you thought you had entered. Refusing says so while you can still act on it.
+You are told at once, while you can still act on it, rather than watching a
+blank row sit through a run you thought you had entered.
 
 The window also removes the advantage of submitting at the closing block after
 watching the whole run — every result published and every recipe disclosed —
@@ -117,10 +116,11 @@ ones, scores the survivors, writes the winner and prints its digest:
 python examples/quickstart_miner.py --tries 20 --out recipe.json
 ```
 
-It runs with no GPU and no chain. Its *search* is random sampling, which is the
-weakest search there is and the part you are meant to replace; everything around
-it — validation, digests, signing, local scoring — is the part you
-can rely on. See [examples/README.md](../examples/README.md).
+It needs no chain, and its scoring step needs a card like any other. Its
+*search* is random sampling, which is the weakest search there is and the part
+you are meant to replace; everything around it — validation, digests, signing,
+local scoring — is the part you can rely on. See
+[examples/README.md](../examples/README.md).
 
 > An *infrastructure* failure costs you nothing beyond the run. If a validator cannot serve your package or the sandbox falls over, you are not scored down for it — you are simply not measured, exactly as if you had not submitted.
 
@@ -435,6 +435,13 @@ and no emission on the same day is the pipeline working, not a failure.
 
 ## Hardware
 
+**You need a 32 GB GPU.** The protocol cannot require one — a recipe is a few
+hundred bytes of JSON and the network will accept it from anywhere — but you
+have three submissions a run and each unmeasured guess costs one of them. The
+entry gate alone is 0.02 of end-to-end completion over the strongest reference,
+and the spread between adjacent paid ranks is routinely under 0.001. Nobody
+finds that by sampling coefficients and hoping.
+
 | What you are doing | What you need |
 |---|---|
 | Building and validating recipes | Any machine |
@@ -450,7 +457,7 @@ See [min_compute.yml](../min_compute.yml) for detail.
 
 **Choosing rank 128.** It exceeds the artifact-size gate against the pinned base model. Run `size` first.
 
-**Omitting the retention adapter.** Retention no longer refuses a package, but it still costs you score — 5% of the qualified score. It is measured on a held-out probe of short, exactly-scored general instructions (arithmetic, ordering, exact formats, answering in the language you were addressed in), so a package can score well on the workflow and still lose ground here. The retention anchor exists for exactly that.
+**Omitting the retention adapter.** Retention carries 5% of the qualified score. It is measured on a held-out probe of short, exactly-scored general instructions — arithmetic, ordering, exact formats, answering in the language you were addressed in — so a package can score well on the workflow and still lose ground here. The retention anchor exists for exactly that.
 
 **Tuning to the public pack.** The hidden set is drawn fresh each run and includes out-of-distribution mutations — renamed components, converted units, aliased database columns, reformatted fault codes. A package that memorised surface patterns fails on those, and out-of-distribution robustness carries 10% of the qualified score directly.
 
@@ -559,7 +566,7 @@ Supplying a parameter a method does not use is an error, not a silent ignore. Th
 
 Per-adapter coefficient across the whole model. Range **`-2.0 … 2.0`**. Unlisted adapters default to `1.0`. Only selected adapters may appear.
 
-Negative coefficients are legal and occasionally useful — subtracting an adapter's update is a real operation — but they are hard on retention, which measures general instruction-following on a held-out probe rather than anything about this workflow. It no longer gates, so it will not refuse the package; it is scored and published, so you can see what the subtraction cost.
+Negative coefficients are legal and occasionally useful — subtracting an adapter's update is a real operation — but they are hard on retention, which measures general instruction-following on a held-out probe rather than anything about this workflow. It is scored and published, so you can see what the subtraction cost.
 
 ### `layer_group_overrides`
 
