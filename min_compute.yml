@@ -1,12 +1,15 @@
 # Minimum compute requirements per role.
 #
 # The three roles in this subnet have very different hardware profiles:
-#   miner     — searches composition space privately; hardware is entirely the
-#               miner's choice. The numbers below describe what the reference
-#               local search + local evaluation loop needs.
-#   validator — thin weight-setter. No GPU, no model, no adapter downloads.
-#   backend   — runs reconstruction, serving and sandboxed evaluation. This is
-#               operated by the subnet owner, not by the general public.
+#   miner     — searches composition space privately. Submitting a recipe needs
+#               no GPU; evaluating one does, and evaluating is how a recipe
+#               worth submitting is found. The numbers below describe the
+#               reference local search + evaluation loop.
+#   validator — rebuilds, serves and scores every candidate on its own cards.
+#               The GPU floor is mandatory and enforced at start-up:
+#               MIN_VALIDATOR_CARDS and MIN_VALIDATOR_CARD_GIB.
+#   backend   — the same work, run by whoever publishes a reference set of
+#               numbers and a console alongside their validator.
 
 version: "2.0.0"
 

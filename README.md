@@ -45,7 +45,7 @@ One JSON document. Not a model, not weights, not code.
 
 Everything a recipe can express is a bounded number, a name drawn from a frozen registry, or an enum. That is what makes it safe to reconstruct inside the evaluation engine without ever executing anything a miner wrote.
 
-A miner searches the composition space **privately** — any method, no reporting. The network judges the artifact, not the research process. Searching means evaluating merges locally, which needs a 32 GB card.
+A miner searches the composition space **privately** — any method, no reporting. The network judges the artifact, not the research process. Searching means evaluating merges locally, which takes a 32 GB card; submitting the result does not.
 
 ## How it works
 
@@ -245,9 +245,9 @@ Then read the guide for your role:
 
 | You are a… | Read | You need |
 |---|---|---|
-| **Miner** | [docs/miner.md](docs/miner.md) | **A 32 GB GPU.** Nothing stops you submitting a recipe from a laptop, and nothing good comes of it — see the guide. |
+| **Miner** | [docs/miner.md](docs/miner.md) | Submitting needs any machine. Evaluating needs a **32 GB GPU**, and evaluating is how you find a recipe worth submitting. |
 | **Pool operator** | [`scripts/import_public_adapters.py`](scripts/import_public_adapters.py) | Materialises the certified pool from its pinned upstream sources. |
-| **Validator** | [docs/validator.md](docs/validator.md) | **32 GB GPUs**, as many as you have — one candidate per card, in parallel. Validators measure every candidate themselves. |
+| **Validator** | [docs/validator.md](docs/validator.md) | **4 × 32 GB GPUs minimum**, mandatory and checked at start-up — one candidate per card, in parallel. Validators measure every candidate themselves. |
 | **Subnet owner** | [docs/owner.md](docs/owner.md) | Publishes the pool. The engine and console are optional. |
 
 ## How validators decide

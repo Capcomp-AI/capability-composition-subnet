@@ -435,12 +435,13 @@ and no emission on the same day is the pipeline working, not a failure.
 
 ## Hardware
 
-**You need a 32 GB GPU.** The protocol cannot require one — a recipe is a few
-hundred bytes of JSON and the network will accept it from anywhere — but you
-have three submissions a run and each unmeasured guess costs one of them. The
-entry gate alone is 0.02 of end-to-end completion over the strongest reference,
-and the spread between adjacent paid ranks is routinely under 0.001. Nobody
-finds that by sampling coefficients and hoping.
+Submitting takes any machine: a recipe is a few hundred bytes of JSON, signed
+by your hotkey and sent over HTTP.
+
+Evaluating takes a 32 GB GPU, and evaluating is how you find a recipe worth
+submitting. You have three submissions a run and each unmeasured guess spends
+one. The entry gate alone is 0.02 of end-to-end completion over the strongest
+reference, and adjacent paid ranks are routinely under 0.001 apart.
 
 | What you are doing | What you need |
 |---|---|
