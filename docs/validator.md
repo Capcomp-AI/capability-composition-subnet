@@ -159,10 +159,11 @@ its hotkey, out of the run's 1350 instances.
 
 ## Setup for `endpoint` mode
 
-No GPU, no adapter pool, no serving runtime — endpoint mode only reads the engine's signed reports and sets weights from what it derives. The base install is enough:
+No GPU, no adapter pool, no serving runtime — endpoint mode only reads the engine's signed reports and sets weights from what it derives. Install from source (the package is not published to PyPI); the base install — no `[merge]` extra — is enough:
 
 ```bash
-pip install capability-subnet
+git clone <repository-url> capability-subnet && cd capability-subnet
+pip install -e .
 ```
 
 Run it against the engine your operator gave you, with their signer hotkey on your allow-list:
