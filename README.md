@@ -247,7 +247,7 @@ Then read the guide for your role:
 |---|---|---|
 | **Miner** | [docs/miner.md](docs/miner.md) | Submitting needs any machine. Evaluating needs a **32 GB GPU**, and evaluating is how you find a recipe worth submitting. |
 | **Pool operator** | [`scripts/import_public_adapters.py`](scripts/import_public_adapters.py) | Materialises the certified pool from its pinned upstream sources. |
-| **Validator** | [docs/validator.md](docs/validator.md) | **4 × 32 GB GPUs minimum**, mandatory and checked at start-up — one candidate per card, in parallel. Validators measure every candidate themselves. |
+| **Validator** | [docs/validator.md](docs/validator.md) | **4 × 32 GB GPUs** to measure for yourself, checked at start-up. Or `--neuron.mode endpoint` on any machine, which verifies scores somebody else published. |
 | **Subnet owner** | [docs/owner.md](docs/owner.md) | Publishes the pool. The engine and console are optional. |
 
 ## How validators decide

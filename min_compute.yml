@@ -5,9 +5,11 @@
 #               no GPU; evaluating one does, and evaluating is how a recipe
 #               worth submitting is found. The numbers below describe the
 #               reference local search + evaluation loop.
-#   validator — rebuilds, serves and scores every candidate on its own cards.
-#               The GPU floor is mandatory and enforced at start-up:
-#               MIN_VALIDATOR_CARDS and MIN_VALIDATOR_CARD_GIB.
+#   validator — in the default local mode, rebuilds, serves and scores every
+#               candidate on its own cards; the floor below is enforced at
+#               start-up by MIN_VALIDATOR_CARDS and MIN_VALIDATOR_CARD_GIB.
+#               In endpoint mode it verifies scores an engine published and
+#               needs no GPU at all.
 #   backend   — the same work, run by whoever publishes a reference set of
 #               numbers and a console alongside their validator.
 

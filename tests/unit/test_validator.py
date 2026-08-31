@@ -36,6 +36,9 @@ class TestAnUnreadableBeaconBurnsRatherThanReturning:
                 },
             )()
             subtensor = None
+            # Measuring here, which is what makes an unreadable beacon fatal:
+            # endpoint mode never touches the chain for a draw.
+            mode = "local"
             # The real method, so this exercises the beacon failure rather than a
             # stand-in for it.
             _step_own = module.ValidatorNeuron._step_own

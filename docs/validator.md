@@ -1,15 +1,29 @@
 # Validator guide
 
-A validator decides where emission goes, and it earns that by measuring. There is one mode: every number you submit comes from work you did, on your hardware, against instances you regenerated yourself.
+A validator decides where emission goes, and by default it earns that by measuring: every number you submit comes from work you did, on your hardware, against instances you regenerated yourself. A lighter `endpoint` mode is available and documented below; it is not the default, and it is a weaker claim.
 
 | What you need | |
 |---|---|
-| GPU | **4 × RTX 5090 (32 GB) minimum**, 8 recommended — one candidate per card |
+| GPU | **4 × RTX 5090 (32 GB) minimum**, 8 recommended — one candidate per card. Not needed in `endpoint` mode |
 | Adapter pool on disk | ~9 GB |
 | Install | `capability-subnet[merge]` |
 | An operator to trust | None |
 
-A validator that cannot measure a candidate refuses to start rather than score every miner zero for a dependency it is missing. There is no lighter configuration to fall back to: taking numbers from somebody else is a weaker claim than measuring, and a network that offers both ends up described by the stronger one while running on the weaker.
+A validator that cannot measure a candidate refuses to start rather than score every miner zero for a dependency it is missing.
+
+### Two modes
+
+| | `--neuron.mode local` (default) | `--neuron.mode endpoint` |
+|---|---|---|
+| Where the scores come from | This host's GPUs | An engine that published them |
+| Hardware | 4 × 32 GB cards | Any machine |
+| What you are claiming | "I measured this" | "I checked what somebody else measured" |
+
+**Local is the default and the stronger claim.** Endpoint mode exists because a validator that cannot afford four cards is otherwise a validator the network does not have — but running it means the numbers you submit are not yours, and a network where everyone runs it has one party measuring and the rest agreeing.
+
+Endpoint mode is not a relay. The vector is refused unless it is signed by a hotkey on **your** allow-list (`--neuron.trusted_signers`), its arithmetic holds, the run it names matches the chain you can see, a sampled instance re-scores to what the published trace says, and the draw was not re-rolled. Anything that fails and your validator burns — with your stake, not the publisher's. An endpoint that is merely unreachable leaves your last weights in force, because a network blip says nothing about the champion.
+
+Weights go out every `--neuron.weight_interval` blocks, 150 by default — about 30 minutes.
 
 Checking this network needs no GPU and no validator registration. `capability-audit` replays any published run from its seeds and traces, and is worth running whether or not you set weights.
 

@@ -104,10 +104,21 @@ class ValidatorNeuron:
         self.subtensor = bt.Subtensor(self.config.network)
         self.metagraph: MetagraphView = fetch_metagraph(self.subtensor, self.config.netuid)
 
-        # Unconditional. There is no mode this validator can fall back to, so a
-        # host that cannot measure a candidate must find that out here rather
-        # than discover it one run later having scored every miner zero.
-        self._preflight_own_evaluation()
+        # Only local mode measures, so only local mode needs the fleet. A host
+        # that cannot measure must find that out here rather than one run later,
+        # having scored every miner zero for a dependency it was missing.
+        self.mode = getattr(self.config, "mode", "local")
+        if self.mode == "local":
+            self._preflight_own_evaluation()
+        else:
+            from capability_subnet.common.config import parse_trusted_signers
+
+            self._trusted = parse_trusted_signers(getattr(self.config, "trusted_signers", "") or "")
+            if not self._trusted:
+                log.warning(
+                    "endpoint mode with no --neuron.trusted_signers: any signature "
+                    "will be accepted. Set the allow-list before running for real."
+                )
 
         self.uid = self._resolve_uid()
         self.last_weight_block = 0
@@ -306,7 +317,10 @@ class ValidatorNeuron:
             return
 
         self.resync()
-        self._step_own(block)
+        if self.mode == "local":
+            self._step_own(block)
+        else:
+            self._step_endpoint(block)
 
     def _step_own(self, block: int) -> None:
         """Measure this run here, and set weights from what was measured.
@@ -405,6 +419,76 @@ class ValidatorNeuron:
         # is what the next run submits from.
         self._report(outcome, candidates, run_id, reigning)
         self._submit_measured_earlier(run_id, block)
+
+    def _step_endpoint(self, block: int) -> None:
+        """Set weights from scores somebody else measured, having checked them.
+
+        The weaker of the two claims, and it is offered because a validator that
+        cannot afford four cards is otherwise a validator the network does not
+        have. What it is not is a relay: the vector is refused unless it is
+        signed by a hotkey on this validator's own allow-list, its arithmetic
+        holds, the run it names matches the chain this host can see, and a
+        sampled instance re-scores to what the published trace says. Anything
+        that fails, this validator burns instead — with its own stake, not the
+        publisher's.
+        """
+        from capability_subnet.validator.client import (
+            BackendClient,
+            BackendUnavailable,
+            check_draw_was_not_re_rolled,
+            safe_fallback,
+            spot_check_run,
+            validate_vector,
+        )
+
+        client = BackendClient(
+            self.config.backend_url,
+            trusted_signers=self._trusted,
+        )
+        try:
+            vector = client.fetch_weights()
+        except BackendUnavailable as exc:
+            log.error("endpoint unreachable (%s); leaving the last weights in force", exc)
+            return
+
+        from capability_subnet.common.chain import run_id_for_block
+
+        run_blocks = client.run_blocks() or C.DEFAULT_RUN_BLOCKS
+        problems = validate_vector(
+            vector,
+            metagraph_size=len(self.metagraph.hotkeys),
+            hotkeys=self.metagraph.hotkeys,
+            current_run=run_id_for_block(block, run_blocks),
+            # A run is paid one run after it is measured, so the newest vector a
+            # healthy engine can offer already trails the chain by WEIGHT_LAG_RUNS.
+            # One more than that is the tolerance; beyond it the engine has stalled
+            # and this validator burns rather than paying a champion nobody is
+            # still defending.
+            max_stale_runs=C.WEIGHT_LAG_RUNS + 1,
+            burn_uid=self.burn_uid(),
+        )
+        if not problems:
+            ok, detail = spot_check_run(client, vector.run_id)
+            if not ok:
+                problems = [detail]
+            else:
+                ok, detail = check_draw_was_not_re_rolled(client, vector.run_id)
+                if not ok:
+                    problems = [detail]
+
+        if problems:
+            for problem in problems:
+                log.error("published vector refused: %s", problem)
+            self._submit(safe_fallback(self.burn_uid(), vector), block)
+            return
+
+        log.info(
+            "run %d: vector verified from %s, %d entries",
+            vector.run_id,
+            self.config.backend_url,
+            len(vector.entries),
+        )
+        self._submit(vector, block)
 
     def _run_report_dir(self) -> Path:
         return Path(self.config.full_path) / "runs"

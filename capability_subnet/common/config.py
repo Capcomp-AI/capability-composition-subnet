@@ -165,8 +165,11 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
         "--neuron.weight_interval",
         dest="weight_interval",
         type=int,
-        default=_env_int("CAPSUB_WEIGHT_INTERVAL", 300),
-        help="Minimum blocks between weight submissions.",
+        # 150 blocks is 30 minutes at 12s. The chain's own floor is
+        # WeightsSetRateLimit — 100 blocks — so this sits clear of it; a
+        # submission refused for rate is retried, not lost.
+        default=_env_int("CAPSUB_WEIGHT_INTERVAL", 150),
+        help=("Minimum blocks between weight submissions. 150 is about 30 minutes."),
     )
     parser.add_argument(
         "--neuron.poll_interval",
@@ -179,7 +182,10 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
         "--neuron.burn_percentage",
         dest="burn_percentage",
         type=float,
-        default=_env_float("CAPSUB_BURN_PERCENTAGE", C.DEFAULT_BURN_PERCENTAGE),
+        # 0.0: a validator adds nothing to whatever the ladder already burns
+        # unless its operator asks for it. Not a protocol constant — this is one
+        # validator's own decision about its own stake.
+        default=_env_float("CAPSUB_BURN_PERCENTAGE", 0.0),
         help=(
             "Additional fraction of emission this validator routes to the burn "
             "UID on top of whatever the published vector already burns."
@@ -191,6 +197,30 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         default=_env_bool("CAPSUB_DISABLE_SET_WEIGHTS"),
         help="Compute and log the weight vector without submitting it.",
+    )
+    parser.add_argument(
+        "--neuron.mode",
+        dest="mode",
+        type=str,
+        choices=("local", "endpoint"),
+        default=_env("CAPSUB_VALIDATOR_MODE", "local"),
+        help=(
+            "local: measure every candidate on this host's GPUs and set weights "
+            "from what you measured. endpoint: take scores from a published "
+            "engine, verify them, and set weights from those. local is the "
+            "stronger claim and the default; endpoint needs no GPU."
+        ),
+    )
+    parser.add_argument(
+        "--neuron.trusted_signers",
+        dest="trusted_signers",
+        type=str,
+        default=_env("CAPSUB_TRUSTED_SIGNERS", ""),
+        help=(
+            "Comma-separated hotkeys whose published scores this validator will "
+            "accept in endpoint mode. Empty disables signature enforcement, "
+            "which is for local development only."
+        ),
     )
     parser.add_argument(
         "--neuron.serve_url",
