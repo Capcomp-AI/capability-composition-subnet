@@ -157,6 +157,39 @@ its hotkey, out of the run's 1350 instances.
 
 ---
 
+## Setup for `endpoint` mode
+
+No GPU, no adapter pool, no serving runtime — endpoint mode only reads the engine's signed reports and sets weights from what it derives. The base install is enough:
+
+```bash
+pip install capability-subnet
+```
+
+Run it against the engine your operator gave you, with their signer hotkey on your allow-list:
+
+```bash
+capability-validator \
+  --netuid 103 \
+  --subtensor.network finney \
+  --wallet.name  <your-coldkey> \
+  --wallet.hotkey <your-hotkey> \
+  --neuron.mode endpoint \
+  --neuron.backend_url https://<engine-your-operator-gave-you> \
+  --neuron.trusted_signers <operator-signer-hotkey>
+```
+
+`--neuron.backend_url` and `--neuron.trusted_signers` are what your operator sends you; the engine is not a public host. `--neuron.trusted_signers` is the whole point — empty accepts any signature, which is only safe for local development, so set it to the operator's signer hotkey and a report signed by anyone else is refused and burned rather than paid. Weights go out every `--neuron.weight_interval` blocks (150, about 30 minutes).
+
+Before running for real, check what you are about to trust — on any machine, no GPU:
+
+```bash
+capability-audit --trusted-signers <operator-signer-hotkey> run --run <n>
+```
+
+That re-derives the weight vector from the same signed reports; if it matches what the network is paying, the engine is honest.
+
+---
+
 ## Setup for `local` mode
 
 The reconstruction stack is not in the base install, and the serving runtime is not installed by this package at all.
