@@ -21,7 +21,7 @@ A validator that cannot measure a candidate refuses to start rather than score e
 
 **Local is the default and the stronger claim.** Endpoint mode exists because a validator that cannot afford four cards is otherwise a validator the network does not have — but running it means the numbers you submit are not yours, and a network where everyone runs it has one party measuring and the rest agreeing.
 
-Endpoint mode is not a relay. The vector is refused unless it is signed by a hotkey on **your** allow-list (`--neuron.trusted_signers`), its arithmetic holds, the run it names matches the chain you can see, a sampled instance re-scores to what the published trace says, and the draw was not re-rolled. Anything that fails and your validator burns — with your stake, not the publisher's. An endpoint that is merely unreachable leaves your last weights in force, because a network blip says nothing about the champion.
+Endpoint mode is not a relay. The engine publishes a signed report for every candidate — its scores, its gates, its grade — and your validator **derives the weight vector from that stream itself**; it never takes a vector somebody else computed. Every report is refused unless it is signed by a hotkey on **your** allow-list (`--neuron.trusted_signers`); the derived vector's arithmetic must hold, the run must match the chain you can see, a sampled instance must re-score to its published trace, and the draw must not have been re-rolled. Anything that fails and your validator burns — with your stake, not the publisher's. An endpoint that is merely unreachable leaves your last weights in force, because a network blip says nothing about the champion.
 
 Weights go out every `--neuron.weight_interval` blocks, 150 by default — about 30 minutes.
 
@@ -31,7 +31,7 @@ Checking this network needs no GPU and no validator registration. `capability-au
 
 ## What you are doing
 
-Each run, your validator reads the commitments on chain, fetches each miner's recipe from the URI it committed, checks the recipe against its digest, reconstructs the merged adapter locally, serves it through your own endpoint, and scores it against hidden instances it regenerates from seeds derived from a block hash. It then ranks what it measured, writes the result to a run report, and submits the weights from the run **before** this one.
+Each run, your validator takes the run's field of committed recipes, fetches each by the URI it was submitted under, checks the recipe against its digest, reconstructs the merged adapter locally, serves it through your own endpoint, and scores it against hidden instances it regenerates from seeds derived from a block hash. It then ranks what it measured, writes the result to a run report, and submits the weights from the run **before** this one.
 
 A run is 24 hours (7200 blocks) and boundaries are anchored: run 412 opens at block 8,908,667, about 12:00 Eastern on 23 August 2026, and each run after it opens 7200 blocks later. So the pipeline is three runs deep:
 
@@ -51,8 +51,8 @@ Validators are not required to agree on artifact bytes. Six of the seven merge m
 
 You are not a relay. Before anything touches the chain your validator:
 
-1. **Verifies signatures** against an allow-list *you* configure, when it takes numbers from an engine. A vector it cannot attribute to a trusted operator is refused.
-2. **Checks the vector against the chain it can see.** Does the champion still hold that UID, or did it deregister and leave the slot to a stranger? Is every UID inside this subnet? Do the weights sum to one? Are there duplicate UIDs the chain would reject?
+1. **Verifies signatures** against an allow-list *you* configure, when it takes scores from an engine. A report it cannot attribute to a trusted operator is refused, and the vector it submits is derived from those reports rather than taken whole.
+2. **Checks the derived vector against the chain it can see.** Does the champion still hold that UID, or did it deregister and leave the slot to a stranger? Is every UID inside this subnet? Do the weights sum to one? Are there duplicate UIDs the chain would reject?
 3. **Checks freshness**, against the run length the engine reports rather than a compiled-in default.
 4. **Burns rather than submitting anything it cannot verify.**
 
@@ -60,7 +60,7 @@ You are not a relay. Before anything touches the chain your validator:
 
 ## Hardware
 
-`own` mode reconstructs and serves an 8B model with a rank-64 adapter applied.
+`local` mode reconstructs and serves an 8B model with a rank-64 adapter applied.
 
 | | |
 |---|---|
@@ -85,9 +85,9 @@ with a property of the package rather than of your hardware — the same KV cach
 everywhere. A larger card therefore does not run a bigger candidate; it runs the
 same one with a smaller fraction.
 
-**Why four cards.** Not the reference schedule — batched serving finishes the
-eight reference packages in about 3.7 hours on a single card, which fits a
-24-hour run with room to spare. It is challenger throughput. At the current
+**Why four cards.** Not the reference schedule — the only permanent reference is
+the base model, and batched serving finishes it quickly on a single card, well
+inside a 24-hour run. It is challenger throughput. At the current
 rate one card covers about 35 challengers in a day-long run and four cover
 about 149, against the 29 commitments the network already carries. One card
 would be at its limit today and past it with any growth; four is what keeps a
@@ -142,22 +142,22 @@ For the default run, per candidate:
 | Evaluation, 540 instances at ~19 s each | **~2.8 h** |
 | **Total** | **~3 h** |
 
-Evaluation dominates and is bounded by the latency gate rather than by the
-hardware: a package whose p95 exceeds 25 s per instance fails that gate, so
-anything still in the running costs at most 540 × 25 s. Reconstruction is a
-twelfth of the total, which is why there is no artifact cache — it would buy
-about 8%.
+Evaluation dominates. Each instance is capped by the sandbox's per-instance
+timeout (`SANDBOX_INSTANCE_TIMEOUT_SECONDS`, 300 s), so a package that stalls on
+a problem is cut off rather than left to run the clock out — there is no latency
+gate, and latency is not scored. Reconstruction is a twelfth of the total, which
+is why there is no artifact cache — it would buy about 8%.
 
 The 540 is this validator's own slice: the shared core plus the tail drawn for
 its hotkey, out of the run's 1350 instances.
 
-> It is the package's latency gate that fails when a host is slow, so a card
-> materially slower than an RTX 5090 can fail candidates for a reason that has
-> nothing to do with them.
+> A card materially slower than an RTX 5090 measures the same field more slowly
+> and can fall behind the run it is meant to decide. That is a throughput
+> concern for you, not a gate the candidate can fail.
 
 ---
 
-## Setup for `own` mode
+## Setup for `local` mode
 
 The reconstruction stack is not in the base install, and the serving runtime is not installed by this package at all.
 
@@ -212,8 +212,9 @@ A `.pth` rather than `sitecustomize.py`: only one `sitecustomize` is imported
 per interpreter and the system one usually wins, while every `.pth` runs.
 
 Do not reach for `--enforce-eager` to get past this. It starts, but it runs slow
-enough to put packages over the p95 latency gate — turning your environment into
-their failed gate.
+enough that instances hit the sandbox per-instance timeout and your validator
+falls behind the run it is meant to decide — a problem in your environment
+charged, wrongly, to the packages you measure.
 
 vLLM JIT-compiles attention kernels on first start and needs a toolchain to do it. On a clean Ubuntu host:
 
@@ -255,7 +256,7 @@ python neurons/validator.py \
 
 `--neuron.serve_url` is the address the validator **binds its own runtime to**, not an endpoint you stand up beforehand. Each candidate gets a runtime started with that candidate's adapter applied, and stopped afterwards, so nothing carries from one submission to the next.
 
-You do not set a memory fraction. A candidate's peak memory is gated, and a fraction of the card would make that gate a statement about your hardware rather than about the package: the same candidate measures 25.4 GiB at 0.78 of a 32 GB card and 22.9 GiB at 0.70. The reservation is fixed by the protocol and the fraction is derived from whatever card you have.
+You do not set a memory fraction. The serving reservation is fixed by the protocol, and letting you pick a fraction of the card would make what a candidate answers with a statement about your hardware rather than about the package: the same candidate measures 25.4 GiB at 0.78 of a 32 GB card and 22.9 GiB at 0.70. The reservation is fixed and the fraction is derived from whatever card you have. (Peak memory is measured and recorded, but it is not gated or scored.)
 
 The validator checks at start-up that it has a serving endpoint, a CUDA device, an importable reconstruction stack and a pool on disk, reports every problem at once, and refuses to run otherwise. A validator that cannot measure must not vote on who deserves emission.
 
@@ -265,25 +266,28 @@ Expect roughly 15 minutes of reconstruction per candidate that uses a trimming m
 
 | Flag | Default | What it does |
 |---|---|---|
-| `--neuron.weight_interval` | `300` | Minimum blocks between submissions |
+| `--neuron.mode` | `local` | `local` measures every candidate on your GPUs; `endpoint` derives weights from the engine's signed reports and needs no GPU |
+| `--neuron.backend_url` | *empty* | (endpoint) The engine to read signed reports from. **Required in endpoint mode.** |
+| `--neuron.trusted_signers` | *empty* | (endpoint) Comma-separated hotkeys whose signed reports you will accept. Empty accepts any signature — local development only |
+| `--neuron.weight_interval` | `150` | Minimum blocks between submissions — about 30 minutes |
 | `--neuron.poll_interval` | `60` | Seconds between polls |
-| `--neuron.burn_percentage` | `0.0` | Additional fraction *you* route to burn |
+| `--neuron.burn_percentage` | `0.0` | Burn *more* than the protocol asks, never less |
 | `--neuron.disable_set_weights` | off | Compute and log without submitting |
-| `--neuron.device` | `cuda` | Device the merge runs on. A non-CUDA value is refused at start-up. |
-| `--neuron.serve_url` | *empty* | Address the validator binds each candidate's runtime to. **Required.** |
-| `--neuron.pool_dir` | `pool` | The certified adapter pool on disk |
-| `--neuron.base_model_path` | *empty* | Local copy of the pinned base model. **Required.** |
-| `--neuron.serving_python` | *empty* | Interpreter that starts each candidate's runtime |
-| `--neuron.devices` | *empty* | Cards to measure on, comma-separated. Empty uses `--neuron.device` alone |
-| `--neuron.max_candidates_per_run` | `0` | Stop after this many candidates, in commit order. `0` measures everything eligible |
-| `--burn_percentage` | `0` | Burn *more* than the protocol asks, never less |
+| `--neuron.device` | `cuda` | (local) Device the merge runs on. A non-CUDA value is refused at start-up. |
+| `--neuron.serve_url` | *empty* | (local) Address the validator binds each candidate's runtime to. **Required in local mode.** |
+| `--neuron.pool_dir` | `pool` | (local) The certified adapter pool on disk |
+| `--neuron.base_model_path` | *empty* | (local) Local copy of the pinned base model. **Required in local mode.** |
+| `--neuron.serving_python` | *empty* | (local) Interpreter that starts each candidate's runtime |
+| `--neuron.devices` | *empty* | (local) Cards to measure on, comma-separated. Empty uses `--neuron.device` alone |
+| `--neuron.max_candidates_per_run` | `0` | (local) Stop after this many candidates, in commit order. `0` measures everything eligible |
 
 ### How a run's emission splits
 
 No fixed share of a run burns. The whole run is the miner pool, and it is paid
-only if the run's best candidate took the throne — exceeding the reigning
-champion's grade by `0.0005`. If it did not, all of it burns; second place does
-not inherit a run its leader did not win.
+to whatever cleared the hard gates — ranked by grade and paid by rank. A run
+burns entirely only when *nothing* cleared them. Taking the throne — exceeding
+the reigning champion's grade by `0.0005` — decides who is recorded *champion*,
+not who is paid: a run can pay a full ladder and crown nobody.
 
 | Rank | Share of the run |
 |---|---|
@@ -311,17 +315,12 @@ The throne is carried between runs in the run reports. A run that crowns nobody
 records the grade it inherited, so the bar stays where it was rather than
 rising or resetting.
 
-### Burning more than the protocol asks
-
-`--neuron.burn_percentage` compounds with the split above rather than replacing
-it: everything already in the vector is scaled by what remains and the extra is
-added on top, so `0.5` leaves miners a quarter of the run rather than a half. A
-validator may burn more than the protocol asks and never less — burning less
-would let one validator quietly override the rule the rest are applying.
-
 ### Your own burn
 
-`--neuron.burn_percentage` lets you burn **more** than the engine asked for, never less.
+`--neuron.burn_percentage` lets you burn **more** than the protocol asks, never
+less. It compounds with the split above rather than replacing it: everything
+already in the vector is scaled by what remains and the extra is added on top, so
+`0.5` leaves miners a quarter of the run rather than a half.
 
 Burned emission goes to the **subnet owner's UID**, resolved from the metagraph
 on every pass. It is not UID 0: that slot belongs to whichever neuron registered
@@ -330,7 +329,7 @@ anything. If the owner holds no UID at all, this validator submits nothing for
 that pass — there is no address that "burn" could honestly mean, and paying an
 arbitrary neuron is worse than skipping a run.
 
-Allowing less would let a validator quietly override an operator's incident response. Allowing more is you declining to pay a champion you do not trust, with your own stake — which is a decision you are entitled to make, and one of the few levers you have if you disagree with an evaluation.
+Allowing less would let a validator quietly override an operator's incident response. Allowing more is you declining to pay a champion you do not trust, with your own stake — a decision you are entitled to make, and one of the few levers you have if you disagree with an evaluation.
 
 ---
 
@@ -339,15 +338,12 @@ Allowing less would let a validator quietly override an operator's incident resp
 Nothing stops you checking the engine's work. Everything needed is published.
 
 ```bash
-# What is the current weight vector, and which report justifies it?
-curl https://<engine-host>/weights
-curl https://<engine-host>/champion
+# Every evaluation in a run — gate verdicts, scores and grade: the stream you
+# derive the weight vector from
+curl "https://<your-backend-url>/reports?run_id=<n>"
 
-# The full report: gate verdicts, per-axis comparison, paired statistics
-curl https://<engine-host>/reports/<report-sha256>
-
-# Every evaluation in a run
-curl "https://<engine-host>/reports?run_id=<n>"
+# One report in full: gate verdicts, per-axis comparison, paired statistics
+curl https://<your-backend-url>/reports/<report-sha256>
 ```
 
 A report states the recipe digest, the artifact digest, the evaluator image digest, every hard-gate verdict, every per-axis comparator verdict, the paired bootstrap bound, and the reason for the decision. If you have the published recipe and the certified pool, you can rebuild the artifact and confirm its digest matches:
@@ -427,14 +423,14 @@ Burning is the deliberate fallback rather than resubmitting the last known-good 
 
 The validator logs every decision with its reason. Worth alerting on:
 
-- repeated `burning this run's share` — the engine is unhealthy or the allow-list is wrong
-- repeated `engine unavailable` — network or operator problem
+- repeated `derived vector refused` — a report failed verification: your allow-list is wrong, or the engine's own record contradicts itself
+- repeated `endpoint unreachable` or `has published no reports yet` — a network or operator problem; your last weights stay in force
 - `weight submission failed` other than rate limiting — a chain problem
 
-Check the engine's own health directly:
+Check the engine directly. It is not a public host — use the `--neuron.backend_url` your operator gave you:
 
 ```bash
-curl https://<engine-host>/health
+curl https://<your-backend-url>/health
 ```
 
 ---
@@ -637,11 +633,7 @@ pm2 start "python neurons/validator.py \
 
 ### Miner
 
-Miners run nothing continuously. Commit once, then watch:
-
-```bash
-curl https://<engine-host>/queue/<your-hotkey>
-```
+Miners run nothing continuously. Commit once, then watch your submission's status on the console at [capcomp.ai](https://www.capcomp.ai/) — the miner guide covers it in full.
 
 ---
 

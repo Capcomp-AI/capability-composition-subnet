@@ -235,3 +235,52 @@ class TestTheSharesAreWhatWasPublished:
     def test_rank_shares_stops_at_the_last_paid_rank(self):
         assert sum(rank_shares(C.PAID_RANKS)) == pytest.approx(1.0, abs=1e-12)
         assert sum(rank_shares(C.PAID_RANKS + 5)) == pytest.approx(1.0, abs=1e-12)
+
+
+def _graded_report(uid, hotkey, e2e, qs, *, passed=True):
+    """A minimal signed-shape report carrying enough score to grade."""
+    from capability_subnet.common.schemas import (
+        CandidateScores,
+        EvaluationReport,
+        GateVerdict,
+    )
+
+    return EvaluationReport(
+        run_id=419,
+        evaluated_at_block=1,
+        miner_hotkey=hotkey,
+        miner_uid=uid,
+        candidate_id=hotkey,
+        base_revision="rev",
+        source_snapshot_sha256="sha256:" + "a" * 64,
+        evaluator_image_digest="sha256:" + "b" * 64,
+        hard_gates=[
+            GateVerdict(name="artifact_size", passed=True),
+            GateVerdict(name="baseline", passed=passed),
+        ],
+        scores=CandidateScores(end_to_end=e2e, qualified_score=qs),
+        strongest_reference_id="reference:base_model",
+        strongest_reference_score=0.10,
+        verdict="held" if passed else "terminated",
+    )
+
+
+def test_vector_from_reports_pays_gate_clearers_by_grade_and_drops_the_rest():
+    """A validator derives the same ladder from reports that it would from its
+    own measurements: gate-clearers ranked by grade, everyone else absent."""
+    from capability_subnet.scoring.weight_vector import vector_from_reports
+
+    reports = [
+        _graded_report(1, "5A", 0.30, 0.30),
+        _graded_report(2, "5B", 0.20, 0.20),
+        _graded_report(3, "5C", 0.15, 0.15),
+        # Best scores of the field, but it failed a hard gate: it earns nothing.
+        _graded_report(4, "5D", 0.40, 0.40, passed=False),
+    ]
+    vector = vector_from_reports(reports, run_id=420, block=1, champion_grade=None, burn_uid=0)
+
+    paid = {e.uid: e.weight for e in vector.entries if e.role != "burn" and e.weight > 0}
+    assert 4 not in paid
+    assert set(paid) == {1, 2, 3}
+    assert paid[1] > paid[2] > paid[3]
+    assert next(e for e in vector.entries if e.role == "champion").uid == 1

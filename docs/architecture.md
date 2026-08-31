@@ -57,7 +57,7 @@ capability_subnet/
 ├── sandbox/         isolated execution — agent loop, tool services, limits
 ├── scoring/         aggregation, gates, comparator, ranking, weight vector
 ├── miner/           recipe construction, local evaluation, submission
-├── validator/       the thin weight-setter
+├── validator/       measures the field and sets weights (local mode); can instead verify signed reports and derive weights without a GPU (endpoint mode)
 ├── audit/           independent verification of published records
 └── testing/         miniature-pool fixtures, published as a pytest plugin
 ```
@@ -170,7 +170,7 @@ Five independent bars, all of which must clear:
 
 `require_beat_reference` defaults to **False**: the highest score on the board is paid, whether or not it cleared the strongest reference. The product is the best composition anyone has found, not proof that composition was worth attempting — and the strict rule had a real failure attached, where a network producing perfectly good comparative information would burn its emission indefinitely because nothing cleared an absolute bar. References are still measured and published every run, so the question stays answerable from the record; it just stops gating payment. Set it True for the stricter contract.
 
-**Base retention does not move with it.** A package that destroyed the base model's general ability is not deployable whatever it scored, so that gate stays hard in both modes.
+**Base retention is measured and scored, not gated.** The retention floor is zero, so a package that destroyed the base model's general ability is not blocked outright; it simply forfeits the retention term, which prices that damage into its score rather than into a pass/fail gate.
 
 Ranking is by measured score alone: the higher qualified score ranks first, and commit time gives no advantage — an earlier submission is never advanced over a higher-scoring later one. An exact score tie, which two distinct artifacts effectively never produce, falls back to uid only to keep the order stable.
 
@@ -186,43 +186,35 @@ An axis with too few paired samples counts as **worse**, not as a tie. Absence o
 
 A loss is *decisive* — and terminates the hotkey — only when the challenger was genuinely measured. An axis with no paired samples at all means the engine failed to gather evidence, and terminating on that would punish a miner for an evaluation the engine did not complete.
 
-The same principle governs the hard gates, which are split into two sets. A candidate that used 40 GB genuinely failed the memory limit; a candidate on a host whose memory counter was unreadable has not been shown to fail anything. The second kind is not scored against the candidate at all. Charging a miner for a run is only defensible if the engine never charges it for the engine's own bad night.
+The same principle governs the hard gates, which are split into two sets. A candidate whose artifact genuinely exceeded the size cap failed a real gate; a candidate on a host that could not gather enough scored instances, or whose reconstruction could not be checked, has not been shown to fail anything. The second kind — the infrastructure gates, `sample_sufficiency` and `reconstruction` — is not scored against the candidate at all. Charging a miner for a run is only defensible if the engine never charges it for the engine's own bad night.
 
 ---
 
-## Permanent reference champions
+## The permanent reference
 
 A plain king-of-the-hill contest only requires beating whoever holds the throne. At genesis the throne is empty, and later a mediocre champion could hold it simply because nothing better challenged.
 
-So the network keeps a set of references on the board permanently:
+So the network keeps the untouched **base model** on the board permanently as its one reference. The set used to be wider — the base model, the best single adapter, and three standard equal-weight merges — but measuring them retired all but the base: over a full run the base scored highest end-to-end and every other reference scored below it, so each spent a card every run raising a bar the base had already raised higher.
 
-| Reference | What it represents |
-|---|---|
-| Base model | Doing nothing |
-| Best single adapter | Picking the best specialist |
-| Equal-weight linear merge | The obvious merge |
-| Equal-weight TIES merge | The obvious interference-aware merge |
-| Equal-weight DARE-TIES merge | The obvious stochastic variant |
+The base model is measured through **exactly the same code path** as candidates — if it were measured differently, "the challenger beat the reference" would be a statement about two harnesses rather than two packages. It is re-measured every run.
 
-They are measured through **exactly the same code path** as candidates — if baselines were measured differently, "the challenger beat the strongest reference" would be a statement about two harnesses rather than two packages.
+The **incumbent is not the reference**. It is re-measured every run and reported alongside the base, but it does not set the absolute bar; see the dethrone rule above for why.
 
-The base model and the three standard merges are re-measured every run. The per-adapter single-adapter references are **rotated**, a few per run on a schedule derived from the run id. Measuring all of them every run is correct and costs most of a run's GPU budget before any challenger is looked at — and a run that cannot finish never evaluates anybody. Rotation keeps the "beat the best specialist" bar honest over time while leaving room to actually run the queue.
-
-The **incumbent is not one of them**. It is re-measured every run and reported alongside them, but it does not set the absolute bar; see the dethrone rule above for why.
-
-None of them can be terminated and **none of them earn emission**. Under the strict contract (`require_beat_reference=True`) a reference can hold the throne, and then the workflow share burns because the network has not yet produced anything worth paying for. Under the default it cannot: the best *submission* is paid regardless of where the references landed, and the references serve as published context for whether that submission was worth anything rather than as a gate on it.
+The base reference cannot be terminated and **earns no emission**. Under the strict contract (`require_beat_reference=True`) it can hold the throne, and then the workflow share burns because the network has not yet produced anything worth paying for. Under the default it cannot: the best *submission* is paid regardless of where the reference landed, and the reference serves as published context for whether that submission was worth anything rather than as a gate on it.
 
 ---
 
 ## What the network trusts
 
-Nothing, in the sense that matters: no participant takes a number from another participant.
+Nothing, in the sense that matters: no participant takes an *unverified* number from another participant. A local validator takes none at all; an endpoint validator takes only signed reports it has checked against its own allow-list and spot-checked.
 
-Each validator reads the run's submissions from the API, reconstructs the merged adapter on its own hardware, serves it, and scores it against instances it regenerates itself. Its weights come from work it did. A validator that cannot do that work refuses to start rather than vote on measurements it does not have.
+In its default **local** mode a validator reads the run's submissions from the API, reconstructs the merged adapter on its own hardware, serves it, and scores it against instances it regenerates itself. Its weights come from work it did — the stronger claim, and the reason a local validator needs a GPU.
+
+A validator without a GPU can instead run in **endpoint** mode: it fetches the engine's signed per-candidate reports, verifies each report's signature against a trusted-signer allow-list, spot-checks a re-scored instance, and derives the weight vector itself from the reported scores and ranks. It never simply relays a number — the signatures and the spot-check are what let it set weights it did not measure end to end.
 
 Validators are not required to agree on artifact bytes. Six of the seven merge methods run an SVD, which is not bitwise reproducible across devices, so two honest validators on different cards build different weights from the same recipe. They are compared on **outcomes** over a shared core of instances every validator measures, with a band wide enough for device divergence and narrow enough to catch a validator that did no work. A validator inconsistent with most of its peers is reported; one that disagrees with a single peer is not, because a two-way split names the wrong party as readily as the right one.
 
-The subnet owner runs an evaluation engine, and it sits outside this path. It publishes signed reports and a weight vector, and nothing consumes them: no validator reads them, and no emission depends on them. They exist as a reference set to compare validators against, and as a disclosure feed anyone can replay. An engine that stopped, lied, or was never started would not change what any miner is paid.
+The subnet owner runs an evaluation engine. It publishes signed reports and a weight vector. A local-mode validator consumes none of them: its weights come from its own hardware, so an engine that stopped, lied, or was never started would not change what a local validator pays. An endpoint-mode validator does consume the signed reports — that is the whole of what it runs on — but only after verifying each signature against its own allow-list and spot-checking a re-scored instance, so it too refuses a number it cannot stand behind. The reports also serve as a reference set to compare validators against, and as a disclosure feed anyone can replay.
 
 ---
 
@@ -331,10 +323,10 @@ also structural: a merge can be worse than the specialist it replaced, and an
 over-aggressive one loses general instruction-following before it loses task
 score.
 
-Both are measured rather than assumed. Latency, token efficiency and artifact
+Both are measured rather than assumed. Token efficiency and artifact
 size carry 15% of the qualified score, so cost is priced into who wins. Base
 retention is measured on a held-out probe and scored, though not gated, so a package that traded
-away general ability cannot be crowned whatever it scored. And the permanent
+away general ability loses the retention term whatever else it scored. And the permanent
 reference — the untouched base model — exists so the network can discover that
 composition did *not* help rather than paying miners to not discover it.
 
@@ -377,7 +369,7 @@ The continuous champion-challenge shape — a queue ordered by commit block, per
 | From-scratch model subnets | Full model weights | **Different layer.** Architecture training versus declarative composition above a frozen base. |
 | Environment-evaluated model subnets | A model plus revision, run through RL environments | **Adjacent mechanism**, different artifact and different target. |
 
-What makes this one distinct: the artifact is a declarative recipe over a frozen pool, not a trained model; the objective is end-to-end completion of an executable business workflow judged by non-model truth; no gradient work is ever verified; and the output is a deployable, cost-bounded package with hard memory, size, latency and retention gates.
+What makes this one distinct: the artifact is a declarative recipe over a frozen pool, not a trained model; the objective is end-to-end completion of an executable business workflow judged by non-model truth; no gradient work is ever verified; and the output is a deployable, cost-bounded package with a hard artifact-size gate, while retention and cost are measured and scored.
 
 ---
 
@@ -531,7 +523,7 @@ The operator is not in the path that decides emission, which removes most of thi
 | Choosing which problems a run asks | Not possible. The draw is the hash of the run's opening block, which no participant picks and which validators derive independently |
 | Quietly not re-measuring references | Every run's reference scores are published in its report |
 | Withholding disclosures entirely | Nothing stops it, and nothing depends on it. Disclosures are evidence about the engine's own numbers, which no validator consumes |
-| Influencing what a miner is paid | Not possible. Validators set weights from measurements they took |
+| Influencing what a miner is paid | Not possible. A local validator sets weights from measurements it took; an endpoint validator only from signed reports it verified and spot-checked, and burns rather than pay a number it cannot stand behind |
 
 ## What is deliberately not defended
 
@@ -561,7 +553,7 @@ Findings that affect scoring integrity — determinism, hidden-material exposure
 
 ### Why is beating the champion not enough?
 
-Because at genesis the throne is empty, and later a mediocre champion could hold it simply because nothing better challenged. The permanent references — base model, best single adapter, three equal-weight merges, the operator's own recipe — mean the network can never crown a package that an off-the-shelf merge already beats.
+Because at genesis the throne is empty, and later a mediocre champion could hold it simply because nothing better challenged. The permanent reference — the untouched base model — means the network can never crown a package that does not beat doing nothing.
 
 ### Why must a challenger be "not worse" on every axis?
 
@@ -605,7 +597,7 @@ Because concatenating factorisations is algebraically the sum of the updates, so
 
 ### How long does a run take?
 
-Roughly `(references + 1) × instances × per-instance-time`. With the default 100 hidden instances and around ten references, opening a run is the dominant cost. Size `run_blocks` accordingly.
+Roughly `(1 reference + the incumbent + the challenger) × instances × per-instance-time`. With the default 100 hidden instances, re-measuring the base reference and the incumbent before the challenger is looked at makes opening a run the dominant cost. Size `run_blocks` accordingly.
 
 ### Can I change the comparator thresholds?
 

@@ -1,20 +1,19 @@
-"""The validator neuron. It measures, on its own GPU, or it does not run.
+"""The validator neuron. Two ways to set weights, chosen by ``--neuron.mode``.
 
-A validator rebuilds every candidate on its own hardware, serves it through a
-runtime it starts itself, and scores it against instances it regenerates from a
-block hash. It needs a CUDA device, an adapter pool and
-`capability-subnet[merge]`. What it does not need is anyone to trust, and that is
-the whole reason the requirement is not negotiable.
+``local`` (the default) measures. It rebuilds every candidate on this host's own
+GPUs, serves it through a runtime it starts itself, and scores it against
+instances regenerated from a block hash. It needs a CUDA device, an adapter pool
+and `capability-subnet[merge]`, and it trusts no one — the whole reason those
+requirements are not negotiable. This is the stronger claim: every number comes
+from work this host did, so agreeing with the other validators is evidence.
 
-There used to be a second mode that fetched a signed weight vector from an
-operator's evaluation engine and verified it by replaying published traces. It
-was cheap — a small VPS, no GPU — and it was genuinely not a relay: it checked
-the signature against an allow-list and burned rather than submit anything it
-could not verify. It is gone anyway, because "verify what one party measured" is
-not the same claim as "measure it", and keeping both let the network describe
-itself with the stronger claim while running on the weaker one. Every validator
-now does the work, so agreeing with the others is evidence rather than a
-formality.
+``endpoint`` verifies. It sets weights from a vector an operator's evaluation
+engine published, after checking the signature against
+``--neuron.trusted_signers``, the arithmetic, that the run matches the chain this
+host sees, and that a sampled instance re-scores to the published trace. It needs
+no GPU, so a validator that cannot afford cards is still a validator the network
+has. It is not a relay: anything that fails verification is burned with this
+validator's own stake, not the publisher's.
 
 Validators are not required to agree on artifact bytes. An SVD is not bitwise
 reproducible across devices, so two honest validators on different cards build
@@ -85,7 +84,8 @@ def _champion_grade(outcome, reigning: float | None) -> float | None:
 
 
 class ValidatorNeuron:
-    """Measures every candidate on this host and sets weights from it."""
+    """Sets weights from its own measurement (local mode) or from a verified
+    published vector (endpoint mode), chosen by ``--neuron.mode``."""
 
     def __init__(self, config=None) -> None:
         import bittensor as bt
@@ -421,17 +421,21 @@ class ValidatorNeuron:
         self._submit_measured_earlier(run_id, block)
 
     def _step_endpoint(self, block: int) -> None:
-        """Set weights from scores somebody else measured, having checked them.
+        """Set weights from the scores the engine measured, re-deriving them here.
 
         The weaker of the two claims, and it is offered because a validator that
         cannot afford four cards is otherwise a validator the network does not
-        have. What it is not is a relay: the vector is refused unless it is
-        signed by a hotkey on this validator's own allow-list, its arithmetic
-        holds, the run it names matches the chain this host can see, and a
-        sampled instance re-scores to what the published trace says. Anything
-        that fails, this validator burns instead — with its own stake, not the
-        publisher's.
+        have. What it is not is a relay: the engine publishes a signed report for
+        every candidate — its scores, its gates and its grade — and this
+        validator computes the weight vector from that stream itself. It trusts
+        the operator for nothing beyond the measurement, and even that it checks:
+        every report must be signed by a hotkey on this validator's own
+        allow-list, a sampled instance must re-score to its published trace, and
+        the run's draw must match the chain. Anything that fails, it burns
+        instead — with its own stake, not the publisher's.
         """
+        from capability_subnet.common.chain import run_id_for_block
+        from capability_subnet.scoring.weight_vector import vector_from_reports
         from capability_subnet.validator.client import (
             BackendClient,
             BackendUnavailable,
@@ -445,47 +449,70 @@ class ValidatorNeuron:
             self.config.backend_url,
             trusted_signers=self._trusted,
         )
+        run_blocks = client.run_blocks() or C.DEFAULT_RUN_BLOCKS
+
+        # The run being paid now, and the measured run whose reports decide it. A
+        # recipe committed in run N is measured in N+1 and paid in N+2, so the
+        # field paid in the current run was measured in the run before it.
+        paying_run = run_id_for_block(block, run_blocks)
+        measured_run = paying_run - 1
+
         try:
-            vector = client.fetch_weights()
+            reports = client.fetch_reports(measured_run)
         except BackendUnavailable as exc:
             log.error("endpoint unreachable (%s); leaving the last weights in force", exc)
             return
+        if not reports:
+            log.warning(
+                "run %d has published no reports yet; leaving the last weights in force",
+                measured_run,
+            )
+            return
 
-        from capability_subnet.common.chain import run_id_for_block
+        # The validator derives the vector rather than fetching one. champion_grade
+        # governs only the throne record, which is not submitted on chain, so the
+        # emitted weights are correct whatever it is; the reigning grade is carried
+        # for the record.
+        vector = vector_from_reports(
+            reports,
+            run_id=paying_run,
+            block=block,
+            champion_grade=self._reigning_grade(paying_run),
+            burn_uid=self.burn_uid(),
+            burn_share=C.BURN_SHARE,
+        )
 
-        run_blocks = client.run_blocks() or C.DEFAULT_RUN_BLOCKS
         problems = validate_vector(
             vector,
             metagraph_size=len(self.metagraph.hotkeys),
             hotkeys=self.metagraph.hotkeys,
-            current_run=run_id_for_block(block, run_blocks),
-            # A run is paid one run after it is measured, so the newest vector a
-            # healthy engine can offer already trails the chain by WEIGHT_LAG_RUNS.
-            # One more than that is the tolerance; beyond it the engine has stalled
-            # and this validator burns rather than paying a champion nobody is
-            # still defending.
+            current_run=paying_run,
             max_stale_runs=C.WEIGHT_LAG_RUNS + 1,
             burn_uid=self.burn_uid(),
         )
         if not problems:
-            ok, detail = spot_check_run(client, vector.run_id)
+            # Re-scored from the engine's own published traces, and the seed root
+            # checked across recent runs. Neither needs a GPU; both refuse a run
+            # that contradicts its own record.
+            ok, detail = spot_check_run(client, measured_run)
             if not ok:
                 problems = [detail]
             else:
-                ok, detail = check_draw_was_not_re_rolled(client, vector.run_id)
+                ok, detail = check_draw_was_not_re_rolled(client, measured_run)
                 if not ok:
                     problems = [detail]
 
         if problems:
             for problem in problems:
-                log.error("published vector refused: %s", problem)
+                log.error("derived vector refused: %s", problem)
             self._submit(safe_fallback(self.burn_uid(), vector), block)
             return
 
         log.info(
-            "run %d: vector verified from %s, %d entries",
-            vector.run_id,
-            self.config.backend_url,
+            "run %d: vector derived from %d report(s) for run %d, %d entries",
+            paying_run,
+            len(reports),
+            measured_run,
             len(vector.entries),
         )
         self._submit(vector, block)

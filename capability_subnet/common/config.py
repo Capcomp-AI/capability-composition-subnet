@@ -228,7 +228,7 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
         default=_env("CAPSUB_SERVE_URL", ""),
         help=(
             "OpenAI-compatible endpoint this validator serves reconstructed "
-            "candidates through. Required by --neuron.evaluation=own; standing "
+            "candidates through. Required by --neuron.mode=local; standing "
             "the server up is the validator's own business, exactly as it is the "
             "miner's."
         ),

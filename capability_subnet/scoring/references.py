@@ -51,7 +51,7 @@ What this gives up, recorded so it is not rediscovered as a surprise:
   time, and it is the first thing to restore if the network starts paying for
   merges nobody would deploy.
 
-The remedy is to measure the pool's twenty-seven adapters once and append a
+The remedy is to measure the pool's thirty adapters once and append a
 reference here for anything that clears the base.
 """
 

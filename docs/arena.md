@@ -165,12 +165,11 @@ German industrial-maintenance chain. It is not the default. Select it with
 
 It was chosen because it is **commercially understandable and technically objective at the same time** — a combination that is rarer than it sounds.
 
-It exercises eight capabilities in one dependent chain, and every one of them can be judged without asking a model for an opinion:
+It exercises seven capabilities in one dependent chain — one per stage of the chain below — and every one of them can be judged without asking a model for an opinion:
 
 | Capability | Judged by |
 |---|---|
 | German technical language | Whether the right facts were extracted from German prose |
-| Structured log extraction | Whether the right channel and values were read |
 | Fault reasoning | Exact match against a deterministic machine schema |
 | Text-to-SQL | **Executing** the query against a hidden snapshot |
 | Python code generation | Hidden test cases the agent never sees |

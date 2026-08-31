@@ -1,9 +1,9 @@
-"""The validator: measure the field, derive the vector, set weights.
+"""The validator: measure or verify the field, derive the vector, set weights.
 
-Not a thin one. The mode that fetched a signed vector from somebody else's
-engine and verified it by replaying traces is gone — see neuron.py for why —
-so a validator reconstructs, serves and scores on its own cards and answers for
-the numbers it writes.
+Two modes, chosen by ``--neuron.mode`` (see neuron.py). ``local`` reconstructs,
+serves and scores every candidate on its own cards. ``endpoint`` sets weights
+from a signed vector an engine published, after verifying it against a trusted
+allow-list. Either way the validator answers for the numbers it writes.
 """
 
 from capability_subnet.validator.client import (

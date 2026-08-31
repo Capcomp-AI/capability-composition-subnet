@@ -31,9 +31,11 @@ decides whether it changes hands; it no longer decides whether anyone is paid.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 
 from capability_subnet.common import constants as C
-from capability_subnet.common.schemas import WeightEntry, WeightVector
+from capability_subnet.common.schemas import EvaluationReport, WeightEntry, WeightVector
+from capability_subnet.scoring.contribution import ContributionInputs, contribution_score
 from capability_subnet.scoring.references import is_reference
 
 log = logging.getLogger(__name__)
@@ -195,6 +197,55 @@ def champion_ladder(
         # record every run's best candidate as having taken a throne it did
         # not take, and the next run would be measured against the wrong bar.
         champion_hotkey=qualifying[0][1] if (qualifying and took_the_throne) else None,
+    )
+
+
+def vector_from_reports(
+    reports: Iterable[EvaluationReport],
+    *,
+    run_id: int,
+    block: int,
+    champion_grade: float | None,
+    burn_uid: int = C.BURN_UID,
+    burn_share: float = C.BURN_SHARE,
+    workflow_id: str = C.DEFAULT_WORKFLOW_ID,
+) -> WeightVector:
+    """Derive the weight vector from a run's published evaluation reports.
+
+    This is the "anyone can re-derive the vector from a stream of reports" path
+    those reports exist for. A validator in endpoint mode fetches the signed
+    reports, verifies them, and calls this to compute the vector itself rather
+    than trusting a vector somebody else computed. It is the same ladder local
+    mode applies to its own measurements; only the source of the grades differs.
+
+    Only reports that cleared every hard gate are ranked. A permanent reference
+    is the bar, not a competitor, and is dropped. Each grade is recomputed from
+    the report's own scores against the reference it was measured on, so a report
+    whose grade does not follow from its scores earns nothing it did not measure.
+    """
+    graded: list[tuple[int, str, float]] = []
+    for report in reports:
+        if not report.gates_passed:
+            continue
+        hotkey = report.miner_hotkey
+        if not hotkey or is_reference(hotkey) or report.miner_uid is None:
+            continue
+        grade = contribution_score(
+            ContributionInputs(
+                scores=report.scores,
+                reference_e2e=report.strongest_reference_score,
+            )
+        )
+        graded.append((report.miner_uid, hotkey, grade))
+    graded.sort(key=lambda row: -row[2])
+    return champion_ladder(
+        graded,
+        run_id=run_id,
+        block=block,
+        champion_grade=champion_grade,
+        burn_uid=burn_uid,
+        burn_share=burn_share,
+        workflow_id=workflow_id,
     )
 
 

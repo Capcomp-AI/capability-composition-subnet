@@ -155,8 +155,9 @@ every paid rank pays its **whole emission** to miners:
 Ten miners are paid at most. A run can still burn, in two ways, and both are
 deliberate:
 
-- **No throne, nothing paid.** If no candidate clears the reigning grade the
-  entire run burns.
+- **Nothing clears the hard gates.** If no candidate clears every hard gate the
+  entire run burns. The throne is not a payment condition — a run that produces
+  no new champion still pays whatever cleared the gates.
 - **An unfilled rank in the first five burns** rather than being promoted into
   the leader's share, so a field of five pays 99.5% and burns 0.5%. The
   sixth-to-tenth share is different: it is split across whoever occupies those
@@ -464,8 +465,8 @@ See [min_compute.yml](../min_compute.yml) for detail.
 
 **Assuming only the throne pays.** It does not. Every package that clears all
 hard gates is graded on quality, improvement over the strongest reference,
-and running cost — and earns a share of emission for
-several runs whether or not it dethroned anything. Getting close is worth
+and running cost — and earns a share of the run's emission
+whether or not it dethroned anything. Getting close is worth
 something; producing something undeployable is not. See
 [what a run pays](#what-a-run-pays) for the split.
 
@@ -476,7 +477,7 @@ not equally valuable if one costs twice as much to run.
 
 **Submitting before evaluating.** Only your last recipe is measured and you get three a run. There is no reason to spend one on a package you have not measured.
 
-**Assuming a loss is the end.** It is, if you were genuinely measured and genuinely lost. It is not when the engine could not evaluate you — an unreadable memory counter or too few scored instances holds your submission for a later run rather than terminating it. While it waits it earns a small share of emission, which is what keeps it from being deregistered before its turn comes.
+**Assuming a loss is the end.** It is, if you were genuinely measured and genuinely lost. It is not when the engine could not evaluate you — too few scored instances or a reconstruction the workers could not agree on holds your submission for a later run rather than terminating it. While it waits it earns a small share of emission, which is what keeps it from being deregistered before its turn comes.
 
 ---
 
@@ -541,7 +542,7 @@ Get both from `capcomp pool`, or let `capcomp init` fill them in. A recipe decla
 
 Between **2 and 10** adapter IDs from the frozen pool. Duplicates are rejected.
 
-All 30 pool adapters are selectable; certification does not gate selection. The
+Every adapter in the certified pool is selectable; certification does not gate selection. The
 bound is `MIN_SELECTED_ADAPTERS`/`MAX_SELECTED_ADAPTERS` and is exported in the
 published JSON Schema as `minItems`/`maxItems`, so `capcomp validate`
 catches a violation before you submit.
@@ -679,20 +680,31 @@ Any failure zeroes the candidate.
 | Numerical | No NaN or infinity |
 | Security | No executable miner content |
 | Artifact size | ≤ 500 MB |
-| Peak VRAM | ≤ 24 GB |
-| Latency | p95 workflow ≤ 30 s |
+| Sample sufficiency | Enough instances scored to compare on |
 | Agent limits | ≤ 12 turns, ≤ 8192 output tokens |
 | Safety | Zero critical unsafe actions |
 | Stage floors | Every critical stage above its floor |
-| Base retention | ≥ 98% of the base model's score on the general-capability probe |
-| Baseline | Exceeds the strongest **permanent reference** by the absolute margin |
-| Defender's margin | Exceeds the incumbent by its remaining, decaying margin |
-| Statistics | Paired lower confidence bound above zero |
+| Entry margin | Exceeds the strongest **permanent reference** by **0.02** end-to-end |
 
-Two of these say the validator could not measure you rather than that you fell
-short: an unreadable GPU memory counter, and too few instances scored to compare
-on. Neither is scored against you — the run simply does not pay you, and the
-next submission is measured on its own terms.
+There is no peak-VRAM gate and no latency gate — neither is gated or scored. The
+24 GiB figure is the serving *reservation* a card must offer, not a ceiling you
+are measured against. Retention is likewise measured and scored, never gated.
+
+Three further gates apply **only under the strict ranking contract**
+(`require_beat_reference`), which ships **off**, so they do not gate the default
+board:
+
+| Gate (strict contract only) | Requirement |
+|---|---|
+| Axis dominance | Dominates the required number of capability axes, and no worse on any other |
+| Defender's margin | Exceeds the incumbent by its remaining, decaying margin |
+| Statistics | Paired lower confidence bound above zero against the strongest reference |
+
+Two of the always-enforced gates say the validator could not measure you rather
+than that you fell short: too few instances scored to compare on, and a
+reconstruction the independent workers could not agree on. Neither is scored
+against you — the run simply does not pay you, and the next submission is
+measured on its own terms.
 
 ---
 

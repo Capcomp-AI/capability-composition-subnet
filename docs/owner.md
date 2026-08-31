@@ -103,20 +103,21 @@ CAPSUB_EVALUATOR_IMAGE_DIGEST=sha256:<digest>
 
 ### Sizing the serving fraction
 
-`gpu_memory_utilization` is a fraction of the **whole card** and is a reservation rather than a requirement. Peak memory tracks it closely:
+`gpu_memory_utilization` is a fraction of the **whole card** and is a reservation rather than a requirement. What vLLM sets aside tracks it closely:
 
-    peak ≈ gpu_memory_utilization × total_VRAM + 0.9 GiB
+    reserved ≈ gpu_memory_utilization × total_VRAM
 
-A candidate's peak is gated at 24 GiB, so the fraction follows from the card:
+A candidate reserves a fixed **24 GiB** to serve — peak memory is deliberately neither gated nor scored, and it lands near 21 GiB whatever the package merged — so the fraction follows from the card:
 
-| Card | Fraction | Resulting peak |
+| Card | Fraction | Reserved |
 |---|---|---|
-| 80 GB | 0.25 | ~20.9 GiB |
-| 48 GB | 0.42 | ~20.9 GiB |
-| 32 GB | 0.66 | ~20.9 GiB |
-| 24 GB | 0.91 | ~20.9 GiB |
+| 80 GB | 0.30 | ~24 GiB |
+| 48 GB | 0.50 | ~24 GiB |
+| 32 GB | 0.78 | ~25 GiB |
 
-The model needs about 15.3 GiB of weights and about 0.6 GiB of KV cache for the 8192 context at one sequence. A larger card needs a *smaller* fraction, not a larger one — the reservation is absolute, so peak lands near 20.9 GiB on every card that can hold it.
+A 24 GB card cannot serve: it does not clear the reservation plus the driver context and the merge sharing the card, so the smallest card a validator may use is 32 GB.
+
+The model needs about 15.3 GiB of weights and about 0.6 GiB of KV cache for the 8192 context at one sequence. A larger card needs a *smaller* fraction, not a larger one — the reservation is absolute at 24 GiB, so the same package is served identically on every card that can hold it, and measured peak lands near 21 GiB throughout.
 
 ---
 
@@ -183,7 +184,7 @@ Four adapters are held out of selection on the licence gate: their upstream lice
 - [ ] Base model materialised at the pinned revision on every measuring host
 - [ ] `min_commit_block` set to the block the arena opens at
 - [ ] `CAPSUB_HIDDEN_SEED_ROOT` generated, kept out of git and logs
-- [ ] Serving fraction set from the card so peak lands under 24 GiB
+- [ ] Serving fraction derived from the card so the 24 GiB reservation fits
 - [ ] Signing hotkey configured, if the engine is being run
-- [ ] Validators told to install `capability-subnet[merge]` and run `own` mode
+- [ ] Validators told to install `capability-subnet[merge]` and run `--neuron.mode local` (or `endpoint`, if they verify signed reports instead of measuring)
 - [ ] Spec version bumped if any consensus constant changed

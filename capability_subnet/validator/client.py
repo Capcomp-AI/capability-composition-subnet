@@ -120,6 +120,32 @@ class BackendClient:
         require_trusted_signature(report, self.trusted_signers)
         return report
 
+    def fetch_reports(self, run_id: int) -> list[EvaluationReport]:
+        """Every published, signed report for one measured run.
+
+        This is the stream endpoint mode derives its vector from: the engine
+        measured the field and published a report per candidate, and the
+        validator re-derives the weights from them itself rather than trusting a
+        vector somebody else computed. Each report is verified against the
+        trusted-signer allow-list, so a run mixing an operator's reports with
+        anyone else's is refused whole rather than paid in part.
+        """
+        payload = self._get(f"/reports?run_id={run_id}&limit=200")
+        raw = payload.get("reports", []) if isinstance(payload, dict) else []
+        reports: list[EvaluationReport] = []
+        for item in raw:
+            # The listing wraps each report with its digest; the report model is
+            # strict, so drop the envelope key before validating.
+            if isinstance(item, dict):
+                item = {k: v for k, v in item.items() if k != "report_sha256"}
+            try:
+                report = EvaluationReport.model_validate(item)
+            except Exception as exc:  # noqa: BLE001
+                raise BackendUnavailable(f"malformed report in run {run_id}: {exc}") from exc
+            require_trusted_signature(report, self.trusted_signers)
+            reports.append(report)
+        return reports
+
     def fetch_champion(self) -> dict:
         return self._get("/champion")
 
