@@ -396,3 +396,32 @@ class TestTheContractStatesItsOwnLimits:
 
     def test_it_publishes_that_no_model_judges_a_result(self, logic):
         assert "No language model judges" in logic.build_contract()["scoring"]["note"]
+
+
+def test_python_runner_is_posix_spawned_and_terminates_a_runaway():
+    """The code runner must not fork the parent (a CUDA/threaded validator
+    deadlocks between fork and exec), and a runaway must be terminated rather
+    than waited out forever."""
+    import dataclasses
+
+    from capability_subnet.sandbox.limits import ExecutionLimits
+    from capability_subnet.sandbox.python_runner import PythonRunner
+
+    limits = dataclasses.replace(ExecutionLimits(), python_cpu_seconds=2, python_timeout_seconds=6)
+    runner = PythonRunner(limits)
+
+    # It goes through /bin/sh (posix_spawn), never a bare interpreter with a
+    # preexec_fn — a preexec_fn forces subprocess to fork().
+    argv = runner._limited_argv(["/usr/bin/python3", "-I", "-S", "-c", "pass"])
+    assert argv[0] == "/bin/sh"
+
+    # A busy loop is terminated (by the CPU limit or the wall-clock timeout).
+    out, _ = runner.run_program("while True:\n    x = 1\n", "")
+    assert out is None
+
+    # Normal code still runs and is scored.
+    out2, detail2 = runner.run_program(
+        "import sys\nprint(sum(int(x) for x in sys.stdin.read().split()))", "2 3 4"
+    )
+    assert out2.strip() == "9"
+    assert detail2 == "completed"

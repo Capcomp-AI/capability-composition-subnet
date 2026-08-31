@@ -21,7 +21,7 @@ import sys
 from dataclasses import dataclass
 from typing import Any
 
-from capability_subnet.sandbox.limits import ExecutionLimits, apply_subprocess_limits
+from capability_subnet.sandbox.limits import ExecutionLimits
 
 log = logging.getLogger(__name__)
 
@@ -122,6 +122,32 @@ class PythonRunner:
     def __init__(self, limits: ExecutionLimits | None = None) -> None:
         self._limits = limits or ExecutionLimits()
 
+    def _limited_argv(self, python_argv: list[str]) -> list[str]:
+        """Wrap the interpreter so it starts under its resource limits.
+
+        The limits are applied with ``ulimit`` in a tiny ``/bin/sh`` that then
+        ``exec``s the interpreter, rather than with a ``preexec_fn``. This is not
+        cosmetic: ``preexec_fn`` forces ``subprocess`` to ``fork()`` instead of
+        ``posix_spawn``, and forking this process is unsafe — a validator (and
+        the off-line harness) has CUDA initialised from reconstructing merges and
+        runs several threads, and forking a CUDA-initialised, multithreaded
+        process deadlocks between the fork and the exec. It ran often enough to
+        look fine and then wedged the whole run, with the wall-clock timeout
+        never firing because the child was stuck before it ever started. Going
+        through the shell keeps ``posix_spawn`` on the fast path and the limits
+        exactly where ``preexec_fn`` put them: in force before the interpreter
+        allocates anything.
+        """
+        mem_kib = self._limits.python_memory_mb * 1024
+        cpu = self._limits.python_cpu_seconds
+        # -t CPU seconds, -v address space (KiB), -f file size, -c core. One
+        # option per call: /bin/sh is dash, which rejects several options in a
+        # single ulimit and has no -u. exec "$@" replaces the shell with the
+        # interpreter, so the timeout and any kill land on one pid, and the
+        # interpreter starts already under the limits.
+        setup = f'ulimit -t {cpu}; ulimit -v {mem_kib}; ulimit -f 16384; ulimit -c 0; exec "$@"'
+        return ["/bin/sh", "-c", setup, "sh", *python_argv]
+
     def run_program(self, source: str, stdin: str) -> tuple[str | None, str]:
         """Run ``source`` as a whole program and return ``(stdout, detail)``.
 
@@ -150,15 +176,14 @@ class PythonRunner:
             completed = subprocess.run(
                 # -I: isolated mode, so submitted code cannot import whatever
                 # happens to be sitting next to the harness. -S: no site
-                # packages. Same posture as run(); see its comment.
-                [sys.executable, "-I", "-S", "-c", source],
+                # packages. Same posture as run(); see its comment. Wrapped in a
+                # ulimit shell so it is posix_spawned rather than forked — see
+                # _limited_argv.
+                self._limited_argv([sys.executable, "-I", "-S", "-c", source]),
                 input=stdin,
                 capture_output=True,
                 text=True,
                 timeout=self._limits.python_timeout_seconds,
-                preexec_fn=lambda: apply_subprocess_limits(
-                    self._limits.python_memory_mb, self._limits.python_cpu_seconds
-                ),
                 env={"PATH": "/usr/bin:/bin", "LC_ALL": "C.UTF-8", "LANG": "C.UTF-8"},
             )
         except subprocess.TimeoutExpired:
@@ -204,15 +229,13 @@ class PythonRunner:
                 # -I: isolated mode. Ignores PYTHON* environment variables and
                 # keeps the current directory off sys.path, so submitted code
                 # cannot import anything the harness happens to have lying next
-                # to it.
-                [sys.executable, "-I", "-S", "-c", _CHILD_PROGRAM],
+                # to it. Wrapped in a ulimit shell so it is posix_spawned rather
+                # than forked — see _limited_argv.
+                self._limited_argv([sys.executable, "-I", "-S", "-c", _CHILD_PROGRAM]),
                 input=job,
                 capture_output=True,
                 text=True,
                 timeout=self._limits.python_timeout_seconds,
-                preexec_fn=lambda: apply_subprocess_limits(
-                    self._limits.python_memory_mb, self._limits.python_cpu_seconds
-                ),
                 env={"PATH": "/usr/bin:/bin", "LC_ALL": "C.UTF-8", "LANG": "C.UTF-8"},
             )
         except subprocess.TimeoutExpired:
