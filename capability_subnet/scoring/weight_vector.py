@@ -1,11 +1,10 @@
 """Building the weight vector.
 
-The engine computes weights; it never sets them. What it publishes is a signed
-vector, and validators independently decide to submit it. That separation is what
-keeps a centralised evaluation engine honest at the chain layer: the engine can
-publish whatever it likes, but emission only moves if validators — who verify the
-signature, check the vector against the published reports, and answer to their own
-stake — agree to write it.
+Whoever computes a vector never sets it. A validator measures the field on its
+own cards, derives this vector from what it measured, and writes that; a vector
+published by somebody else is evidence to check against, not an instruction. So
+emission only moves on numbers a validator either produced or verified — and it
+answers for them with its own stake.
 
 The rule the vector expresses, in full:
 

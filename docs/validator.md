@@ -435,9 +435,9 @@ See [min_compute.yml](../min_compute.yml).
 
 ## The honest trade
 
-Concentrating evaluation in one operator is a real cost. It buys reproducible scoring, cheap validation and a straightforward comparison mechanism; it costs decentralisation at the evaluation layer.
+Every validator measures the field itself, which is what keeps scoring out of any single party's hands — and it is not free. It costs four cards per validator, and it means two honest validators can disagree: the same package measured twice does not score identically, because batched inference is not bitwise reproducible across different batch compositions.
 
-The mitigations are signed reports, published artifacts and recipes, validators that verify rather than relay, and the chain's own consensus at the weight layer. Optional validator audit re-runs — where a validator re-executes a sampled instance and checks the engine's answer — are a planned hardening step, not something that exists today.
+The mitigations are signed reports, published artifacts and recipes, validators that verify rather than relay, and the chain's own consensus at the weight layer. What remains concentrated is the draw: hidden instances derive from a root one party holds, mixed with a block hash nobody chooses. Audit re-runs against a sampled instance are a planned hardening step, not something that exists today.
 
 If that trade is not acceptable to you, it is better to know before you register than after.
 
@@ -676,11 +676,13 @@ To recover: restore `state/`, restart the engine. It re-reads the chain, rebuild
 
 ## Common questions
 
-### Why don't validators need a GPU?
+### What hardware does a validator need?
 
-Evaluation is centralised. Validators fetch a signed weight vector, verify it, and set weights.
+Its own cards. A validator measures the field itself: `MIN_VALIDATOR_CARDS` is four, each at least `MIN_VALIDATOR_CARD_GIB`, and `settings.py` refuses to start below either with the arithmetic in the message rather than letting a run fail halfway through. A candidate reserves 24 GiB to serve and shares the card with a merge that peaks near 2.5 GiB, which is what forces the 32 GiB floor.
 
-### Then what stops a dishonest operator?
+Auditing is the part that needs no GPU. `capability-audit` replays a published run from its seeds and traces, and anyone can do that without registering.
+
+### What stops a dishonest operator?
 
 A validator is not a relay. Before touching the chain it verifies the operator signature against an allow-list **it** configures, checks the vector against the chain it can see, and burns rather than submitting anything it cannot verify. Every report a decision rests on is signed and published, so the weight vector can be re-derived independently.
 

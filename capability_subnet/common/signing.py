@@ -1,12 +1,13 @@
 """Signing and verification of published artifacts.
 
-The evaluation engine is centralised, so everything it publishes is signed with
-the operator's hotkey. A validator that fetches a weight vector verifies three
-things before touching the chain: the signature is valid, the signer is on the
-operator allow-list it was configured with, and the payload is internally
-consistent. That combination is what makes a centralised engine auditable —
-a fabricated report cannot be attributed to the operator, and a real one cannot
-be repudiated.
+Validators measure the field on their own cards, so nothing here decides a
+score. What signing decides is attribution: an engine that publishes reports
+signs them with its hotkey, and a validator reading someone else's numbers
+verifies three things before letting them count — the signature is valid, the
+signer is on the allow-list it configured itself, and the payload is internally
+consistent. A fabricated report cannot be attributed to anyone, and a real one
+cannot be repudiated, which is what makes independently measured runs
+comparable rather than merely parallel.
 """
 
 from __future__ import annotations

@@ -4,9 +4,9 @@ These tests take the operator's side: they construct reports that *claim*
 something the rest of the same report does not support, and assert the verifier
 says so.
 
-That is the whole value of the exercise. A centralised engine can publish
-whatever it likes, so the useful question is not "is the engine honest" but
-"would we be able to tell". Each test below is one way of telling.
+That is the whole value of the exercise. Any engine can publish whatever it
+likes, so the useful question is not "is this one honest" but "would we be able
+to tell". Each test below is one way of telling.
 """
 
 from __future__ import annotations

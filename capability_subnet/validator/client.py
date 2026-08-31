@@ -8,9 +8,9 @@ then answers three questions before anything touches the chain:
   is the champion actually on the metagraph?
 * is it recent enough to still mean something?
 
-A vector that fails any of these is not submitted. That is the whole reason a
-centralised evaluation engine is acceptable: the engine computes, but validators
-decide, and each one answers to its own stake.
+A vector that fails any of these is not submitted. Someone else's vector is
+evidence, never an instruction: a validator measures the field itself and
+answers for what it writes with its own stake.
 """
 
 from __future__ import annotations

@@ -1,10 +1,10 @@
 """Independent verification of what the engine published.
 
-The engine is centralised, so its output is only as trustworthy as the checks
-anyone can run against it. This module is those checks, written so that a
-validator, a miner or an outside observer can run them with nothing but the
-published reports — no hidden instances, no GPU, no cooperation from the
-operator.
+Validators measure for themselves, so any published run can be checked against
+another party's numbers rather than believed. This module is those checks,
+written so that a validator, a miner or an outside observer can run them with
+nothing but the published reports — no hidden instances, no GPU, no cooperation
+from whoever produced them.
 
 What can be verified without the hidden data turns out to be most of what
 matters:

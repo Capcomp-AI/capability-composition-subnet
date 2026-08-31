@@ -1,9 +1,9 @@
 """Independent verification of published evaluation records.
 
-The evaluation engine is centralised, so its output is only as trustworthy as
-the checks anyone can run against it. These are those checks: they need the
-published reports, no hidden data, no GPU, and no cooperation from the operator
-beyond a readable API.
+Validators measure for themselves, so a published run is something to check
+rather than believe. These are those checks: they need the published reports,
+no hidden data, no GPU, and no cooperation from whoever produced them beyond a
+readable API.
 """
 
 from capability_subnet.audit.verify import (

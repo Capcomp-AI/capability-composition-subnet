@@ -438,8 +438,9 @@ class ComparatorOutcome(StrictModel):
 class EvaluationReport(StrictModel):
     """The published, signed record of one candidate evaluation.
 
-    Anyone can re-derive the weight vector from a stream of these reports, which
-    is what keeps a centralised evaluation engine auditable.
+    Anyone can re-derive the weight vector from a stream of these reports, so
+    two parties that measured the same run independently can be compared rather
+    than merely trusted.
     """
 
     report_version: int = 1

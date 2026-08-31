@@ -84,7 +84,7 @@ The complete immutable record of one attempt: every tool call, every result, the
 
 ### 4. The report
 
-The signed, published account of one evaluation: gate verdicts, per-axis comparisons, paired statistics, and the decision with its reason. Anyone can re-derive the weight vector from a stream of these, which is what keeps a centralised engine auditable.
+The signed, published account of one evaluation: gate verdicts, per-axis comparisons, paired statistics, and the decision with its reason. Anyone can re-derive the weight vector from a stream of these, so a validator's numbers can be checked against anyone else's rather than taken on trust.
 
 ---
 
@@ -389,7 +389,7 @@ Three things make this system's threat model unusual:
 
 1. **Recipes are public.** They must be, or nobody could verify an evaluation. So copying is trivially easy and has to be made *worthless* rather than impossible.
 2. **Candidate-written code executes.** The diagnostic stage is not scoreable otherwise.
-3. **Evaluation is centralised.** One operator holds the hidden instances and the signing key, which concentrates both capability and the incentive to misuse it.
+3. **The hidden instances come from a secret root.** Validators each measure the field on their own cards, so no single party's numbers decide anything — but the draw itself is derived from a root one operator holds, mixed with a block hash nobody chooses. That is where the residual trust sits.
 
 Each is addressed by a different mechanism, and the mechanisms are described honestly below, including where they stop.
 
@@ -485,7 +485,7 @@ Largely neutralised by architecture rather than filtering: the agent has no netw
 
 **Goal:** the operator pays whoever they like.
 
-This is the honest weak point of a centralised engine, and it is mitigated rather than eliminated:
+Validators measure independently, so no operator's numbers are authoritative on their own. What remains is the draw — the hidden instances derive from a root one party holds — and that is mitigated rather than eliminated:
 
 | Mitigation | What it gives |
 |---|---|
