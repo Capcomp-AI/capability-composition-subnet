@@ -398,16 +398,30 @@ run 412: measured in run 413, paid in run 414
   attempts  1 used, 2 left
 ```
 
-Or over HTTP:
+Or over HTTP. The run that is still open is readable only by the hotkey it is
+about, so this one is signed:
 
 ```bash
-curl https://<api-host>/status/<your-hotkey>
+RUN=$(curl -s https://<api-host>/health | jq -r .current_run)
+SIG=$(btcli wallet sign --message "capcomp-status:v1:$RUN:<your-hotkey>" ...)
+curl "https://<api-host>/status/<your-hotkey>?signature=$SIG"
 ```
 
 ```json
 {"run_id": 412, "submitted": true, "submission_count": 1,
  "remaining": 2, "recipe_sha256": "sha256:38f6428d…", "superseded": []}
 ```
+
+Unsigned, it answers `401` and tells you the exact string to sign. The
+signature is bound to the run and the hotkey, so it cannot be replayed against
+a later run or pointed at somebody else.
+
+Why: this describes a run still being submitted into. Answering it for anyone
+about anyone made the open field enumerable — the metagraph is public, so a
+loop over every registered hotkey rebuilt who was in the run, how many attempts
+each had spent, and, because two identical recipes share a digest, which of
+them had copied whom. That is exactly what the reveal delay exists to prevent.
+Once a run is published, all of it is open to everyone; see below.
 
 `superseded` lists the digests of recipes this one replaced, so the attempt
 count is checkable rather than something you are told.
@@ -461,6 +475,49 @@ record is filed under.
 
 Runs that are not published yet exit non-zero and say when they will be, so a
 script polling for a score stops rather than treating "embargoed" as "zero".
+
+### Reading anybody's run
+
+Once a run is published — two runs after the one submitted in — **every**
+miner's recipe and score is open to everyone, not just your own. There is no
+privileged view: the same routes answer the same bytes to any caller.
+
+```bash
+capcomp result --run 419 --uid 54            # somebody else's entry
+capcomp result --run 419 --uid 54 --recipe   # and the recipe they submitted
+```
+
+For the whole field at once, including who was refused and why:
+
+```bash
+curl https://<api-host>/run/419/results | jq '.candidates[] | {uid, grade, rank, weight, verdict}'
+curl https://<api-host>/run/419/weights   # what it paid
+curl https://<api-host>/run/419           # every submission, bodies included
+```
+
+`/run/{id}/results` carries, per candidate: the grade and each axis behind it,
+the recipe and artifact digests, every gate verdict with the reason, the rank
+and weight, and the sample counts the score was computed over. The run's own
+row carries the draw beacon.
+
+**Check it rather than trust it.** The beacon is the hash of the block the
+measuring run opened at — a value the operator cannot choose:
+
+```bash
+# the beacon the API publishes for run 419
+curl -s https://<api-host>/run/419/results | jq -r .run.beacon
+# the hash of that block, read from the chain yourself
+btcli subnet show --netuid 103   # or any RPC: chain_getBlockHash(8966267)
+```
+
+They are the same value. From it the instance draw regenerates exactly, so
+every score in the table can be recomputed from public data and a copy of the
+frozen pool. That is the whole point of publishing the beacon rather than
+merely the scores.
+
+A run still being measured answers `released: false` with the run it opens in.
+That applies to your own entry too: knowing your score mid-measurement would
+tell you how the field stands against it.
 
 The full evaluation report is published at `/reports` — every gate verdict, every per-axis comparison, the paired statistics, and the reason for the decision.
 

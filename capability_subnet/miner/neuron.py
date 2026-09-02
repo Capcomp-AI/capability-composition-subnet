@@ -112,7 +112,10 @@ class MinerNeuron:
         digest = api.digest_of(body)
 
         try:
-            run_id, standing = api.current_run(self.config.api_url, hotkey)
+            # The wallet is already open, so the standing is fetched signed.
+            run_id, standing = api.current_run(
+                self.config.api_url, hotkey, sign=self.wallet.hotkey.sign
+            )
         except api.SubmitError as exc:
             log.error("%s", exc)
             return 4

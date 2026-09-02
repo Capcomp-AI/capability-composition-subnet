@@ -411,9 +411,30 @@ def _cmd_status(args: argparse.Namespace) -> int:
     """What this hotkey has submitted in the current run."""
     import httpx
 
-    hotkey = args.hotkey or _wallet(args).hotkey.ss58_address
+    from capability_subnet.miner import submit as api
+
+    # The open run's standing is signed for: it describes a run still in
+    # flight, and answering it to anyone about anyone made the field
+    # enumerable. --hotkey is still accepted, but only the holder can read it.
+    wallet = _wallet(args)
+    hotkey = args.hotkey or wallet.hotkey.ss58_address
+    if args.hotkey and args.hotkey != wallet.hotkey.ss58_address:
+        print(
+            f"error: {args.hotkey[:12]}… is not this wallet's hotkey. A run still "
+            "open can only be read by its owner; for a published run use "
+            "`capcomp result --run N --hotkey ...`.",
+            file=sys.stderr,
+        )
+        return 4
+
     try:
-        response = httpx.get(f"{args.api_url.rstrip('/')}/status/{hotkey}", timeout=45.0)
+        run_id = api.open_run(args.api_url)
+        signature = wallet.hotkey.sign(api.status_message(run_id, hotkey)).hex()
+        response = httpx.get(
+            f"{args.api_url.rstrip('/')}/status/{hotkey}",
+            params={"signature": signature},
+            timeout=45.0,
+        )
         response.raise_for_status()
         payload = response.json()
     except Exception as exc:

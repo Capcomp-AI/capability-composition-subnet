@@ -49,6 +49,36 @@ def signing_message(run_id: int, recipe_sha256: str) -> bytes:
     return f"{SIGNING_PREFIX}:{run_id}:{recipe_sha256}".encode()
 
 
+#: Signed to read a hotkey's standing in the run that is still open. The service
+#: used to answer that for anyone about anyone, which made the open run's field
+#: enumerable one registered hotkey at a time.
+STATUS_SIGNING_PREFIX = "capcomp-status:v1"
+
+
+def status_message(run_id: int, hotkey: str) -> bytes:
+    return f"{STATUS_SIGNING_PREFIX}:{run_id}:{hotkey}".encode()
+
+
+def open_run(api_url: str, *, timeout: float = 30.0) -> int:
+    """Which run the service would file a submission under, right now.
+
+    Unauthenticated, because it has to be: /status is bound to the run, so a
+    caller needs the run before it can sign for it. The number itself is
+    public — the chain head over a published constant.
+    """
+    import httpx
+
+    try:
+        response = httpx.get(f"{api_url.rstrip('/')}/health", timeout=timeout)
+        response.raise_for_status()
+        run = response.json().get("current_run")
+    except Exception as exc:
+        raise SubmitError(f"could not reach the submission API: {exc}") from exc
+    if run is None:
+        raise SubmitError("the submission API cannot see the chain; try again shortly")
+    return int(run)
+
+
 def canonical_body(recipe) -> bytes:
     """The bytes to send, and the bytes that are hashed and signed.
 
@@ -64,7 +94,7 @@ def canonical_body(recipe) -> bytes:
     return recipe.canonical_bytes()
 
 
-def current_run(api_url: str, hotkey: str, *, timeout: float = 30.0) -> tuple[int, dict]:
+def current_run(api_url: str, hotkey: str, *, timeout: float = 30.0, sign=None) -> tuple[int, dict]:
     """The run the API would file a submission under, and this hotkey's standing.
 
     Read from the API rather than computed locally. The run is decided by the
@@ -73,8 +103,20 @@ def current_run(api_url: str, hotkey: str, *, timeout: float = 30.0) -> tuple[in
     """
     import httpx
 
+    run_id = open_run(api_url, timeout=timeout)
+    if sign is None:
+        # No wallet to prove ownership with. The run is still the answer to
+        # half the question, and the caller is told which half is missing
+        # rather than handed a 401 it did not ask for.
+        return run_id, {"run_id": run_id, "standing": None}
+
+    signature = sign(status_message(run_id, hotkey)).hex()
     try:
-        response = httpx.get(f"{api_url.rstrip('/')}/status/{hotkey}", timeout=timeout)
+        response = httpx.get(
+            f"{api_url.rstrip('/')}/status/{hotkey}",
+            params={"signature": signature},
+            timeout=timeout,
+        )
         response.raise_for_status()
         payload = response.json()
     except Exception as exc:
