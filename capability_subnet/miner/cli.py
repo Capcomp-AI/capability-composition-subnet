@@ -288,6 +288,125 @@ def _cmd_check(args: argparse.Namespace) -> int:
     return 1
 
 
+def _cmd_result(args: argparse.Namespace) -> int:
+    """One hotkey's recipe and scores for one run, once that run is public."""
+    import json as _json
+
+    import httpx
+
+    hotkey = args.hotkey
+    if not hotkey:
+        if args.uid is None:
+            hotkey = _wallet(args).hotkey.ss58_address
+        else:
+            # A uid is a slot, not an identity: it is reissued when a miner
+            # deregisters, so the hotkey holding uid 7 today need not be the one
+            # that submitted in the run being asked about. Resolved here, once,
+            # and printed — so the answer names who it is actually about.
+            import bittensor as bt
+
+            graph = bt.subtensor(args.network).subnets.metagraph(netuid=args.netuid)
+            holders = list(graph.hotkeys)
+            if args.uid < 0 or args.uid >= len(holders):
+                print(
+                    f"error: uid {args.uid} is not registered on netuid {args.netuid}",
+                    file=sys.stderr,
+                )
+                return 4
+            hotkey = holders[args.uid]
+            print(f"uid {args.uid} is currently held by {hotkey}")
+
+    url = f"{args.api_url.rstrip('/')}/miner/{hotkey}/run/{args.run}"
+    try:
+        response = httpx.get(url, params={"recipe": "true"} if args.recipe else None, timeout=45.0)
+    except Exception as exc:
+        print(f"error: could not reach the submission API: {exc}", file=sys.stderr)
+        return 4
+
+    if response.status_code == 404:
+        # Two different 404s: an embargoed run, and a hotkey that did not
+        # submit. The service says which, and repeating it is more use than
+        # "not found".
+        detail = ""
+        try:
+            detail = response.json().get("detail", "")
+        except Exception:
+            detail = response.text[:200]
+        print(f"run {args.run}: {detail or 'no record'}", file=sys.stderr)
+        return 3
+
+    try:
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 4
+
+    if args.json:
+        print(_json.dumps(payload, indent=2, sort_keys=True, default=str))
+        return 0
+
+    if not payload.get("found"):
+        print(f"run {args.run}: {hotkey[:12]}… submitted nothing.")
+        return 0
+
+    sub = payload.get("submission") or {}
+    c = payload.get("candidate") or {}
+    print(
+        f"run {payload['submitted_run']}: measured in {payload['measured_in_run']}, "
+        f"paid in {payload['paid_in_run']}"
+    )
+    print(f"  hotkey    {hotkey}")
+    print(f"  uid       {c.get('uid') if c.get('uid') is not None else sub.get('uid')}")
+    print(f"  recipe    {c.get('recipe_sha256') or sub.get('recipe_sha256')}")
+    if sub.get("submission_count"):
+        print(f"  attempts  {sub['submission_count']} used")
+    for superseded in sub.get("superseded") or []:
+        print(f"  replaced  {superseded}")
+
+    if not payload.get("scored"):
+        # Submitted, and the run has not been migrated yet. Distinct from
+        # "submitted nothing" and from "refused", and a miner waits rather than
+        # acts on it.
+        print("  state     submitted; scores for this run are not published yet")
+        return 0
+
+    if c.get("artifact_sha256"):
+        print(f"  artifact  {c['artifact_sha256']}")
+    print(f"  verdict   {c.get('verdict') or c.get('status')}")
+    if c.get("verdict_reason"):
+        print(f"            {c['verdict_reason']}")
+
+    if c.get("grade") is None:
+        print("  grade     — (not graded)")
+    else:
+        print(f"  grade     {c['grade']:.6f}")
+        print(f"  rank      {c.get('rank') or '—'}   weight {c.get('weight') or 0:.6f}")
+
+    axes = [
+        ("end-to-end", "end_to_end"),
+        ("stage balance", "stage_balance"),
+        ("out-of-dist", "ood"),
+        ("retention", "retention"),
+        ("token eff", "token_efficiency"),
+        ("artifact eff", "artifact_efficiency"),
+    ]
+    shown = [(label, c[key]) for label, key in axes if c.get(key) is not None]
+    if shown:
+        print("  axes")
+        for label, value in shown:
+            print(f"    {label:<14} {value:.4f}")
+    if c.get("reference_e2e") is not None:
+        print(f"  reference {c['reference_e2e']:.6f}")
+
+    body = sub.get("recipe")
+    if args.recipe and body:
+        print("\n  recipe")
+        for line in _json.dumps(_json.loads(body), indent=2, sort_keys=True).splitlines():
+            print(f"    {line}")
+    return 0
+
+
 def _cmd_status(args: argparse.Namespace) -> int:
     """What this hotkey has submitted in the current run."""
     import httpx
@@ -457,6 +576,31 @@ def build_parser() -> argparse.ArgumentParser:
     _add_api(status)
     _add_wallet(status)
     status.set_defaults(func=_cmd_status)
+
+    result = subparsers.add_parser(
+        "result",
+        help="One hotkey's recipe and scores for one run (published runs only).",
+    )
+    result.add_argument("--run", type=int, required=True, help="The run submitted in.")
+    result.add_argument(
+        "--uid",
+        type=int,
+        default=None,
+        help="Resolve the hotkey from this uid on the metagraph. A uid is a slot "
+        "and is reissued, so it is resolved as of now and printed.",
+    )
+    result.add_argument(
+        "--hotkey", default="", help="An ss58 address. Defaults to the wallet's hotkey."
+    )
+    result.add_argument("--netuid", type=int, default=int(os.environ.get("CAPSUB_NETUID", "103")))
+    result.add_argument(
+        "--subtensor.network", dest="network", default=os.environ.get("CAPSUB_NETWORK", "finney")
+    )
+    result.add_argument("--recipe", action="store_true", help="Include the recipe body.")
+    result.add_argument("--json", action="store_true", help="Print the raw payload.")
+    _add_api(result)
+    _add_wallet(result)
+    result.set_defaults(func=_cmd_result)
 
     submit = subparsers.add_parser(
         "submit", help="Sign and send a recipe. Without --confirm, sends nothing."

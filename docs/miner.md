@@ -417,13 +417,50 @@ run that pays it opens — two runs after the one you submitted in:
 
 | route | what it gives |
 |---|---|
+| `GET /miner/{hotkey}/run/{id}` | **your** recipe and scores for one run |
 | `GET /run/{id}` | what was submitted, and by whom |
 | `GET /run/{id}/results` | every score, gate verdict and rank |
 | `GET /run/{id}/weights` | what the run pays |
 | `GET /run/{id}/instances/{hotkey}` | what each package was asked and answered |
 
-Ask before then and they answer `released: false` with the run they open in,
-rather than an error.
+The `/run/{id}` routes answer `released: false` with the run they open in,
+rather than an error. `/miner/{hotkey}/run/{id}` answers `404` with the same
+information, because there it is your own record you are asking for and
+"nothing yet" and "not published yet" are worth telling apart.
+
+### Reading back one run
+
+`capcomp result` fetches a single run's record for a single hotkey, so you do
+not have to pull forty rows and find yourself in them:
+
+```bash
+capcomp result --run 419 --uid 72
+capcomp result --run 419 --hotkey <ss58> --recipe    # include the body
+capcomp result --run 419 --json                      # the raw payload
+```
+
+```
+run 419: measured in 420, paid in 421
+  hotkey    5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+  uid       72
+  recipe    sha256:db26befe…
+  attempts  1 used
+  verdict   held
+  grade     0.264217
+  axes
+    end-to-end     0.1474
+    stage balance  0.0437
+    ...
+```
+
+One run at a time, and the run named explicitly. A uid is a *slot* — it is
+reissued when a miner deregisters — so `--uid` is resolved against the
+metagraph as it stands now and the hotkey it resolved to is printed. If you are
+asking about an older run, pass `--hotkey` instead: that is the identity the
+record is filed under.
+
+Runs that are not published yet exit non-zero and say when they will be, so a
+script polling for a score stops rather than treating "embargoed" as "zero".
 
 The full evaluation report is published at `/reports` — every gate verdict, every per-axis comparison, the paired statistics, and the reason for the decision.
 
