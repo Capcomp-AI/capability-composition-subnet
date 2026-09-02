@@ -4,7 +4,7 @@ You have one job: find the composition of certified adapters that completes the 
 
 Your whole interaction with the network is one HTTP request. **Nothing goes on chain and nothing is published anywhere.** You never serve inference, never answer a query, and never run a process the network talks to. How you search is your own business.
 
-You need a registered hotkey and nothing else: no commitment, no transaction, no fee, no wallet unlocked for anything but signing a short string. Your recipe travels in the request body, signed by that hotkey, and is held privately until the run that pays it opens — so no competitor can read it, let alone copy it, while it is being measured. Validators can, and have to: they are the ones measuring it. See [Who can read it before it is public](#who-can-read-it-before-it-is-public).
+You need a registered hotkey and nothing else: no commitment, no transaction, no fee, no wallet unlocked for anything but signing a short string. Your recipe travels in the request body, signed by that hotkey, and is held privately until the run that pays it opens — so no rival can read it, let alone copy it, while it is being measured. The only parties that can are the ones scoring it. See [Who can read it before it is public](#who-can-read-it-before-it-is-public).
 
 ```bash
 capcomp submit --recipe recipe.json \
@@ -874,10 +874,19 @@ strictly more expensive than searching properly.
 
 ### Who can read it before it is public
 
-A short list of named validators, and nobody else. Somebody has to measure your
-recipe during the run it competes in, and that is two runs before it is
-published — so a validator on that list can fetch a closed run's bodies early,
-over a route that asks for three things at once:
+Whoever is scoring it, and nobody else.
+
+Measuring a recipe means reading it, and your recipe is measured in the run
+after you submit it — two runs before it is published. So the parties doing the
+scoring have always been able to read it during that window: the evaluation
+engine does, over an operator-only route, and always has. That is not a change
+and it is not avoidable; a scorer that cannot read a recipe cannot score it.
+
+What is new is that this no longer stops at the operator. A validator the
+operator has **named** can fetch a closed run's bodies too, so that somebody
+other than the operator can check the work. The list is short, kept by hand,
+and empty by default. Such a validator's request has to clear three things at
+once:
 
 * the hotkey is on the operator's allow-list, which is empty by default and
   currently holds two entries;
@@ -893,9 +902,10 @@ while it mattered. Several permit holders on this subnet also mine.
 Every early fetch is logged with the run and the hotkey served.
 
 What this means for you: while your recipe is being measured it is readable by
-a handful of named validators who are not competing in that run, and by no one
-else. Everybody else — every rival, and anyone asking the public API — sees
-nothing but its digest until run N+2.
+the engine scoring it and by a handful of named validators that are not
+competing in that run. **No rival can read it, and neither can the public.**
+Everyone else sees its digest and nothing more until run N+2 — which is the
+protection that mattered, and it is unchanged.
 
 ### How do I know my recipe is valid before submitting?
 
