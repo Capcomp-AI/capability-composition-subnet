@@ -163,9 +163,15 @@ invalidates every manifest published after it, not only its own digest.
 ### Checking a run
 
 ```bash
-pip install capability-subnet
-python -m capability_subnet.audit.cli bundle --run <N>
+git clone <repository-url> && cd capability-composition-subnet
+pip install -e .
+
+capability-audit bundle --run <N>
 ```
+
+No GPU, no credential, no operator endpoint, and no registered hotkey: the
+command reads the chain and fetches the archive, both of which are public. It
+exits non-zero if any of the four checks fails, so it can be run from a script.
 
 Four things must agree: every file matches its digest in the manifest, the root
 recomputed from the manifest matches the root stored in it, the signature over

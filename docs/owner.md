@@ -28,9 +28,12 @@ The engine runs runs, serves candidates, and publishes signed reports and a sign
 Nothing on the network depends on it. Validators measure for themselves, so no weight anyone sets comes from here — which is the point, and also why this is optional. Run it if you want a reference set of published numbers to compare validators against, a console for the subnet, or a disclosure feed that third parties can replay without a GPU. It needs its own 32 GB card and the same serving toolchain a validator needs.
 
 ```bash
-capability-backend --config backend.yaml
-capability-backend-api --config backend.yaml
+python -m capability_engine.service --config backend.yaml   # control loop
+python -m capability_engine.api     --config backend.yaml   # read-only API
 ```
+
+The engine ships in `lora-merger-engine`, not in this package; see
+[engine operations](https://github.com/Capcomp-AI/lora-merger-engine/blob/main/docs/operations.md).
 
 If you run it, it needs a signing hotkey. Reports and weight vectors published unsigned are refused by any validator enforcing an allow-list, which means the engine runs, publishes, and moves no emission at all.
 

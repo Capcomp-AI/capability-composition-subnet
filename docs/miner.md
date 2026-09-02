@@ -908,11 +908,14 @@ carries the six axes and the three grade terms, so anyone can recompute your
 grade and your rank from the published numbers.
 
 ```bash
-# your run's record
-https://huggingface.co/datasets/capcomp/sn103-run-<N>
+# your scores and rank, from the submission API
+capcomp result --run <N> --uid <your uid>
 
-# your scores, by hotkey
-python -m capability_subnet.audit.cli bundle --run <N>
+# the whole run's published record, checked against the chain
+capability-audit bundle --run <N>
+
+# or read it directly
+https://huggingface.co/datasets/capcomp/sn103-run-<N>
 ```
 
 See [The public archive](architecture.md#the-public-archive) for how a run is
