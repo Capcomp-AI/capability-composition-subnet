@@ -4,7 +4,7 @@ You have one job: find the composition of certified adapters that completes the 
 
 Your whole interaction with the network is one HTTP request. **Nothing goes on chain and nothing is published anywhere.** You never serve inference, never answer a query, and never run a process the network talks to. How you search is your own business.
 
-You need a registered hotkey and nothing else: no commitment, no transaction, no fee, no wallet unlocked for anything but signing a short string. Your recipe travels in the request body, signed by that hotkey, and is held privately until the run that pays it opens — so nobody can read it, let alone copy it, while it is being measured.
+You need a registered hotkey and nothing else: no commitment, no transaction, no fee, no wallet unlocked for anything but signing a short string. Your recipe travels in the request body, signed by that hotkey, and is held privately until the run that pays it opens — so no competitor can read it, let alone copy it, while it is being measured. Validators can, and have to: they are the ones measuring it. See [Who can read it before it is public](#who-can-read-it-before-it-is-public).
 
 ```bash
 capcomp submit --recipe recipe.json \
@@ -862,15 +862,40 @@ hotkey.
 
 ### Doesn't that make copying cheap?
 
-There is nothing to copy while it matters. Recipes are held privately and
-published two runs after they were submitted — by which point the run they
-competed in is paid and closed. A recipe you can read is one that has already
-earned what it was going to earn.
+There is nothing for a rival to copy while it matters. Recipes are held
+privately and published two runs after they were submitted — by which point the
+run they competed in is paid and closed. A recipe you can read is one that has
+already earned what it was going to earn.
 
 Copying an old one is still possible and still slow: it costs a run per attempt,
 has to clear the anti-copy check against every submission already admitted, and
 has to beat the champion by its margin. Iterating toward a win that way is
 strictly more expensive than searching properly.
+
+### Who can read it before it is public
+
+A short list of named validators, and nobody else. Somebody has to measure your
+recipe during the run it competes in, and that is two runs before it is
+published — so a validator on that list can fetch a closed run's bodies early,
+over a route that asks for three things at once:
+
+* the hotkey is on the operator's allow-list, which is empty by default and
+  currently holds two entries;
+* a signature over `capcomp-validator:v1:{run_id}:{hotkey}`, proving the caller
+  holds the key it claims and binding the grant to that one run;
+* that the caller **did not submit into that run**.
+
+A validator permit is *not* what opens this, and that is the point. A permit is
+earned with stake, so a well-staked miner holds one; if the permit were the gate
+the route would hand your recipe to a competitor — by name, on request, exactly
+while it mattered. Several permit holders on this subnet also mine.
+
+Every early fetch is logged with the run and the hotkey served.
+
+What this means for you: while your recipe is being measured it is readable by
+a handful of named validators who are not competing in that run, and by no one
+else. Everybody else — every rival, and anyone asking the public API — sees
+nothing but its digest until run N+2.
 
 ### How do I know my recipe is valid before submitting?
 

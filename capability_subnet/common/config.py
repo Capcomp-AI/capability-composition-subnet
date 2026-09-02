@@ -212,6 +212,20 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     parser.add_argument(
+        "--api.url",
+        dest="api_url",
+        type=str,
+        default=_env("CAPSUB_API_URL", "https://api.capcomp.ai"),
+        help=(
+            "Submission service. local mode reads the run's field from here: "
+            "miners submit to it rather than to the chain, so a validator that "
+            "reads only commitments measures an empty subnet. Bodies are served "
+            "early only to hotkeys the operator has named and that did not "
+            "submit into the run, "
+            "and every one is checked against its digest on arrival."
+        ),
+    )
+    parser.add_argument(
         "--neuron.trusted_signers",
         dest="trusted_signers",
         type=str,

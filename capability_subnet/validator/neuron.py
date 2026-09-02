@@ -42,7 +42,6 @@ from capability_subnet.common.chain import (
     MetagraphView,
     current_block,
     fetch_metagraph,
-    measured_in_run,
     run_id_for_block,
     run_opens_block,
     submit_weights,
@@ -325,11 +324,19 @@ class ValidatorNeuron:
     def _step_own(self, block: int) -> None:
         """Measure this run here, and set weights from what was measured.
 
-        The operator-free path. Nothing is fetched from anybody: the run comes
-        from the chain's own block hash, the candidates come from commitments,
-        and the numbers come from this host's GPU.
+        The path where the numbers are this validator's own. The run comes
+        from the chain's own block hash and the numbers come from this host's
+        GPU; the field is fetched, because miners submit to the submission
+        service rather than to the chain, and every recipe in it is checked
+        against the digest it was stored under before it is measured.
+
+        Fetching the field is not the same as taking somebody's word for a
+        score. What arrives is what the miners wrote, hash-checked; what it is
+        worth is decided here.
         """
-        from capability_subnet.common.chain import block_beacon, read_commitments
+        from capability_subnet.common.chain import block_beacon
+        from capability_subnet.common.schemas import Recipe
+        from capability_subnet.validator.field import FieldError, field_for_run
         from capability_subnet.validator.run import Candidate, evaluate_run
 
         run_blocks = C.DEFAULT_RUN_BLOCKS
@@ -345,21 +352,37 @@ class ValidatorNeuron:
             self._burn(block, reason=f"no beacon for block {opened_at}: {exc}")
             return
 
-        eligible = []
-        for commitment in read_commitments(self.subtensor, self.config.netuid):
-            # Only what stood at the moment the run opened. A commitment made
-            # after the beacon existed was made by someone who could already see
-            # the instances.
-            if commitment.block > opened_at:
-                continue
-            # And only what was committed in the run that just closed.
-            if not measured_in_run(commitment.block, run_id, run_blocks):
-                continue
-            eligible.append(commitment)
+        try:
+            fetched = field_for_run(
+                getattr(self.config, "api_url", "") or "https://api.capcomp.ai",
+                run_id,
+                self.wallet,
+                run_blocks=run_blocks,
+            )
+        except FieldError as exc:
+            # An empty field and an unreachable service produce the same weight
+            # vector — everything burns — and they are not the same event. Say
+            # which one this was, and burn with the reason attached.
+            log.error("run %s: could not read the field: %s", run_id, exc)
+            self._burn(block, reason=f"could not read run {run_id}'s field: {exc}")
+            return
+
+        # field_for_run has already applied the run-membership and settling
+        # rules. This is the separate claim: nothing measured here was written
+        # after the draw existed. It should be implied by the above, and it is
+        # cheap enough to check rather than assume.
+        eligible = [e for e in fetched if e.first_block <= opened_at]
+        if len(eligible) != len(fetched):
+            log.warning(
+                "run %s: %d submission(s) postdate the beacon at block %d; not measured",
+                run_id,
+                len(fetched) - len(eligible),
+                opened_at,
+            )
 
         limit = int(getattr(self.config, "max_candidates_per_run", 0) or 0)
         if 0 < limit < len(eligible):
-            # read_commitments returns commit order, so this keeps the earliest
+            # The service returns submission order, so this keeps the earliest
             # and says so. A silent truncation reads as "measured everything".
             log.warning(
                 "%d candidates eligible, measuring the first %d by commit order; "
@@ -370,25 +393,35 @@ class ValidatorNeuron:
             )
             eligible = eligible[:limit]
 
-        # Nothing reaches this list any more, and the run burns because of it.
-        #
-        # This path took its field from the chain: a commitment named a digest
-        # and a pointer, and the recipe was fetched from that pointer. Miners
-        # submit to the API instead, so no commitment decodes into a submission
-        # and read_commitments yields nothing however full the chain looks.
-        #
-        # Said out loud rather than left to produce an empty field silently. A
-        # validator running this would otherwise burn every run and look like it
-        # had measured an empty subnet, which is the one thing that must not be
-        # indistinguishable from a subnet nobody entered.
         candidates: list[Candidate] = []
-        if not eligible:
+        for entry in eligible:
+            try:
+                recipe = Recipe.model_validate_json(entry.recipe_raw)
+            except Exception as exc:
+                # One unparseable recipe is that miner's problem, not the run's.
+                # Dropping it is right; dropping it silently is not, because the
+                # miner then reads an unpaid run as a scoring decision.
+                log.warning(
+                    "run %s: %s… submitted a recipe that does not parse (%s); not measured",
+                    run_id,
+                    entry.hotkey[:12],
+                    exc,
+                )
+                continue
+            candidates.append(
+                Candidate(
+                    uid=entry.uid,
+                    hotkey=entry.hotkey,
+                    recipe=recipe,
+                    first_block=entry.first_block,
+                )
+            )
+
+        if not candidates:
             log.warning(
-                "run %s: no candidates. This validator measures the field it reads "
-                "from the chain, and submissions no longer go there — they go to "
-                "the submission service. Until this path reads from it, every run "
-                "here burns.",
+                "run %s: no candidates. The field came back empty from %s, so this run burns.",
                 run_id,
+                getattr(self.config, "api_url", ""),
             )
 
         reigning = self._reigning_grade(run_id)
