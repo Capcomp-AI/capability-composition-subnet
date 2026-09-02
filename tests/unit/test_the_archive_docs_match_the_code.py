@@ -51,14 +51,34 @@ def test_the_commitment_format_matches_the_encoder(doc):
 
 @pytest.mark.parametrize("doc", ARCHIVE_DOCS, ids=lambda p: p.name)
 def test_no_document_promises_a_file_the_bundle_omits(doc):
-    """Traces are the one a reader would most reasonably expect to find."""
+    """A reader who fetches an archive must find what the table said was in it.
+
+    Traces are published as ``instances.csv.gz``; the CSV of scores and the
+    separate weight vector are not, because everything a grade depends on is in
+    scores.json. Naming an omitted file sends someone looking for it.
+    """
     text = doc.read_text()
-    for absent in ("instances.csv", "candidates.csv", "weights.json"):
+    if "sn103-run" not in text:
+        return
+    for absent in ("candidates.csv", "weights.json"):
         for line in text.splitlines():
-            if absent in line and "sn103-run" in text:
+            if absent in line:
                 assert "not" in line.lower() or "absent" in line.lower(), (
                     f"{doc.name} mentions {absent} without saying it is not published: {line}"
                 )
+
+
+@pytest.mark.parametrize("doc", ARCHIVE_DOCS, ids=lambda p: p.name)
+def test_every_doc_names_the_traces_the_bundle_carries(doc):
+    """The reverse failure: a bundle carrying traces no document mentions.
+
+    They are the part that lets a score be checked against work rather than
+    against its own arithmetic, so a reader who never learns they are there
+    audits less than they could.
+    """
+    assert "instances.csv.gz" in doc.read_text(), (
+        f"{doc.name} does not tell a reader the traces are published"
+    )
 
 
 def test_the_audit_command_the_docs_name_exists():

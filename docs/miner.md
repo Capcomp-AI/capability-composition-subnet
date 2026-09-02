@@ -907,6 +907,16 @@ a record nobody can quietly revise, including the operator: `scores.json`
 carries the six axes and the three grade terms, so anyone can recompute your
 grade and your rank from the published numbers.
 
+`instances.csv.gz` in the same repository is the part worth reading if a score
+surprised you. It holds every instance your candidate faced: the prompt, the
+answer it gave, the per-stage verdict, and the tokens and seconds it spent. A
+low end-to-end score becomes a list of specific questions it got wrong, which
+is the difference between knowing you scored badly and knowing why.
+
+You can regenerate the questions independently: instances are drawn from
+`sha256("open|<run>|<label>|<beacon>")`, with the beacon published in the run's
+manifest, so nothing about the draw rests on the operator's word.
+
 ```bash
 # your scores and rank, from the submission API
 capcomp result --run <N> --uid <your uid>

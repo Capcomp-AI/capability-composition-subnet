@@ -127,12 +127,14 @@ by constructing the name rather than by consulting any list.
 |---|---|
 | `manifest.json` | run numbers, beacon, base reference, the previous run and its root, every file with its digest, the root digest, and the signature over it |
 | `scores.json` | per candidate: the six axes, the three grade terms, the grade, rank and weight |
+| `instances.csv.gz` | every instance: the prompt, the reply, the per-stage verdict, tokens and timing |
 | `recipes/` | every recipe as submitted, one file per hotkey |
 | `README.md` | what the repository is and how to check it, covered by the same digest |
 
-Nothing else is published. Timings, token counts, devices and artifact sizes do
-not enter the grade, so they are not there; every field in the archive is one
-the result depends on.
+Per-candidate fields are limited to what the published formula consumes;
+timings, devices and artifact sizes do not enter the grade and are not carried
+there. The traces are the exception and carry the full per-instance record,
+because checking a score against the work needs the work.
 
 ### Reading it from the chain
 
@@ -188,18 +190,22 @@ That a record has not changed since its commitment landed in a block, and that
 the published grades follow from the published scores under the published
 formula — both lines recompute from `scores.json` alone.
 
-It does **not** establish that the scores are correct. Confirming that means
-measuring the field independently, which is what a validator running
-`--neuron.mode local` does, and what the published adapter pool exists to make
-possible.
+It does **not** establish that the replies came from the merged adapter rather
+than from somewhere else. Confirming that means measuring the field
+independently, which is what a validator running `--neuron.mode local` does,
+and what the published adapter pool exists to make possible.
 
-### Why traces are absent
+### Regenerating the questions
 
-Per-instance records carry the prompt, the expected answer and the seed for
-every hidden instance. Publishing them would disclose the evaluation set
-together with its answers. The draw is represented by its beacon, which is the
-block hash the instances derive from, so a validator can regenerate the draw
-and compare rather than being handed it.
+Instances are drawn by `draw_run_open`, keyed on
+`sha256("open|<run>|<label>|<beacon>")` — no secret material. The beacon in
+each manifest therefore determines the entire instance set, so you can
+regenerate every prompt and expected answer yourself and check them against the
+published traces rather than trusting them.
+
+That is also why publishing the traces discloses nothing: the questions were
+already derivable from the beacon. What the traces add is the replies the
+engine recorded, which is the one part a reader cannot reconstruct.
 
 ---
 
