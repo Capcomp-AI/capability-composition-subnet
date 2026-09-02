@@ -71,7 +71,15 @@ CHECKS = [
         "the only reference is the base model",
         r"single_adapter_rotation` \| `|best single adapter, the standard merges",
     ),
-    ("peak VRAM is neither gated nor scored", r"peak_vram|peak-VRAM gate"),
+    # The lookbehind is the point: a sentence saying there is *no* peak-VRAM
+    # gate is the documentation agreeing with the constant, and flagging it made
+    # this check fail on a correct doc. HISTORICAL cannot cover it — that is
+    # deliberately past-tense only, and widening it to catch present-tense
+    # denials would hide sentences this suite exists to find.
+    (
+        "peak VRAM is neither gated nor scored",
+        r"peak_vram|(?<!no )peak-VRAM gate",
+    ),
     (
         f"a run is {C.DEFAULT_RUN_BLOCKS} blocks, one day",
         r"run_blocks:? ?`?21600|~?72 ?h(ours|-hour)?\b|3-day run|three-day run",
