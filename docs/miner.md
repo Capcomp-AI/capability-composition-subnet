@@ -207,7 +207,7 @@ pip install -e ".[miner]"
 Everything you are judged on is published. None of it is secret except the specific hidden instances.
 
 ```bash
-# The frozen certified adapter pool
+# The frozen certified adapter pool — ids, capabilities, distractors
 capcomp pool
 
 # The complete contract: bounds, gates, scoring weights, dethrone rule
@@ -217,6 +217,15 @@ capcomp contract
 capcomp contract --section champion_challenge
 capcomp contract --section hard_gates
 ```
+
+The adapter weights are published at
+[`capcomp/sn103-adapter-pool`](https://huggingface.co/capcomp/sn103-adapter-pool),
+so you can build and evaluate against the same tensors the engine merges.
+`pool.json` there carries a sha256 for every adapter; an adapter whose digest
+does not match is not the one being merged and a recipe built on it will not
+reproduce. A few adapters whose source repositories state no licence are listed
+with their digests and their original location rather than mirrored — fetch
+those from the source and check them against the same digests.
 
 The pool contains capability adapters **and controlled distractors**. The distractors are selectable on purpose: recognising that a plausible-looking adapter actively hurts is part of the composition problem. `capcomp pool` marks them, and `capcomp validate` warns when you select one.
 
@@ -456,7 +465,7 @@ capcomp result --run 419 --json                      # the raw payload
 ```
 run 419: measured in 420, paid in 421
   hotkey    5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
-  uid       72
+  uid       7
   recipe    sha256:db26befe…
   attempts  1 used
   verdict   held
@@ -883,6 +892,31 @@ is measured a run later than whatever it copied, it cannot beat the champion by
 reproducing the champion, and the reference it has to clear moves upward as the
 field improves. Copying an old recipe buys you an old result, in a run that has
 moved on. Searching is cheaper than chasing.
+
+### Where your recipe ends up
+
+Two runs after you submit, your recipe is published — the same bytes you signed
+— in that run's public archive, at `capcomp/sn103-run-<N>` on HuggingFace,
+alongside the scores it earned. The archive's digest is committed on the
+Bittensor chain, so what is published cannot be altered afterwards without the
+change being visible to anyone who checks.
+
+That cuts both ways and is meant to. Your recipe becomes readable by everyone
+once the run that paid it has closed. In exchange, the score attached to it is
+a record nobody can quietly revise, including the operator: `scores.json`
+carries the six axes and the three grade terms, so anyone can recompute your
+grade and your rank from the published numbers.
+
+```bash
+# your run's record
+https://huggingface.co/datasets/capcomp/sn103-run-<N>
+
+# your scores, by hotkey
+python -m capability_subnet.audit.cli bundle --run <N>
+```
+
+See [The public archive](architecture.md#the-public-archive) for how a run is
+reached from the chain and what the digests do and do not prove.
 
 ### Who can read it before it is public
 

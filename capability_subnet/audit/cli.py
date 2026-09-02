@@ -230,6 +230,44 @@ def _cmd_replay(args: argparse.Namespace) -> int:
     return code if code else (0 if outcome.ok else 1)
 
 
+def _cmd_bundle(args: argparse.Namespace) -> int:
+    """Verify a published run archive against the chain commitment."""
+    import json as _json
+
+    from capability_subnet.audit.bundle import AuditError, audit
+
+    try:
+        result = audit(args.run, netuid=args.netuid, network=args.network)
+    except AuditError as exc:
+        print(f"FAILED: {exc}", file=sys.stderr)
+        return 1
+
+    if args.json:
+        print(_json.dumps(result, indent=2))
+        return 0
+
+    print(f"  netuid {result['netuid']}, commitment in block {result['commitment_block']}")
+    print(f"  the chain names run {result['chain_names_run']} as the newest archived\n")
+    for step in result["steps"]:
+        arrow = "  -> " if step["run"] != result["chain_names_run"] else "     "
+        print(f"{arrow}run {step['run']}")
+        print(f"       root      {step['root']}")
+        print(f"       signed by {step['signer']}")
+        print(
+            f"       {step['recipes']} recipes, {step['grades_recomputed']}"
+            f"/{step['graded']} grades recompute"
+        )
+        if step["grades_recomputed"] != step["graded"]:
+            print("       WARNING: a published grade does not follow from its axes")
+    walked = result["walked"]
+    print(
+        f"\n  verified run {result['audited_run']}"
+        + (f" by walking back {walked - 1} run(s) from the chain" if walked > 1 else "")
+    )
+    print("  file digests, manifest root, signature and chain digest all agree")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="capability-audit",
@@ -271,6 +309,21 @@ def build_parser() -> argparse.ArgumentParser:
     recipe.add_argument("--pool", default="pool")
     recipe.add_argument("--expect", default=None, help="Artifact digest the report claims.")
     recipe.set_defaults(func=_cmd_recipe)
+
+    bundle = subparsers.add_parser(
+        "bundle",
+        help="Verify a published run archive against the chain. Needs no GPU, "
+        "no credential and no operator endpoint.",
+    )
+    bundle.add_argument(
+        "--run",
+        type=int,
+        default=None,
+        help="which run to verify; defaults to the newest the chain names",
+    )
+    bundle.add_argument("--netuid", type=int, default=103)
+    bundle.add_argument("--network", default="finney")
+    bundle.set_defaults(func=_cmd_bundle)
 
     replay = subparsers.add_parser(
         "replay",

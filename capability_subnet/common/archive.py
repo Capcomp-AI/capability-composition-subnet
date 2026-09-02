@@ -3,14 +3,12 @@
 A bundle's root digest is what makes the archive checkable. Writing that root
 on chain is what makes it checkable *against us*: the chain timestamps the
 claim in a block nobody can rewrite, so a bundle that changes after the fact
-stops matching a value we can no longer edit.
+stops matching a value fixed in a block.
 
-Deliberately a different payload kind from the miner commitment in
-:mod:`capability_subnet.common.commitments`. That one is closed — recipes go to
-the API and ``validate_recipe_uri`` refuses every pointer — and reusing its
-magic would make an archive commitment decode as a submission in every scanner
-that already reads the chain. A distinct magic means those scanners skip these,
-which is what they should do.
+A different payload kind from the miner commitment in
+:mod:`capability_subnet.common.commitments`, so that a scanner reading the
+chain for submissions skips these and a reader of these skips submissions.
+Both directions are asserted by tests.
 
 **What is committed is the digest, not the location.** A repository reference
 would be the wrong thing to bind: repositories are mutable, and one that still
@@ -114,3 +112,139 @@ def looks_like_archive(payload: str) -> bool:
 def signing_message(run_id: int, root_sha256: str) -> bytes:
     """What the operator signs over a bundle root. Mirrors ops.bundle."""
     return f"capcomp-bundle:v1:{run_id}:{root_sha256}".encode()
+
+
+# -- verifying a published bundle -------------------------------------------
+#
+# These live here, in the package a third party installs, rather than beside
+# the builder in the operator's repository. A verifier that had to be obtained
+# from the party being verified would be worth very little, and one implemented
+# twice would eventually disagree with itself about what a digest covers.
+
+SCHEMA_VERSION = 1
+
+#: Files a repository host adds on its own. Not part of the record, and not
+#: cause to report tampering — a check that fails on the first honest fetch
+#: teaches people to ignore it.
+HOST_FILES = frozenset({".gitattributes", ".gitignore", ".huggingface.yaml"})
+
+
+def is_host_file(relative: str) -> bool:
+    import pathlib
+
+    return relative in HOST_FILES or any(
+        part in (".cache", ".git") for part in pathlib.Path(relative).parts
+    )
+
+
+def canonical_bytes(document) -> bytes:
+    """The one serialisation any digest here is taken over."""
+    import json
+
+    return json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+
+
+def sha256_bytes(data: bytes) -> str:
+    import hashlib
+
+    return "sha256:" + hashlib.sha256(data).hexdigest()
+
+
+def sha256_file(path) -> str:
+    import hashlib
+
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return "sha256:" + digest.hexdigest()
+
+
+#: The manifest fields the root digest covers, in the order they are declared.
+#: Listed explicitly so that a field added to a manifest by a newer publisher
+#: changes the root rather than being silently ignored by an older verifier.
+ROOT_FIELDS = (
+    "schema_version",
+    "submitted_run",
+    "measured_in_run",
+    "paid_in_run",
+    "beacon",
+    "reference_e2e",
+    "backfilled",
+    "previous_run",
+    "previous_root",
+    "files",
+)
+
+
+def manifest_root(document: dict) -> str:
+    """Recompute a manifest's root from its own contents.
+
+    Recomputed, never read from ``document["root"]``. A bundle edited together
+    with its own manifest is internally consistent and passes every per-file
+    check; recomputation is what catches it.
+    """
+    missing = [f for f in ROOT_FIELDS if f not in document]
+    if missing:
+        raise ArchiveCommitmentError(
+            f"manifest is missing {', '.join(missing)}; it was produced by a "
+            f"different schema than this verifier understands"
+        )
+    return sha256_bytes(canonical_bytes({f: document[f] for f in ROOT_FIELDS}))
+
+
+def verify_bundle(directory, *, expected_root: str = "") -> tuple[bool, list[str]]:
+    """Check a fetched bundle against itself, and optionally against a digest.
+
+    ``expected_root`` is the root a caller obtained elsewhere — from the chain,
+    or from the ``previous_root`` of the run after this one. Supplying it is
+    what turns "this bundle is internally consistent" into "this bundle is the
+    one that was published".
+    """
+    import json
+    import pathlib
+
+    directory = pathlib.Path(directory)
+    problems: list[str] = []
+
+    manifest_path = directory / "manifest.json"
+    if not manifest_path.exists():
+        return False, [f"no manifest.json in {directory}"]
+    document = json.loads(manifest_path.read_text())
+
+    listed = {entry["path"]: entry for entry in document.get("files", [])}
+    on_disk = {
+        str(p.relative_to(directory))
+        for p in directory.rglob("*")
+        if p.is_file()
+        and p.name != "manifest.json"
+        and not is_host_file(str(p.relative_to(directory)))
+    }
+    for extra in sorted(on_disk - set(listed)):
+        problems.append(f"{extra} is present but not in the manifest")
+    for absent in sorted(set(listed) - on_disk):
+        problems.append(f"{absent} is in the manifest but not present")
+
+    for name, entry in sorted(listed.items()):
+        path = directory / name
+        if not path.exists():
+            continue
+        actual = sha256_file(path)
+        if actual != entry["sha256"]:
+            problems.append(f"{name} hashes to {actual}, manifest says {entry['sha256']}")
+
+    try:
+        recomputed = manifest_root(document)
+    except ArchiveCommitmentError as exc:
+        return False, [*problems, str(exc)]
+    if recomputed != document.get("root"):
+        problems.append(
+            f"root is recorded as {document.get('root')} but recomputes to {recomputed}"
+        )
+    if expected_root and recomputed != expected_root:
+        problems.append(
+            f"root {recomputed} does not match the digest this bundle was "
+            f"reached by ({expected_root})"
+        )
+
+    return not problems, problems

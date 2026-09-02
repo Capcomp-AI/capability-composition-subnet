@@ -204,6 +204,99 @@ The base reference cannot be terminated and **earns no emission**. Under the str
 
 ---
 
+## The public archive
+
+Every run's record is published to HuggingFace and its digest committed on the
+Bittensor chain, so the results can be checked without trusting the party that
+produced them.
+
+### Where it is
+
+| | |
+|---|---|
+| a run's record | `capcomp/sn103-run-<N>` (dataset) |
+| the adapter pool | `capcomp/sn103-adapter-pool` (model) |
+| the digest | subnet-owner commitment on netuid 103 |
+
+Repository names are derived from the run number, so a run's archive is found
+by constructing the name rather than by consulting any list.
+
+### What a run's repository holds
+
+| file | |
+|---|---|
+| `manifest.json` | run numbers, beacon, base reference, the previous run and its root, every file with its digest, the root digest, and the signature over it |
+| `scores.json` | per candidate: the six axes, the three grade terms, the grade, rank and weight |
+| `recipes/` | every recipe as submitted, one file per hotkey |
+| `README.md` | what the repository is and how to check it, covered by the same digest |
+
+Nothing else is published. Timings, token counts, devices and artifact sizes do
+not enter the grade, so they are not there; every field in the archive is one
+the result depends on.
+
+### Reading it from the chain
+
+The commitment decodes to `capsub-a1|<run>|<root>|<repo>@<revision>`.
+
+```python
+import bittensor as bt
+from capability_subnet.common import archive
+
+commitment = bt.subtensor(network="finney").subnets.metagraph(netuid=103).commitments[0]
+published = archive.decode(commitment.value)
+print(published.run_id, published.root_sha256, published.location)
+```
+
+The Commitments pallet holds one value per hotkey and each write replaces the
+last, so the chain names the newest run. Earlier runs are reached by following
+`previous_run` and `previous_root` in each manifest:
+
+```
+chain  ->  newest run's root
+           manifest.previous_root  ->  the run before it
+                                       manifest.previous_root  ->  ...
+```
+
+Because each root covers the previous root, altering an archived run
+invalidates every manifest published after it, not only its own digest.
+
+### Checking a run
+
+```bash
+pip install capability-subnet
+python -m capability_subnet.audit.cli bundle --run <N>
+```
+
+Four things must agree: every file matches its digest in the manifest, the root
+recomputed from the manifest matches the root stored in it, the signature over
+that root verifies against the subnet-owner hotkey, and the root matches the
+commitment on chain. The root is recomputed rather than read, because a bundle
+edited together with its own manifest is internally consistent.
+
+A bundle carries no build timestamp, so rebuilding it from the same inputs
+gives the identical root. The timestamp is the block its commitment landed in.
+
+### What the archive establishes
+
+That a record has not changed since its commitment landed in a block, and that
+the published grades follow from the published scores under the published
+formula — both lines recompute from `scores.json` alone.
+
+It does **not** establish that the scores are correct. Confirming that means
+measuring the field independently, which is what a validator running
+`--neuron.mode local` does, and what the published adapter pool exists to make
+possible.
+
+### Why traces are absent
+
+Per-instance records carry the prompt, the expected answer and the seed for
+every hidden instance. Publishing them would disclose the evaluation set
+together with its answers. The draw is represented by its beacon, which is the
+block hash the instances derive from, so a validator can regenerate the draw
+and compare rather than being handed it.
+
+---
+
 ## What the network trusts
 
 Nothing, in the sense that matters: no participant takes an *unverified* number from another participant. A local validator takes no numbers at all — it fetches the miners' recipes from the submission service, but a recipe is an input it hashes against the digest it was stored under, not a result it believes. An endpoint validator takes only signed reports it has checked against its own allow-list and spot-checked.
