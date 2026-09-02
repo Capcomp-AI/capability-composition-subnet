@@ -236,7 +236,11 @@ The draw holds no secret and commits to nothing, so there is nothing to reveal a
 
 Recipes are public — they have to be, or nobody could verify an evaluation. So the protocol makes copying *worthless* rather than impossible:
 
-- **Earliest commit wins**, checked on the recipe digest at admission and again on the reconstructed artifact digest. Two differently-worded recipes that build the same bytes are the same package.
+- **Earliest commit wins, within a window of `COPY_LOOKBACK_RUNS` (2) runs**, checked on the recipe digest at admission and again on the reconstructed artifact digest. Two differently-worded recipes that build the same bytes are the same package.
+
+  The window is the span in which a copy could take something. Submitted in N, measured in N+1, paid in N+2 — so an identical submission arriving inside two runs is riding a result its author has not been paid for yet, and is refused. Past that the original has been measured, paid and published, and a later identical submission takes nothing from it.
+
+  Stated plainly, because it is a real loosening: **a recipe revealed at N+2 may be re-filed by anyone from N+3 on.** The check is not a permanent claim over a recipe. What keeps copying a poor strategy is the next two points, not this one.
 - **One measurement per submission.** Copying costs a run per attempt, and there is nothing to copy until the run is paid.
 - **Defender advantage.** The throne is held by a margin, in both contracts: a challenger must beat the strongest reference — the incumbent included — by an absolute end-to-end margin, and a copy cannot beat the thing it copied by any margin. Ranking itself is by score alone and gives an earlier commitment no edge, so a copy can at most place ahead in the runner-up order on sampling noise; it can never take the crown.
 

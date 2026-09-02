@@ -149,6 +149,11 @@ Bodies are held privately until the run that pays them opens, two runs after
 the one submitted in. That is what makes copying pointless: by the time a
 recipe is readable, the run it competed in is closed and paid.
 
+The anti-copy check covers the same span from the other side — it compares a
+submission against everything admitted in the last `COPY_LOOKBACK_RUNS` (2)
+runs, so a duplicate arriving while the original is still unpaid is refused,
+and one arriving after the original has been paid and published is not.
+
 Miners do not write to the chain at all. That is a deliberate trade: the
 submission set is this operator's record rather than something a third party can
 rebuild from a public ledger. What it buys is a recipe nobody can copy before it

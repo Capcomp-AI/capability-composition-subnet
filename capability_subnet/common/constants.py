@@ -621,6 +621,28 @@ WEIGHT_LAG_RUNS: Final[int] = 1
 #: someone who waited.
 MIN_COMMITMENT_AGE_BLOCKS: Final[int] = 300
 
+#: How far back the anti-copy check looks, in runs.
+#:
+#: "Earliest commit wins" used to reach over the whole history: a submission was
+#: a copy if any identical one had ever been made. That is the strongest form of
+#: the rule and it never expires, which means a recipe submitted once is removed
+#: from the search space permanently — including for the miner who has to
+#: rediscover it independently, and including long after the run it competed in
+#: was paid and forgotten.
+#:
+#: The window is what the rule is actually for. A copy earns by riding a result
+#: its author has not yet been paid for, and that exposure lasts exactly as long
+#: as the pipeline: submitted in N, measured in N+1, paid in N+2. Two runs back
+#: covers it. Beyond that the original has been measured, paid and published,
+#: and a later identical submission takes nothing from it.
+#:
+#: This is a real loosening and worth stating plainly: a recipe revealed at N+2
+#: may be re-filed by anyone from N+3 on. What still makes copying a poor
+#: strategy is the rest of the design — a copy is measured a run later than what
+#: it copied, it cannot beat the champion's margin by reproducing the champion,
+#: and the reference it must clear moves as the field improves.
+COPY_LOOKBACK_RUNS: Final[int] = 2
+
 #: Hidden instances drawn per run for the canonical comparison.
 #:
 #: What this buys is a stable verdict rather than a possible one. Nothing

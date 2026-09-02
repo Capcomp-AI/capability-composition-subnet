@@ -102,8 +102,8 @@ have been measured.**
 
 The floor is what keeps copying expensive. Reading a published recipe, tweaking
 it and resubmitting costs a full run per attempt, against an anti-copy check
-that compares you to every submission already admitted and a champion whose
-margin you still have to clear.
+that compares you to everything admitted in the last two runs and a champion
+whose margin you still have to clear.
 
 So: validate locally, evaluate locally, and only then submit — a wasted
 attempt costs you a run.
@@ -867,10 +867,22 @@ privately and published two runs after they were submitted — by which point th
 run they competed in is paid and closed. A recipe you can read is one that has
 already earned what it was going to earn.
 
-Copying an old one is still possible and still slow: it costs a run per attempt,
-has to clear the anti-copy check against every submission already admitted, and
-has to beat the champion by its margin. Iterating toward a win that way is
-strictly more expensive than searching properly.
+Copying a *recent* one is refused outright. The anti-copy check compares your
+submission against everything admitted in the last **2 runs**, on both the
+recipe digest and the reconstructed artifact — so renaming the output or
+reordering the adapter list changes nothing. Inside that window the earliest
+commit is the eligible one and every later duplicate scores zero.
+
+Past two runs the check no longer applies, and that is deliberate: **a recipe
+published at N+2 may be re-filed by anyone from N+3 on.** By then the run it
+competed in has been measured, paid and closed, so a duplicate takes nothing
+from its author.
+
+That does not make copying a good strategy. It still costs a run per attempt, it
+is measured a run later than whatever it copied, it cannot beat the champion by
+reproducing the champion, and the reference it has to clear moves upward as the
+field improves. Copying an old recipe buys you an old result, in a run that has
+moved on. Searching is cheaper than chasing.
 
 ### Who can read it before it is public
 

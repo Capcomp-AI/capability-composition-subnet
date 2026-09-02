@@ -55,6 +55,17 @@ CHECKS = [
         rf"hidden_instances: (?!{C.DEFAULT_HIDDEN_INSTANCES}\b)\d+",
     ),
     (
+        f"the anti-copy window is {C.COPY_LOOKBACK_RUNS} runs",
+        # The rule used to reach over all of history, and the sentences saying
+        # so read as reassurance rather than as a specification — which is
+        # exactly how they would survive a change to the constant. Anything
+        # claiming the check covers everything ever admitted now contradicts it.
+        r"against every submission already admitted"
+        r"|every submission ever (admitted|made)"
+        r"|compares you to every submission"
+        r"|anti-copy check against all",
+    ),
+    (
         f"the serving reservation is {C.SERVING_RESERVED_GIB:.0f} GiB",
         r"\b(fixed )?\*{0,2}20 GiB\*{0,2}\b|0\.4168",
     ),
