@@ -27,15 +27,19 @@ Your recipe then walks three runs:
 | | what happens |
 |---|---|
 | **run N** | you submit |
-| **run N+1** | it is evaluated and its score recorded |
-| **run N+2** | that score sets the weight, and your recipe and its score become public |
+| **run N+1** | your recipe becomes public, and it is evaluated |
+| **run N+2** | its score becomes public, and sets the weight |
 
-That last row is the timing of `capcomp submit`, which is the path that is
-scored. The chain path is different and will change it: a recipe committed with
-`capcomp commit` unseals at the **start of N+1**, an hour after the run it was
-submitted in closes, because the chain opens it on a drand schedule nobody
-controls. Scores still publish at N+2 either way. See [Committing on
-chain](#committing-on-chain-preview).
+Your recipe and your score become public a run apart, and the gap is the point.
+The recipe is published when the run measuring it opens, so a validator can see
+the input to the measurement it is being asked to check - a score nobody can
+trace back to a recipe is a number to take on trust. The score waits a further
+run, because publishing it while the field is still being measured would tell a
+miner who has not been scored yet exactly what bar to clear.
+
+Both submission paths land on the same schedule, which is not a coincidence:
+`capcomp commit` seals to a drand round that opens at the close of run N, and
+nobody - the operator included - can hold that back or bring it forward.
 
 The gap between measuring and paying is not a delay for its own sake. A weight
 vector is a statement about a **closed** run's leaderboard. Paying inside the
@@ -479,8 +483,9 @@ Once a run is published, all of it is open to everyone; see below.
 `superseded` lists the digests of recipes this one replaced, so the attempt
 count is checkable rather than something you are told.
 
-Your recipe, its score and the run's weight vector all become public when the
-run that pays it opens - two runs after the one you submitted in:
+Your recipe becomes public when the run measuring it opens, one run after you
+submitted. Its score and the run's weight vector follow a run later, when the
+run that pays it opens:
 
 | route | what it gives |
 |---|---|
@@ -531,8 +536,8 @@ script polling for a score stops rather than treating "embargoed" as "zero".
 
 ### Reading anybody's run
 
-Once a run is published - two runs after the one submitted in - **every**
-miner's recipe and score is open to everyone, not just your own. There is no
+Once a run is published - recipes when the measuring run opens, scores a run
+later - **every** miner's is open to everyone, not just your own. There is no
 privileged view: the same routes answer the same bytes to any caller.
 
 ```bash
@@ -915,10 +920,11 @@ hotkey.
 
 ### Doesn't that make copying cheap?
 
-There is nothing for a rival to copy while it matters. Recipes are held
-privately and published two runs after they were submitted - by which point the
-run they competed in is paid and closed. A recipe you can read is one that has
-already earned what it was going to earn.
+There is nothing for a rival to copy while it matters. A recipe is sealed for
+the whole run it was submitted in, so nobody can read it while they are still
+deciding what to submit against it. It opens when the run measuring it opens -
+by which point that run's field is closed and a copy could only compete a
+further run later, against a bar the original has already moved.
 
 Copying a *recent* one is refused outright. The anti-copy check compares your
 submission against everything admitted in the last **2 runs**, on both the

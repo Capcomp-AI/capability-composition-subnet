@@ -389,9 +389,11 @@ class ValidatorNeuron:
                 run_blocks=run_blocks,
             )
         except FieldError as exc:
-            # Expected, not exceptional, for the run currently being measured:
-            # its submissions are published two runs after they were made, so
-            # this validator cannot read the field it is being asked to score.
+            # A run's field is published as the run measuring it opens, so
+            # this is now a real failure rather than the expected state it used
+            # to be: the service is unreachable, or the run boundary has not
+            # been reached, or this validator's schedule disagrees with the
+            # service's about which run it is in.
             #
             # It burns and says so. An empty field and an unreadable one
             # produce the same weight vector, and reporting the second as the

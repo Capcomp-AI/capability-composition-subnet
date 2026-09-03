@@ -158,7 +158,7 @@ to both the run and the recipe so it cannot be replayed into either.
 | Max recipe size | 256 KB |
 | Stored | The final recipe only - the rest survive as digests and a count |
 
-Bodies are held privately until the run that pays them opens, two runs after
+Bodies are held privately until the run that measures them opens, one run after
 the one submitted in. That is what makes copying pointless: by the time a
 recipe is readable, the run it competed in is closed and paid.
 

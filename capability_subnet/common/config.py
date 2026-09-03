@@ -205,14 +205,13 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
         choices=("local", "endpoint"),
         default=_env("CAPSUB_VALIDATOR_MODE", "local"),
         help=(
-            "endpoint: take scores from a published engine, verify their "
-            "signatures, and set weights from those. Needs no GPU, and it is "
-            "what works today. local: measure every candidate on this host's "
-            "GPUs - the stronger claim, but it cannot be made at the moment, "
-            "because a run's recipes are published two runs after they are "
-            "submitted and local mode needs the field of the run it is "
-            "measuring. A local validator therefore burns every run and says "
-            "so in its log. Use endpoint until that changes."
+            "local: measure every candidate on this host's GPUs and set "
+            "weights from what you measured. The stronger claim, and the "
+            "default, and it needs a GPU. endpoint: take scores from a "
+            "published engine, verify their signatures against your own "
+            "allow-list and set weights from those; no GPU required. A run's "
+            "recipes are published when the run measuring them opens, so local "
+            "mode has the field it needs when it needs it."
         ),
     )
     parser.add_argument(
@@ -223,9 +222,10 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
         help=(
             "Submission service. Miners submit to it rather than to the chain, "
             "so a validator that reads only commitments measures an empty "
-            "subnet. Bodies are published two runs after they are submitted, to "
-            "everyone at once - there is no early access and no credential that "
-            "grants it. Every body is checked against its digest on arrival."
+            "subnet. Bodies are published when the run that measures them "
+            "opens, to everyone at once - there is no early access and no "
+            "credential that grants it. Scores follow a run later. Every body "
+            "is checked against its digest on arrival."
         ),
     )
     parser.add_argument(

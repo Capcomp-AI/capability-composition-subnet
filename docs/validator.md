@@ -36,8 +36,9 @@ Each run, your validator fetches the run's field from the submission service, ch
 ### Getting the field
 
 Miners submit to the submission service, not to the chain, and **a run's
-submissions are published two runs after they were made** - the same moment
-they become public to everyone.
+submissions are published when the run measuring them opens** - one run after
+they were made, to everyone at once. That is the run you need them in: measuring
+run N+1 means reading run N's field, and run N's field opens with N+1.
 
 ```
 GET {api.url}/run/{run_id}/submissions      # no hotkey, no signature
@@ -326,7 +327,7 @@ capability-validator \
   --neuron.trusted_signers <operator-signer-hotkey>
 ```
 
-**Use `--neuron.mode=endpoint`.** `local` is the stronger claim and remains the default, but it cannot be made today: a run's recipes are published two runs after they are submitted, and a local validator needs the field of the run it is measuring. It burns every run and logs why. Endpoint mode reads signed scores from the engine and needs no GPU.
+**`local` needs a GPU; `endpoint` does not.** Both work: a run's recipes are published when the run measuring them opens, which is exactly when local mode needs them, and endpoint mode reads the engine's signed reports instead. Local is the stronger claim - your weights come from your own measurements - and it is the default.
 
 `--neuron.backend_url` and `--neuron.trusted_signers` are what your operator sends you; the engine is not a public host. `--neuron.trusted_signers` is the whole point - empty accepts any signature, which is only safe for local development, so set it to the operator's signer hotkey and a report signed by anyone else is refused and burned rather than paid. Weights go out every `--neuron.weight_interval` blocks (150, about 30 minutes).
 

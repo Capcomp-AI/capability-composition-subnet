@@ -5,16 +5,15 @@ and any validator could read both without asking anyone. It does not any more �
 miners submit to the submission service — so a validator that still reads
 commitments measures an empty subnet and burns every run.
 
-**A run's bodies are readable only once it is public**, two runs after
-submission. There is no early-access route and no credential that opens one:
-the same rule applies to a validator, a miner and an auditor alike.
+**A run's bodies are readable once the run measuring them opens**, one run
+after submission. There is no early-access route and no credential that opens
+one sooner: the same rule applies to a validator, a miner and an auditor alike.
 
-What that costs is worth naming, because it decides what this module can be
-used for. A validator cannot read the field of the run it is measuring — those
-bodies arrive at N+2, after that run has been paid — so it cannot derive that
-run's weight vector from the submissions themselves in time. What it can do is
-measure a published run and compare its own numbers against the archive, which
-is verification after the fact rather than in the paying window.
+That moment is what this module is for. A validator measuring run N+1 needs run
+N's field, and run N's field is published exactly as N+1 opens, so local mode
+can derive the vector it is about to set from the submissions themselves rather
+than from anyone else's numbers. The scores follow a run later, which is a
+separate rule answering a separate question.
 
 Every body is checked against the digest the row carries before it becomes a
 candidate. The service could serve a recipe that is not the one the miner
