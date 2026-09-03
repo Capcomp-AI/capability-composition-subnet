@@ -2,7 +2,7 @@
 
 Documentation drifts silently. A miner reading that a recipe may name twelve
 adapters writes one that names twelve, and finds out it cannot when the engine
-rejects it — the doc was wrong for long enough that seven submissions in one
+rejects it - the doc was wrong for long enough that seven submissions in one
 run carried eleven. These check the statements most likely to be read as
 authoritative against the constants they are meant to describe.
 
@@ -57,7 +57,7 @@ CHECKS = [
     (
         f"the anti-copy window is {C.COPY_LOOKBACK_RUNS} runs",
         # The rule used to reach over all of history, and the sentences saying
-        # so read as reassurance rather than as a specification — which is
+        # so read as reassurance rather than as a specification - which is
         # exactly how they would survive a change to the constant. Anything
         # claiming the check covers everything ever admitted now contradicts it.
         r"against every submission already admitted"
@@ -84,7 +84,7 @@ CHECKS = [
     ),
     # The lookbehind is the point: a sentence saying there is *no* peak-VRAM
     # gate is the documentation agreeing with the constant, and flagging it made
-    # this check fail on a correct doc. HISTORICAL cannot cover it — that is
+    # this check fail on a correct doc. HISTORICAL cannot cover it - that is
     # deliberately past-tense only, and widening it to catch present-tense
     # denials would hide sentences this suite exists to find.
     (
@@ -98,6 +98,27 @@ CHECKS = [
     (
         f"weights lag the measurement by {C.WEIGHT_LAG_RUNS} run",
         r"weights? (are|is) set in the (same|measuring) run",
+    ),
+    (
+        f"an on-chain recipe is at most {C.MAX_ONCHAIN_RECIPE_BYTES:,} canonical bytes",
+        # Any other figure offered as *the* on-chain recipe limit. A miner who
+        # builds to a stale number finds out when the seal will not fit, which
+        # is after they have already decided what to submit.
+        rf"on-chain (size )?limit is (?!{C.MAX_ONCHAIN_RECIPE_BYTES:,}\b)[\d,]+"
+        rf"|at most \*{{0,2}}(?!{C.MAX_ONCHAIN_RECIPE_BYTES:,}\b)[\d,]+ canonical bytes",
+    ),
+    (
+        f"the epoch commitment budget is {C.MAX_EPOCH_COMMIT_BYTES:,} bytes",
+        rf"[\d,]+ bytes of commitments per epoch(?<!{C.MAX_EPOCH_COMMIT_BYTES:,} bytes of "
+        rf"commitments per epoch)",
+    ),
+    (
+        "the chain path is a preview and is not scored",
+        # The claim that would be the expensive one to leave stale: a miner told
+        # that committing on chain submits them loses runs in silence, because
+        # nothing raises an error for a submission nobody reads.
+        r"(?i)commit(ting)? on chain (submits|is how you submit)"
+        r"|(?i)`?capcomp commit`? (submits|is the submission|is scored)",
     ),
 ]
 

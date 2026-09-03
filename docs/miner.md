@@ -1,10 +1,10 @@
 # Miner guide
 
-You have one job: find the composition of certified adapters that completes the workflow better than anything else on the board — then send it.
+You have one job: find the composition of certified adapters that completes the workflow better than anything else on the board - then send it.
 
-Your whole interaction with the network is one HTTP request. **Nothing goes on chain and nothing is published anywhere.** You never serve inference, never answer a query, and never run a process the network talks to. How you search is your own business.
+Your whole interaction with the network is one HTTP request. **Nothing you submit goes on chain and nothing is published anywhere until the run that pays it opens.** You never serve inference, never answer a query, and never run a process the network talks to. How you search is your own business.
 
-You need a registered hotkey and nothing else: no commitment, no transaction, no fee, no wallet unlocked for anything but signing a short string. Your recipe travels in the request body, signed by that hotkey, and is held privately until the run that pays it opens — so no rival can read it, let alone copy it, while it is being measured. The only parties that can are the ones scoring it. See [Who can read it before it is public](#who-can-read-it-before-it-is-public).
+You need a registered hotkey and nothing else: no commitment, no transaction, no fee, no wallet unlocked for anything but signing a short string. (`capcomp commit` is a preview of a chain-native path that is not live - see [Committing on chain](#committing-on-chain-preview).) Your recipe travels in the request body, signed by that hotkey, and is held privately until the run that pays it opens - so no rival can read it, let alone copy it, while it is being measured. The only parties that can are the ones scoring it. See [Who can read it before it is public](#who-can-read-it-before-it-is-public).
 
 ```bash
 capcomp submit --recipe recipe.json \
@@ -17,7 +17,7 @@ That is the entire protocol contract. The rest of this guide is about making the
 
 ## Before anything else: a run is a day, and the pipeline is three runs deep
 
-A run is **7200 blocks — 24 hours**, and boundaries are anchored: run 412 opens
+A run is **7200 blocks - 24 hours**, and boundaries are anchored: run 412 opens
 at block 8,908,667, which the chain reaches at about **12:00 Eastern on Sunday
 23 August 2026**, and every run after it opens 24 hours later. So a run opens at
 about noon Eastern, every day.
@@ -32,20 +32,20 @@ Your recipe then walks three runs:
 
 The gap between measuring and paying is not a delay for its own sake. A weight
 vector is a statement about a **closed** run's leaderboard. Paying inside the
-run doing the measuring means paying from a leaderboard still being written — a
+run doing the measuring means paying from a leaderboard still being written - a
 candidate measured early faces an empty field, one measured late faces a full
 one, and the vector moves under both as the queue is worked through. A closed
 run has a final leaderboard, and every validator reading the same chain
 computes the same vector from it.
 
 Your submission earns from that one measurement alone. It is not re-measured
-and it does not keep earning afterwards. To earn again, submit again — which
+and it does not keep earning afterwards. To earn again, submit again - which
 gives you one evaluated attempt per day, because a recipe sent after a run
 opened is not measured in it. Nothing is terminated: a package that loses costs
 you that run, not the hotkey.
 
 **Three submissions per run.** Only your last one is measured, and only it is
-stored — the ones it replaced survive as digests and a count, so you can always
+stored - the ones it replaced survive as digests and a count, so you can always
 check what you used. Re-sending an identical recipe does not cost an attempt, so
 retrying a request that timed out is safe.
 
@@ -57,11 +57,11 @@ evaluation service.
 **Do not replace your recipe once the run you submitted in has closed.** A
 recipe sent in run N is measured in run N+1. Sending a new one *during* N+1
 files it under N+1, so N+1 measures nothing from you and the new recipe waits
-for N+2 — and its payment for N+3. You did not fail a gate or lose a comparison:
+for N+2 - and its payment for N+3. You did not fail a gate or lose a comparison:
 you withdrew the submission that was about to be judged, and you skip a day.
 
 **Submissions close an hour before the run does.** A submission must have been
-in for `MIN_COMMITMENT_AGE_BLOCKS` — 300 blocks, about an hour — when the run
+in for `MIN_COMMITMENT_AGE_BLOCKS` - 300 blocks, about an hour - when the run
 that would measure it opens. Inside that last hour the API **refuses it**:
 `409`, nothing stored, no attempt spent. Send it again once the next run opens.
 
@@ -69,7 +69,7 @@ You are told at once, while you can still act on it, rather than watching a
 blank row sit through a run you thought you had entered.
 
 The window also removes the advantage of submitting at the closing block after
-watching the whole run — every result published and every recipe disclosed —
+watching the whole run - every result published and every recipe disclosed -
 before choosing.
 
 Ask the tooling rather than doing the arithmetic. Pass the current block and
@@ -90,14 +90,14 @@ run 412 closes in 200 blocks, inside the 60-minute settling window.
 A submission made now is refused: it has to have been in for 300 blocks when a
 run opens to be measured by it, and it cannot be.
 Nothing is stored and no attempt is spent. Wait for run 413 to open, then send
-it — it is measured in run 414.
+it - it is measured in run 414.
 ```
 
 Add `--strict-timing` to make that a non-zero exit, so a script does not submit
 into a run that will not measure it.
 
 The rule in three lines: **replace it freely early in the run, stop an hour
-before it closes — after that it is refused — then leave it alone until you
+before it closes - after that it is refused - then leave it alone until you
 have been measured.**
 
 The floor is what keeps copying expensive. Reading a published recipe, tweaking
@@ -105,11 +105,11 @@ it and resubmitting costs a full run per attempt, against an anti-copy check
 that compares you to everything admitted in the last two runs and a champion
 whose margin you still have to clear.
 
-So: validate locally, evaluate locally, and only then submit — a wasted
+So: validate locally, evaluate locally, and only then submit - a wasted
 attempt costs you a run.
 
 **Start from the worked example.** [`examples/quickstart_miner.py`](../examples/quickstart_miner.py)
-does the whole loop in one file — builds valid recipes, rejects the inadmissible
+does the whole loop in one file - builds valid recipes, rejects the inadmissible
 ones, scores the survivors, writes the winner and prints its digest:
 
 ```bash
@@ -118,19 +118,19 @@ python examples/quickstart_miner.py --tries 20 --out recipe.json
 
 It needs no chain, and its scoring step needs a card like any other. Its
 *search* is random sampling, which is the weakest search there is and the part
-you are meant to replace; everything around it — validation, digests, signing,
-local scoring — is the part you can rely on. See
+you are meant to replace; everything around it - validation, digests, signing,
+local scoring - is the part you can rely on. See
 [examples/README.md](../examples/README.md).
 
-> An *infrastructure* failure costs you nothing beyond the run. If a validator cannot serve your package or the sandbox falls over, you are not scored down for it — you are simply not measured, exactly as if you had not submitted.
+> An *infrastructure* failure costs you nothing beyond the run. If a validator cannot serve your package or the sandbox falls over, you are not scored down for it - you are simply not measured, exactly as if you had not submitted.
 
 ---
 
 ## What a run pays
 
 **A run pays whatever cleared its hard gates.** Clear them and you are ranked
-by grade and paid by rank. The bar that matters is the entry gate — **0.02** of
-end-to-end completion over the strongest permanent reference — and it is
+by grade and paid by rank. The bar that matters is the entry gate - **0.02** of
+end-to-end completion over the strongest permanent reference - and it is
 absolute, so whether you earn depends on your package rather than on how strong
 some earlier run happened to be. A run where nothing clears the gates burns
 entirely.
@@ -156,7 +156,7 @@ Ten miners are paid at most. A run can still burn, in two ways, and both are
 deliberate:
 
 - **Nothing clears the hard gates.** If no candidate clears every hard gate the
-  entire run burns. The throne is not a payment condition — a run that produces
+  entire run burns. The throne is not a payment condition - a run that produces
   no new champion still pays whatever cleared the gates.
 - **An unfilled rank in the first five burns** rather than being promoted into
   the leader's share, so a field of five pays 99.5% and burns 0.5%. The
@@ -174,8 +174,8 @@ cleared every hard gate:
 
 The qualified score is itself weighted: end-to-end completion 55%, stage
 balance 15%, out-of-distribution 10%, token efficiency 10%, base retention 5%,
-artifact efficiency 5%. So end-to-end reaches the grade twice — through quality
-and again through improvement — and is roughly two-thirds of what decides rank.
+artifact efficiency 5%. So end-to-end reaches the grade twice - through quality
+and again through improvement - and is roughly two-thirds of what decides rank.
 
 Stage balance is the geometric mean of your score across the twelve capability
 axes: it punishes gaps rather than averaging them away, so being absent on a few
@@ -207,7 +207,7 @@ pip install -e ".[miner]"
 Everything you are judged on is published. None of it is secret except the specific hidden instances.
 
 ```bash
-# The frozen certified adapter pool — ids, capabilities, distractors
+# The frozen certified adapter pool - ids, capabilities, distractors
 capcomp pool
 
 # The complete contract: bounds, gates, scoring weights, dethrone rule
@@ -224,7 +224,7 @@ so you can build and evaluate against the same tensors the engine merges.
 `pool.json` there carries a sha256 for every adapter; an adapter whose digest
 does not match is not the one being merged and a recipe built on it will not
 reproduce. A few adapters whose source repositories state no licence are listed
-with their digests and their original location rather than mirrored — fetch
+with their digests and their original location rather than mirrored - fetch
 those from the source and check them against the same digests.
 
 The pool contains capability adapters **and controlled distractors**. The distractors are selectable on purpose: recognising that a plausible-looking adapter actively hurts is part of the composition problem. `capcomp pool` marks them, and `capcomp validate` warns when you select one.
@@ -239,11 +239,13 @@ python -m capability_subnet.workflows.cli show --seed 42 --with-truth
 python -m capability_subnet.workflows.cli selftest --count 10
 ```
 
-Then generate the public development pack — 120 complete instances with ground truth, plus SQLite copies of each maintenance database:
+Then generate the public development pack - 120 complete instances with ground truth, plus SQLite copies of each maintenance database:
 
 ```bash
 python -m capability_subnet.workflows.cli generate-public-pack --out data/public_pack
 ```
+`capcomp pack --out data/public_pack` is a shorthand for the same thing with the defaults; use the form above when you need `--seed` or `--without-truth`.
+
 
 The pack is reproducible from a published seed. Compare the printed tree digest against the published one to confirm your copy matches.
 
@@ -276,7 +278,7 @@ Validate before you go further:
 capcomp validate --recipe recipe.json
 ```
 
-This runs **exactly the checks the engine runs at admission** and prints both hard problems and advisories. Advisories are not rejections — they flag choices that are legal but usually unintended, such as selecting a distractor or leaving a stochastic merge on the default seed.
+This runs **exactly the checks the engine runs at admission** and prints both hard problems and advisories. Advisories are not rejections - they flag choices that are legal but usually unintended, such as selecting a distractor or leaving a stochastic merge on the default seed.
 
 Check the artifact size before you build anything:
 
@@ -314,7 +316,7 @@ print(result.summary())
 
 Two things worth knowing:
 
-- **The artifact digest you compute here is the digest the engine will compute.** If they differ, your host disagrees with the engine about determinism — worth finding out before submitting, not after.
+- **The artifact digest you compute here is the digest the engine will compute.** If they differ, your host disagrees with the engine about determinism - worth finding out before submitting, not after.
 - **Twenty instances is not enough to distinguish two similar recipes.** The variance of an end-to-end completion rate over a small sample is wide. If you are comparing candidates that differ by a few points, you need many more instances or a cheaper proxy metric.
 
 ## 6. Search
@@ -328,7 +330,7 @@ recipe = random_recipe(seed=1, adapter_count=4)
 ```
 
 Equivalently, `capcomp init --random`. It picks adapters at random and assigns
-arbitrary coefficients — enough to have something that validates, and nothing
+arbitrary coefficients - enough to have something that validates, and nothing
 more. Building a search is the work.
 
 Things worth investigating:
@@ -338,7 +340,7 @@ Things worth investigating:
 - **Density against rank.** Aggressive trimming plus a high rank is a different package from light trimming plus a low rank, even at the same artifact size.
 - **What to leave out.** The best package is usually not the one with the most adapters.
 
-The engine publishes a compatibility history at `/compatibility` — co-selection frequencies, marginal contributions, method and rank effects across every evaluation the network has run. It is the accumulated answer to exactly these questions.
+The engine publishes a compatibility history at `/compatibility` - co-selection frequencies, marginal contributions, method and rank effects across every evaluation the network has run. It is the accumulated answer to exactly these questions.
 
 ## 7. Submit
 
@@ -347,13 +349,39 @@ There is nothing to publish and nothing to commit.
 **The API is the only way in.** A recipe written to the chain as a commitment,
 or left at an `hf:` or `https:` URL for the engine to fetch, is not a
 submission: it is not admitted, not stored and not scored. That was the route
-before miners moved to signing a request body, and nothing reads it now — a
+before miners moved to signing a request body, and nothing reads it now - a
 commitment made today produces no queue entry and no scoreboard row, and you
 will see no error, because nothing is looking at it to raise one. If `capcomp
 submit` did not return success, you are not in the run.
 
-**First, ask whether it would be admitted.** This costs nothing — no signature,
-no hotkey, no attempt — and it is the engine's own contract answering, not a
+### Committing on chain (preview)
+
+`capcomp commit` seals a recipe under a drand timelock and writes it into the
+commitments pallet. It works, and you can run it today against testnet or
+mainnet - but **nothing scores what it writes.** It exists so you can exercise
+the path, check your recipe fits the on-chain size limit, and see your epoch
+budget before the switch. Until this guide says otherwise, `capcomp submit` is
+the submission.
+
+```bash
+capcomp commit --recipe recipe.json \
+    --wallet.name <coldkey> --wallet.hotkey <hotkey>
+```
+
+Without `--confirm` it commits nothing and prints what it would do: the run the
+commitment would join, the sizes at each stage, the drand round it unseals at,
+and how much of this epoch's budget it costs.
+
+Two limits differ from the API path and are worth knowing now. A recipe must be
+at most **1,536 canonical bytes** - a sealed recipe has to fit one commitment
+field, and sealing adds a fixed 254 bytes. And the chain allows each hotkey
+**3,100 bytes of commitments per epoch** (about 72 minutes), which at typical
+recipe sizes is three or four commits; there is no cap on how many times you may
+submit overall, but you can run out within an epoch and have to wait for the
+next.
+
+**First, ask whether it would be admitted.** This costs nothing - no signature,
+no hotkey, no attempt - and it is the engine's own contract answering, not a
 local approximation:
 
 ```bash
@@ -361,7 +389,7 @@ capcomp check --recipe recipe.json
 ```
 
 ```
-ok — this recipe would be admitted
+ok - this recipe would be admitted
 ```
 
 Iterate until it says that. Then send it:
@@ -373,7 +401,7 @@ capcomp submit --recipe recipe.json \
 
 Without `--confirm` this is a dry run: it validates the recipe, reads the run
 from the API, prints the digest, says what it would replace and how many of the
-run's three attempts you would have left — and sends nothing.
+run's three attempts you would have left - and sends nothing.
 
 ```
 run 412: measured in run 413, paid in run 414
@@ -385,7 +413,7 @@ Nothing was sent. Re-run with --confirm to submit.
 
 Add `--confirm` when you are sure.
 
-The digest is the canonical digest of your recipe — the same number
+The digest is the canonical digest of your recipe - the same number
 `capcomp digest` prints, and the same one the engine identifies your
 package by. You sign a string binding that digest to the run, so a signature
 cannot be replayed into a later run or against a different recipe. The client
@@ -426,7 +454,7 @@ signature is bound to the run and the hotkey, so it cannot be replayed against
 a later run or pointed at somebody else.
 
 Why: this describes a run still being submitted into. Answering it for anyone
-about anyone made the open field enumerable — the metagraph is public, so a
+about anyone made the open field enumerable - the metagraph is public, so a
 loop over every registered hotkey rebuilt who was in the run, how many attempts
 each had spent, and, because two identical recipes share a digest, which of
 them had copied whom. That is exactly what the reveal delay exists to prevent.
@@ -436,7 +464,7 @@ Once a run is published, all of it is open to everyone; see below.
 count is checkable rather than something you are told.
 
 Your recipe, its score and the run's weight vector all become public when the
-run that pays it opens — two runs after the one you submitted in:
+run that pays it opens - two runs after the one you submitted in:
 
 | route | what it gives |
 |---|---|
@@ -457,7 +485,7 @@ information, because there it is your own record you are asking for and
 not have to pull forty rows and find yourself in them:
 
 ```bash
-capcomp result --run 419 --uid 7
+capcomp result --run 419 --uid <uid>
 capcomp result --run 419 --hotkey <ss58> --recipe    # include the body
 capcomp result --run 419 --json                      # the raw payload
 ```
@@ -476,8 +504,8 @@ run 419: measured in 420, paid in 421
     ...
 ```
 
-One run at a time, and the run named explicitly. A uid is a *slot* — it is
-reissued when a miner deregisters — so `--uid` is resolved against the
+One run at a time, and the run named explicitly. A uid is a *slot* - it is
+reissued when a miner deregisters - so `--uid` is resolved against the
 metagraph as it stands now and the hotkey it resolved to is printed. If you are
 asking about an older run, pass `--hotkey` instead: that is the identity the
 record is filed under.
@@ -487,7 +515,7 @@ script polling for a score stops rather than treating "embargoed" as "zero".
 
 ### Reading anybody's run
 
-Once a run is published — two runs after the one submitted in — **every**
+Once a run is published - two runs after the one submitted in - **every**
 miner's recipe and score is open to everyone, not just your own. There is no
 privileged view: the same routes answer the same bytes to any caller.
 
@@ -510,7 +538,7 @@ and weight, and the sample counts the score was computed over. The run's own
 row carries the draw beacon.
 
 **Check it rather than trust it.** The beacon is the hash of the block the
-measuring run opened at — a value the operator cannot choose:
+measuring run opened at - a value the operator cannot choose:
 
 ```bash
 # the beacon the API publishes for run 419
@@ -528,7 +556,7 @@ A run still being measured answers `released: false` with the run it opens in.
 That applies to your own entry too: knowing your score mid-measurement would
 tell you how the field stands against it.
 
-The full evaluation report is published at `/reports` — every gate verdict, every per-axis comparison, the paired statistics, and the reason for the decision.
+The full evaluation report is published at `/reports` - every gate verdict, every per-axis comparison, the paired statistics, and the reason for the decision.
 
 **Your score appears the day after you submit; the emission the day after
 that.** A weight vector states a closed run's leaderboard, so the run that
@@ -552,7 +580,7 @@ reference, and adjacent paid ranks are routinely under 0.001 apart.
 | Building and validating recipes | Any machine |
 | Reconstructing an artifact | ~32 GB RAM. A GPU is optional and ~30x faster on the trimming methods. |
 | Evaluating locally | A GPU that can hold the 24 GiB serving reservation (32 GB+) |
-| Searching seriously | As much as you want to spend — this is where competition happens |
+| Searching seriously | As much as you want to spend - this is where competition happens |
 
 See [min_compute.yml](../min_compute.yml) for detail.
 
@@ -562,25 +590,25 @@ See [min_compute.yml](../min_compute.yml) for detail.
 
 **Choosing rank 128.** It exceeds the artifact-size gate against the pinned base model. Run `size` first.
 
-**Omitting the retention adapter.** Retention carries 5% of the qualified score. It is measured on a held-out probe of short, exactly-scored general instructions — arithmetic, ordering, exact formats, answering in the language you were addressed in — so a package can score well on the workflow and still lose ground here. The retention anchor exists for exactly that.
+**Omitting the retention adapter.** Retention carries 5% of the qualified score. It is measured on a held-out probe of short, exactly-scored general instructions - arithmetic, ordering, exact formats, answering in the language you were addressed in - so a package can score well on the workflow and still lose ground here. The retention anchor exists for exactly that.
 
-**Tuning to the public pack.** The hidden set is drawn fresh each run and includes out-of-distribution mutations — renamed components, converted units, aliased database columns, reformatted fault codes. A package that memorised surface patterns fails on those, and out-of-distribution robustness carries 10% of the qualified score directly.
+**Tuning to the public pack.** The hidden set is drawn fresh each run and includes out-of-distribution mutations - renamed components, converted units, aliased database columns, reformatted fault codes. A package that memorised surface patterns fails on those, and out-of-distribution robustness carries 10% of the qualified score directly.
 
 **Assuming only the throne pays.** It does not. Every package that clears all
 hard gates is graded on quality, improvement over the strongest reference,
-and running cost — and earns a share of the run's emission
+and running cost - and earns a share of the run's emission
 whether or not it dethroned anything. Getting close is worth
 something; producing something undeployable is not. See
 [what a run pays](#what-a-run-pays) for the split.
 
 **Ignoring token spend.** It is now a scored component, and it is measured per
-*completed* instance rather than per attempted one — so giving up early makes it
+*completed* instance rather than per attempted one - so giving up early makes it
 worse, not better. Two packages that finish the same fraction of workflows are
 not equally valuable if one costs twice as much to run.
 
 **Submitting before evaluating.** Only your last recipe is measured and you get three a run. There is no reason to spend one on a package you have not measured.
 
-**Assuming a loss is the end.** It is, if you were genuinely measured and genuinely lost. It is not when the engine could not evaluate you — too few scored instances or a reconstruction the workers could not agree on holds your submission for a later run rather than terminating it. While it waits it earns a small share of emission, which is what keeps it from being deregistered before its turn comes.
+**Assuming a loss is the end.** It is, if you were genuinely measured and genuinely lost. It is not when the engine could not evaluate you - too few scored instances or a reconstruction the workers could not agree on holds your submission for a later run rather than terminating it. While it waits it earns a small share of emission, which is what keeps it from being deregistered before its turn comes.
 
 ---
 
@@ -590,7 +618,7 @@ not equally valuable if one costs twice as much to run.
 
 Every value below is a placeholder, chosen to be neutral rather than good: equal
 weights, no layer emphasis, a middling density. It shows the shape of the
-document and nothing about which composition wins — that is the search, and it is
+document and nothing about which composition wins - that is the search, and it is
 yours. `examples/quickstart_miner.py` writes a valid recipe you can run.
 
 ```jsonc
@@ -650,7 +678,7 @@ bound is `MIN_SELECTED_ADAPTERS`/`MAX_SELECTED_ADAPTERS` and is exported in the
 published JSON Schema as `minItems`/`maxItems`, so `capcomp validate`
 catches a violation before you submit.
 
-Order does not matter — reconstruction always loads in sorted identifier order, so the same set produces the same artifact however you wrote it.
+Order does not matter - reconstruction always loads in sorted identifier order, so the same set produces the same artifact however you wrote it.
 
 A single adapter is not a candidate; it is one of the reference baselines.
 
@@ -662,7 +690,7 @@ A single adapter is not a candidate; it is one of the reference baselines.
 |---|---|---|---|
 | `combination_type` | enum | see below | always |
 | `density` | float | `0.05 … 1.0` | TIES, DARE and magnitude-prune families |
-| `majority_sign_method` | `"total"` \| `"frequency"` | — | TIES family only |
+| `majority_sign_method` | `"total"` \| `"frequency"` | - | TIES family only |
 | `random_seed` | int | `0 … 4294967295` | always (only *affects* stochastic methods) |
 
 Supplying a parameter a method does not use is an error, not a silent ignore. That is deliberate: silently ignoring `density` on a linear merge would let a miner believe they were tuning something.
@@ -671,7 +699,7 @@ Supplying a parameter a method does not use is an error, not a silent ignore. Th
 
 Per-adapter coefficient across the whole model. Range **`-2.0 … 2.0`**. Unlisted adapters default to `1.0`. Only selected adapters may appear.
 
-Negative coefficients are legal and occasionally useful — subtracting an adapter's update is a real operation — but they are hard on retention, which measures general instruction-following on a held-out probe rather than anything about this workflow. It is scored and published, so you can see what the subtraction cost.
+Negative coefficients are legal and occasionally useful - subtracting an adapter's update is a real operation - but they are hard on retention, which measures general instruction-following on a held-out probe rather than anything about this workflow. It is scored and published, so you can see what the subtraction cost.
 
 ### `layer_group_overrides`
 
@@ -725,7 +753,7 @@ Each name is a preset over one three-stage pipeline: **sparsify → elect signs 
 
 ### What each stage does
 
-**Magnitude trim** keeps the largest-magnitude entries of each update and zeroes the rest. The cut is made at a *threshold* rather than by selecting exactly `k` entries — index selection has to break ties somehow, and different backends break them differently.
+**Magnitude trim** keeps the largest-magnitude entries of each update and zeroes the rest. The cut is made at a *threshold* rather than by selecting exactly `k` entries - index selection has to break ties somehow, and different backends break them differently.
 
 **Random drop and rescale** keeps a fraction `d` at random and divides the survivors by `d`, leaving the expected update unchanged while removing most of the entries that could interfere with another adapter. This is the only stage that uses `random_seed`.
 
@@ -789,7 +817,7 @@ Any failure zeroes the candidate.
 | Stage floors | Every critical stage above its floor |
 | Entry margin | Exceeds the strongest **permanent reference** by **0.02** end-to-end |
 
-There is no peak-VRAM gate and no latency gate — neither is gated or scored. The
+There is no peak-VRAM gate and no latency gate - neither is gated or scored. The
 24 GiB figure is the serving *reservation* a card must offer, not a ceiling you
 are measured against. Retention is likewise measured and scored, never gated.
 
@@ -806,7 +834,7 @@ board:
 Two of the always-enforced gates say the validator could not measure you rather
 than that you fell short: too few instances scored to compare on, and a
 reconstruction the independent workers could not agree on. Neither is scored
-against you — the run simply does not pay you, and the next submission is
+against you - the run simply does not pay you, and the next submission is
 measured on its own terms.
 
 ---
@@ -834,7 +862,7 @@ here so you can build your own client if you would rather.
 | | |
 |---|---|
 | Attempts per run | 3, and only the last is measured |
-| Identical resend | Free — it costs no attempt |
+| Identical resend | Free - it costs no attempt |
 | Max recipe size | 256 KB |
 | Refusals | `401` signature, `403` not registered, `429` no attempts left |
 
@@ -851,7 +879,7 @@ capcomp digest   --recipe recipe.json   # canonical digest
 capcomp canonicalise --recipe recipe.json
 ```
 
-`validate` reports two kinds of finding. **Problems** would cause rejection at admission. **Advisories** are legal choices that are usually unintended — selecting a distractor, omitting the retention anchor, coefficients above 1.5 in magnitude, or a stochastic merge left on the default seed.
+`validate` reports two kinds of finding. **Problems** would cause rejection at admission. **Advisories** are legal choices that are usually unintended - selecting a distractor, omitting the retention anchor, coefficients above 1.5 in magnitude, or a stochastic merge left on the default seed.
 
 ---
 
@@ -859,26 +887,26 @@ capcomp canonicalise --recipe recipe.json
 
 ### What hardware do I need?
 
-Building and validating recipes: any machine. Reconstructing an artifact: ~32 GB RAM; a GPU is optional but roughly thirty times faster on the trimming methods, which have to decompose a full update per projection. Evaluating locally: a GPU that fits the base model in bfloat16. Searching seriously: as much as you want to spend — that is where the competition is.
+Building and validating recipes: any machine. Reconstructing an artifact: ~32 GB RAM; a GPU is optional but roughly thirty times faster on the trimming methods, which have to decompose a full update per projection. Evaluating locally: a GPU that fits the base model in bfloat16. Searching seriously: as much as you want to spend - that is where the competition is.
 
 ### How often can I submit?
 
 Three times a run, and once a day in effect. A submission is measured in the run
 after the one it was made in, so sending another immediately does not buy you a
-second measurement in the same run — it replaces what will be measured in the
+second measurement in the same run - it replaces what will be measured in the
 next one. Nothing is terminated, and a loss costs you that run rather than the
 hotkey.
 
 ### Doesn't that make copying cheap?
 
 There is nothing for a rival to copy while it matters. Recipes are held
-privately and published two runs after they were submitted — by which point the
+privately and published two runs after they were submitted - by which point the
 run they competed in is paid and closed. A recipe you can read is one that has
 already earned what it was going to earn.
 
 Copying a *recent* one is refused outright. The anti-copy check compares your
 submission against everything admitted in the last **2 runs**, on both the
-recipe digest and the reconstructed artifact — so renaming the output or
+recipe digest and the reconstructed artifact - so renaming the output or
 reordering the adapter list changes nothing. Inside that window the earliest
 commit is the eligible one and every later duplicate scores zero.
 
@@ -895,8 +923,8 @@ moved on. Searching is cheaper than chasing.
 
 ### Where your recipe ends up
 
-Two runs after you submit, your recipe is published — the same bytes you signed
-— in that run's public archive, at `capcomp/sn103-run-<N>` on HuggingFace,
+Two runs after you submit, your recipe is published - the same bytes you signed
+- in that run's public archive, at `capcomp/sn103-run-<N>` on HuggingFace,
 alongside the scores it earned. The archive's digest is committed on the
 Bittensor chain, so what is published cannot be altered afterwards without the
 change being visible to anyone who checks.
@@ -935,12 +963,12 @@ reached from the chain and what the digests do and do not prove.
 
 Nobody outside the party that scores it.
 
-Scoring a recipe means reading it, so the evaluation engine does — during the
+Scoring a recipe means reading it, so the evaluation engine does - during the
 run that measures you, two runs before publication. That is unavoidable: a
 scorer that cannot read a recipe cannot score it.
 
 Everyone else waits. There is no allow-list, no signed route and no credential
-that opens a run early — not for validators, not for anyone. Your recipe
+that opens a run early - not for validators, not for anyone. Your recipe
 becomes readable when the run that paid it opens, at which point it is public
 to the whole network at once.
 
@@ -961,21 +989,21 @@ You probably chose rank 128. Against the pinned base model that produces roughly
 
 ### Should I select the distractor adapters?
 
-Almost certainly not — but they are selectable on purpose. One is a German legal-contract adapter, superficially relevant because the workflow is German and actually harmful. Recognising that is part of the problem.
+Almost certainly not - but they are selectable on purpose. One is a German legal-contract adapter, superficially relevant because the workflow is German and actually harmful. Recognising that is part of the problem.
 
 ### Can I use negative coefficients?
 
-Yes, within `-2.0 … 2.0`. Subtracting an adapter's update is a real operation. It is hard on retention — which measures general instruction-following on a held-out probe, not anything about this workflow — so measure it. Retention is scored, not gated, so it costs you rather than refusing you.
+Yes, within `-2.0 … 2.0`. Subtracting an adapter's update is a real operation. It is hard on retention - which measures general instruction-following on a held-out probe, not anything about this workflow - so measure it. Retention is scored, not gated, so it costs you rather than refusing you.
 
 ### How much do local scores predict hidden scores?
 
-Directionally, quite well — same generator, same tools, same scorer. But the hidden set is drawn fresh each run and includes out-of-distribution mutations. And a completion rate over twenty instances has wide enough variance that two recipes differing by a few points are indistinguishable at that sample size.
+Directionally, quite well - same generator, same tools, same scorer. But the hidden set is drawn fresh each run and includes out-of-distribution mutations. And a completion rate over twenty instances has wide enough variance that two recipes differing by a few points are indistinguishable at that sample size.
 
 ### Why is my submission not in the queue?
 
 Admission rejected it, or it never arrived. Check `/queue/<your-hotkey>`; a 404 means it was not admitted. The usual causes are a stale snapshot digest, a recipe that fails the schema, or a digest computed over bytes other than the ones you sent.
 
-If you wrote a commitment to the chain rather than calling `capcomp submit`, that is the reason: the engine does not read commitments. See [Submit](#7-submit).
+If you wrote a commitment to the chain rather than calling `capcomp submit`, that is the reason: the engine does not read commitments. That includes anything written by `capcomp commit`, which is a preview and is not scored. See [Submit](#7-submit).
 
 ### What is the compatibility history for?
 

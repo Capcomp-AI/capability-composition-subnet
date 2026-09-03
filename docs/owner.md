@@ -8,7 +8,7 @@ What the owner runs, what everyone else runs, and the configuration the live sub
 
 Validators measure candidates on their own hardware, so the owner is not in the scoring path. Three things still belong to the owner, and only the first is mandatory.
 
-### 1. The pool and the base model — mandatory, one-off
+### 1. The pool and the base model - mandatory, one-off
 
 The certified adapter pool and the pinned base model are the shared ground every recipe is written against. The owner materialises them once, publishes the registry, and every miner and validator reproduces the same pool from it.
 
@@ -21,11 +21,11 @@ The snapshot digest that prints is the pool's identity. Every recipe declares it
 
 This is a one-off per arena version. Re-running it is cheap: an adapter already on disk whose bytes still hash to the digest the registry records is verified and skipped.
 
-### 2. The evaluation engine — optional
+### 2. The evaluation engine - optional
 
 The engine runs runs, serves candidates, and publishes signed reports and a signed weight vector.
 
-Nothing on the network depends on it. Validators measure for themselves, so no weight anyone sets comes from here — which is the point, and also why this is optional. Run it if you want a reference set of published numbers to compare validators against, a console for the subnet, or a disclosure feed that third parties can replay without a GPU. It needs its own 32 GB card and the same serving toolchain a validator needs.
+Nothing on the network depends on it. Validators measure for themselves, so no weight anyone sets comes from here - which is the point, and also why this is optional. Run it if you want a reference set of published numbers to compare validators against, a console for the subnet, or a disclosure feed that third parties can replay without a GPU. It needs its own 32 GB card and the same serving toolchain a validator needs.
 
 ```bash
 python -m capability_engine.service --config backend.yaml   # control loop
@@ -37,13 +37,13 @@ The engine ships in `lora-merger-engine`, not in this package; see
 
 If you run it, it needs a signing hotkey. Reports and weight vectors published unsigned are refused by any validator enforcing an allow-list, which means the engine runs, publishes, and moves no emission at all.
 
-### 3. The console — optional
+### 3. The console - optional
 
 A read-only web front end that proxies to the engine. It carries no engine, no protocol package, no torch, and no key: a compromise of it yields a proxy and an HTML file. Deployed from `lora-merger-engine`, which is the only part of this system that belongs on a public platform.
 
 ### What the owner does *not* run
 
-No inference endpoint for miners to query. No recipe hosting — miners publish their own. No per-miner infrastructure of any kind.
+No inference endpoint for miners to query. No recipe hosting - miners publish their own. No per-miner infrastructure of any kind.
 
 ---
 
@@ -91,7 +91,7 @@ merge_device: cuda
 disclosure_traces: 10
 ```
 
-`.env` carries the per-host details and the one secret. **Environment variables override the YAML**, so anything set here wins silently over the file above — check it first when a setting appears not to apply.
+`.env` carries the per-host details and the one secret. **Environment variables override the YAML**, so anything set here wins silently over the file above - check it first when a setting appears not to apply.
 
 ```bash
 CAPSUB_NETUID=103
@@ -110,7 +110,7 @@ CAPSUB_EVALUATOR_IMAGE_DIGEST=sha256:<digest>
 
     reserved ≈ gpu_memory_utilization × total_VRAM
 
-A candidate reserves a fixed **24 GiB** to serve — peak memory is deliberately neither gated nor scored, and it lands near 21 GiB whatever the package merged — so the fraction follows from the card:
+A candidate reserves a fixed **24 GiB** to serve - peak memory is deliberately neither gated nor scored, and it lands near 21 GiB whatever the package merged - so the fraction follows from the card:
 
 | Card | Fraction | Reserved |
 |---|---|---|
@@ -120,7 +120,7 @@ A candidate reserves a fixed **24 GiB** to serve — peak memory is deliberately
 
 A 24 GB card cannot serve: it does not clear the reservation plus the driver context and the merge sharing the card, so the smallest card a validator may use is 32 GB.
 
-The model needs about 15.3 GiB of weights and about 0.6 GiB of KV cache for the 8192 context at one sequence. A larger card needs a *smaller* fraction, not a larger one — the reservation is absolute at 24 GiB, so the same package is served identically on every card that can hold it, and measured peak lands near 21 GiB throughout.
+The model needs about 15.3 GiB of weights and about 0.6 GiB of KV cache for the 8192 context at one sequence. A larger card needs a *smaller* fraction, not a larger one - the reservation is absolute at 24 GiB, so the same package is served identically on every card that can hold it, and measured peak lands near 21 GiB throughout.
 
 ---
 
@@ -129,9 +129,19 @@ The model needs about 15.3 GiB of weights and about 0.6 GiB of KV cache for the 
 To the submission API the owner runs. There is no on-chain step, no upload to a
 third party, and nothing for a miner to host.
 
+`capcomp commit` writes a timelocked recipe into the commitments pallet, and is
+the preview of the chain-native path. Nothing reads it: the engine builds its
+field from the API, so a commitment made with it is inert until engine ingest
+ships. The command says so on every run.
+
+`capcomp commit` writes a timelocked recipe into the commitments pallet and is
+the chain-native path being built beside this one. Nothing reads it yet, so a
+commitment made today produces no queue entry and no scoreboard row. It is a
+rehearsal, not a second way in.
+
 A miner POSTs the recipe signed by their hotkey. The service checks the
 signature, that the hotkey is registered on the subnet, and that they have
-attempts left in the run, then stores it — replacing whatever it held for them.
+attempts left in the run, then stores it - replacing whatever it held for them.
 
 ```
 POST /submit
@@ -146,13 +156,13 @@ to both the run and the recipe so it cannot be replayed into either.
 | Attempts per run | `RESUBMISSION_LIMIT`, currently 3; only the last is measured |
 | Identical resend | Costs no attempt |
 | Max recipe size | 256 KB |
-| Stored | The final recipe only — the rest survive as digests and a count |
+| Stored | The final recipe only - the rest survive as digests and a count |
 
 Bodies are held privately until the run that pays them opens, two runs after
 the one submitted in. That is what makes copying pointless: by the time a
 recipe is readable, the run it competed in is closed and paid.
 
-The anti-copy check covers the same span from the other side — it compares a
+The anti-copy check covers the same span from the other side - it compares a
 submission against everything admitted in the last `COPY_LOOKBACK_RUNS` (2)
 runs, so a duplicate arriving while the original is still unpaid is refused,
 and one arriving after the original has been paid and published is not.
@@ -163,8 +173,8 @@ rebuild from a public ledger. What it buys is a recipe nobody can copy before it
 has been scored, a resubmission limit that can be enforced, and a recipe that
 stays retrievable rather than depending on a repository its author may delete.
 
-Validators read the record from the API — `/run/{id}`, `/run/{id}/results`,
-`/run/{id}/weights` and `/run/{id}/instances/{hotkey}` — all of which open when
+Validators read the record from the API - `/run/{id}`, `/run/{id}/results`,
+`/run/{id}/weights` and `/run/{id}/instances/{hotkey}` - all of which open when
 the run that pays them opens.
 
 The settling rule still applies: a submission must have been in for
