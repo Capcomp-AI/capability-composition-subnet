@@ -75,7 +75,7 @@ class MergeSpec(StrictModel):
         # distinct recipes that reconstruct to identical bytes, and the anti-copy
         # check would terminate whichever arrived second for copying a package it
         # never saw.
-        from capability_subnet.merge_engine.methods import canonical_method
+        from capability_subnet.common.merge_methods import canonical_method
 
         return canonical_method(value)
 

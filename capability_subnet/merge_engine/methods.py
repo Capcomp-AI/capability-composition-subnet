@@ -26,7 +26,6 @@ from collections.abc import Callable
 
 import torch
 
-from capability_subnet.common import constants as C
 from capability_subnet.common.merge_methods import (
     PIPELINES,
     MergePipeline,
@@ -34,20 +33,6 @@ from capability_subnet.common.merge_methods import (
     SparsifyMode,
 )
 from capability_subnet.merge_engine.determinism import WORK_DTYPE, generator_for
-
-#: Merge names that describe the same package, folded to one spelling.
-METHOD_ALIASES: dict[str, str] = {C.MERGE_CAT_SVD: C.MERGE_SVD}
-
-
-def canonical_method(method: str) -> str:
-    """The canonical spelling of ``method``.
-
-    Applied before a recipe is hashed so that two recipes describing the same
-    merge share a digest. Without it the anti-copy check sees them as distinct
-    submissions that happen to build identical bytes, and terminates whichever
-    arrived second for copying.
-    """
-    return METHOD_ALIASES.get(method, method)
 
 
 def pipeline_for(method: str) -> MergePipeline:

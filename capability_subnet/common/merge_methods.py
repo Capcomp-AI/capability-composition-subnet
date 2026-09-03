@@ -115,3 +115,24 @@ PIPELINES: dict[str, MergePipeline] = {
         description="Magnitude trimming followed by a plain weighted sum.",
     ),
 }
+
+
+#: Merge names that describe the same package, folded to one spelling.
+METHOD_ALIASES: dict[str, str] = {C.MERGE_CAT_SVD: C.MERGE_SVD}
+
+
+def canonical_method(method: str) -> str:
+    """The canonical spelling of ``method``.
+
+    Applied before a recipe is hashed so that two recipes describing the same
+    merge share a digest. Without it the anti-copy check sees them as distinct
+    submissions that happen to build identical bytes, and terminates whichever
+    arrived second for copying.
+
+    Here rather than beside the pipelines because a recipe is validated far more
+    often than it is merged, and validating must not need a merge engine.
+    Folding a name through ``merge_engine.methods`` pulled in torch by way of
+    the package, so ``capcomp init`` - the first command in the miner guide -
+    failed on the install the guide documents with ``No module named 'torch'``.
+    """
+    return METHOD_ALIASES.get(method, method)
