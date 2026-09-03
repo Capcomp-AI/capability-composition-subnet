@@ -6,7 +6,7 @@ engine published. It is the weaker of the two claims and it is not the default.
 
 What keeps it from being a relay is that every refusal below ends the same way:
 this validator burns, with its own stake. These pin that, because the failure
-mode of a mode like this is silent — a vector that is merely passed along looks
+mode of a mode like this is silent - a vector that is merely passed along looks
 exactly like one that was checked.
 """
 
@@ -29,10 +29,32 @@ class TestTheModeIsOfferedAndLocalIsTheDefault:
 
     def test_endpoint_has_to_be_asked_for(self, monkeypatch):
         monkeypatch.setattr(
-            "sys.argv", ["capability-subnet-validator", "--neuron.mode", "endpoint"]
+            "sys.argv",
+            [
+                "capability-subnet-validator",
+                "--neuron.mode",
+                "endpoint",
+                "--neuron.backend_url",
+                "https://engine.example",
+            ],
         )
 
         assert build_config("validator").mode == "endpoint"
+
+    def test_endpoint_without_an_engine_is_refused_at_startup(self, monkeypatch):
+        """Not a default to fall back on: there is nothing to fall back to.
+
+        Endpoint mode reads scores from an engine. Starting without one gives a
+        neuron that runs, reads nothing and sets no weights, which looks healthy
+        from outside for as long as nobody checks the emissions.
+        """
+        monkeypatch.setattr(
+            "sys.argv", ["capability-subnet-validator", "--neuron.mode", "endpoint"]
+        )
+        monkeypatch.delenv("CAPSUB_BACKEND_URL", raising=False)
+
+        with pytest.raises(SystemExit, match="needs --neuron.backend_url"):
+            build_config("validator")
 
     def test_nothing_else_is_accepted(self, monkeypatch):
         """A typo must not fall through to whichever branch is the else."""

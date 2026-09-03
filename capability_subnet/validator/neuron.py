@@ -3,7 +3,7 @@
 ``local`` (the default) measures. It rebuilds every candidate on this host's own
 GPUs, serves it through a runtime it starts itself, and scores it against
 instances regenerated from a block hash. It needs a CUDA device, an adapter pool
-and `capability-subnet[merge]`, and it trusts no one — the whole reason those
+and `capability-subnet[merge]`, and it trusts no one - the whole reason those
 requirements are not negotiable. This is the stronger claim: every number comes
 from work this host did, so agreeing with the other validators is evidence.
 
@@ -20,7 +20,7 @@ reproducible across devices, so two honest validators on different cards build
 different weights from the same recipe; they are compared on outcomes over a
 shared core of instances instead.
 
-Third parties can still audit without a GPU — the disclosure replay tooling in
+Third parties can still audit without a GPU - the disclosure replay tooling in
 :mod:`capability_subnet.audit` is exactly that, and it did not need weight-setting
 rights to be useful.
 """
@@ -122,14 +122,26 @@ class ValidatorNeuron:
         self.uid = self._resolve_uid()
         self.last_weight_block = 0
         self.should_exit = False
-        self._slots = self._build_slots()
+        # Endpoint mode reads scores rather than producing them, so it has no
+        # use for a measuring fleet - and building one made a GPU-less host log
+        # that it was "measuring on 1 device(s)" before doing nothing of the
+        # kind. The queue stays empty, and _slot() is never reached.
+        self._slots = self._build_slots() if self.mode == "local" else queue.Queue()
 
-        log.info(
-            "validator ready: uid %s on netuid %s, measuring on %s",
-            self.uid,
-            self.config.netuid,
-            self.config.device,
-        )
+        if self.mode == "local":
+            log.info(
+                "validator ready: uid %s on netuid %s, measuring on %s",
+                self.uid,
+                self.config.netuid,
+                self.config.device,
+            )
+        else:
+            log.info(
+                "validator ready: uid %s on netuid %s, reading scores from %s",
+                self.uid,
+                self.config.netuid,
+                self.config.backend_url,
+            )
 
     def _preflight_own_evaluation(self) -> None:
         """Refuse to start if this host cannot actually measure a candidate.
@@ -165,14 +177,14 @@ class ValidatorNeuron:
             problems.append(
                 f"the reconstruction stack cannot be imported ({exc}). A validator rebuilds "
                 "every candidate locally, and this is not part of the base install. Install "
-                "`capability-subnet[merge]` — there is no mode that skips it."
+                "`capability-subnet[merge]` - there is no mode that skips it."
             )
 
         device = str(getattr(self.config, "device", "cuda"))
         if not device.startswith("cuda"):
             problems.append(
                 f"--neuron.device is {device!r}. A validator rebuilds every submission "
-                "locally, and the trimming methods run roughly thirty times slower on a CPU — "
+                "locally, and the trimming methods run roughly thirty times slower on a CPU - "
                 "a queue that takes minutes per candidate on a GPU takes most of a day, so a "
                 "CPU validator would fall behind the run it is meant to decide. Set a CUDA "
                 "device; there is no mode that measures without one."
@@ -211,7 +223,7 @@ class ValidatorNeuron:
         """One measuring slot per device: a CUDA device and a port of its own.
 
         A served candidate reserves almost the whole card, so a slot is a whole
-        device rather than a share of one — two packages on one card would
+        device rather than a share of one - two packages on one card would
         contend for memory and each would measure the other's footprint as its
         own, which is precisely what the peak-VRAM gate must not depend on.
 
@@ -244,21 +256,39 @@ class ValidatorNeuron:
         Cards are the unit of parallelism: one candidate per card, so a run's
         throughput is the card count. Defaulting to one device left three
         quarters of a four-card host idle unless the operator knew to pass
-        --neuron.devices, and the symptom was not an error — just a validator
+        --neuron.devices, and the symptom was not an error - just a validator
         that took four times as long and fell behind the run it is meant to
         decide.
 
-        Falls back to the single configured device if torch cannot enumerate
-        them, which is the same behaviour as before rather than a new failure.
+        Raises rather than guessing when there is nothing to enumerate. The
+        previous fallback returned ``["cuda"]`` on a host with no torch, no
+        driver and no card, so a validator with no GPU at all announced that it
+        was measuring on one device and then failed a run later, deep in a
+        merge, with an error about the device that never existed. A host that
+        cannot measure has to hear so at start-up.
+
+        Raises:
+            SystemExit: if no CUDA device can be enumerated.
         """
         try:
             import torch
 
             count = torch.cuda.device_count()
-        except Exception:  # noqa: BLE001 - no torch, no CUDA, no driver
-            count = 0
+        except Exception as exc:  # noqa: BLE001 - no torch, no CUDA, no driver
+            raise SystemExit(
+                f"error: --neuron.mode=local needs CUDA devices and torch could not "
+                f"enumerate any: {exc}\n"
+                "Local mode measures every candidate on this host's GPUs. Install "
+                "torch with CUDA support, or run --neuron.mode=endpoint, which reads "
+                "scores from an engine and needs no GPU."
+            ) from exc
         if count <= 0:
-            return ["cuda"]
+            raise SystemExit(
+                "error: --neuron.mode=local needs at least one CUDA device and torch "
+                "reports none.\n"
+                "Local mode measures every candidate on this host's GPUs. Check the "
+                "driver, or run --neuron.mode=endpoint, which needs no GPU."
+            )
         return [f"cuda:{index}" for index in range(count)]
 
     @contextmanager
@@ -291,8 +321,8 @@ class ValidatorNeuron:
         """Where a refused run's emission goes.
 
         The subnet owner's UID, resolved from the metagraph every pass. UID 0 is
-        not a burn address — it belongs to whichever neuron registered into the
-        first slot — so a compiled-in 0 pays that neuron for nothing. When the
+        not a burn address - it belongs to whichever neuron registered into the
+        first slot - so a compiled-in 0 pays that neuron for nothing. When the
         owner holds no UID there is nothing safe to route to, and the validator
         submits nothing at all rather than paying an arbitrary miner.
         """
@@ -462,13 +492,13 @@ class ValidatorNeuron:
         The weaker of the two claims, and it is offered because a validator that
         cannot afford four cards is otherwise a validator the network does not
         have. What it is not is a relay: the engine publishes a signed report for
-        every candidate — its scores, its gates and its grade — and this
+        every candidate - its scores, its gates and its grade - and this
         validator computes the weight vector from that stream itself. It trusts
         the operator for nothing beyond the measurement, and even that it checks:
         every report must be signed by a hotkey on this validator's own
         allow-list, a sampled instance must re-score to its published trace, and
         the run's draw must match the chain. Anything that fails, it burns
-        instead — with its own stake, not the publisher's.
+        instead - with its own stake, not the publisher's.
         """
         from capability_subnet.common.chain import run_id_for_block
         from capability_subnet.scoring.weight_vector import vector_from_reports
@@ -562,7 +592,7 @@ class ValidatorNeuron:
         The throne is a fact about the subnet's history rather than about one
         run, so it is carried in the run reports: each run records the grade of
         whoever holds it once that run has been decided, and the next run reads
-        it back. Nothing is synthesised from the current run's own field —
+        it back. Nothing is synthesised from the current run's own field -
         crowning this run's leader would mean crowning whoever led a field of
         one, and paying the full champion share every run regardless of whether
         anything was taken.
@@ -600,8 +630,8 @@ class ValidatorNeuron:
         that reached the queue in a different order therefore submitted
         different vectors from the same evidence.
 
-        So the pipeline is three runs deep — committed in N, measured in N+1,
-        paid in N+2 — and this is the last step. Read back from the run report
+        So the pipeline is three runs deep - committed in N, measured in N+1,
+        paid in N+2 - and this is the last step. Read back from the run report
         rather than kept in memory, so a validator restarted between runs pays
         what it measured instead of starting again with nothing.
         """
@@ -615,8 +645,8 @@ class ValidatorNeuron:
             entries = payload["weights"]
         except (OSError, ValueError, KeyError) as exc:
             # Never invent a vector. A validator that has not measured run
-            # source_run — because it was down, or because this is its first
-            # run — has no evidence for paying anyone, and burning is what the
+            # source_run - because it was down, or because this is its first
+            # run - has no evidence for paying anyone, and burning is what the
             # rest of this class does when the evidence is missing.
             self._burn(
                 block,
@@ -661,8 +691,8 @@ class ValidatorNeuron:
 
         The weight vector says what a miner was paid; on its own it never says
         what it was paid *for*. These are the numbers the decision was made from,
-        and without them a miner asking why it earned nothing — and an operator
-        asking whether this host is measuring sanely — both have only the answer
+        and without them a miner asking why it earned nothing - and an operator
+        asking whether this host is measuring sanely - both have only the answer
         to look at. They are computed either way; the cost here is writing them
         down before they are thrown away.
         """
@@ -725,7 +755,7 @@ class ValidatorNeuron:
                 "instances": len(outcome.assignment),
                 # The grade the *next* run's challengers have to beat. The
                 # throne outlives a run, and this file is the only thing that
-                # carries it across one — a validator restarted between runs
+                # carries it across one - a validator restarted between runs
                 # reads it back rather than starting from an empty throne and
                 # paying a field that cleared nothing.
                 "champion_grade": _champion_grade(outcome, reigning),
@@ -754,7 +784,7 @@ class ValidatorNeuron:
         except Exception:  # noqa: BLE001 - reporting must never stop the run
             # Louder than it was: this file is no longer only evidence. The
             # next run submits its weights from it, so losing it costs a run's
-            # emission — which is burned rather than guessed.
+            # emission - which is burned rather than guessed.
             log.error(
                 "could not write the run report; run %d will have nothing to pay from "
                 "and will burn",
@@ -775,8 +805,8 @@ class ValidatorNeuron:
         same probe the candidates face.
 
         Split across the whole fleet rather than run on one card. The reference
-        has to finish before any candidate starts — every candidate's retention
-        is scored against its probe and every margin against its score — so it
+        has to finish before any candidate starts - every candidate's retention
+        is scored against its probe and every margin against its score - so it
         is the one sweep no amount of candidate concurrency can overlap, and
         leaving three cards idle through it is the whole fleet running at a
         quarter speed for the length of a full instance draw.
