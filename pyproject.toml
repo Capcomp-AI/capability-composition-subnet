@@ -113,7 +113,6 @@ testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning"]
 markers = [
   "gpu: requires a CUDA device and the pinned base model",
-  "docker: requires a working Docker daemon",
   "chain: requires a reachable subtensor endpoint",
 ]
 

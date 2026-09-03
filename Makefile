@@ -48,12 +48,6 @@ validator: ## Run the thin validator neuron
 miner-validate: ## Validate a recipe file locally (RECIPE=path/to/recipe.json)
 	$(PY) -m capability_subnet.miner.cli validate --recipe $(RECIPE)
 
-docker-sandbox-up: ## Bring up the sandbox tool services for local debugging
-	docker compose -f docker/docker-compose.sandbox.yml up -d
-
-docker-sandbox-down: ## Tear the sandbox tool services down
-	docker compose -f docker/docker-compose.sandbox.yml down -v
-
 clean: ## Remove build and cache artifacts
 	rm -rf build dist *.egg-info .pytest_cache .ruff_cache
 	find . -name '__pycache__' -type d -prune -exec rm -rf {} +
