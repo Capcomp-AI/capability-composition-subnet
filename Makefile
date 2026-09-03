@@ -42,12 +42,6 @@ import-pool: ## Fetch and normalise the certified pool from its pinned upstream 
 registry-snapshot: ## Print the frozen certified adapter snapshot digest
 	$(PY) -m capability_subnet.registry.cli snapshot
 
-backend: ## Run the evaluation engine control loop
-	$(PY) -m capability_subnet.backend.service
-
-backend-api: ## Run the read-only backend API that validators poll
-	$(PY) -m capability_subnet.backend.api
-
 validator: ## Run the thin validator neuron
 	$(PY) neurons/validator.py
 

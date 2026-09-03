@@ -30,6 +30,13 @@ Your recipe then walks three runs:
 | **run N+1** | it is evaluated and its score recorded |
 | **run N+2** | that score sets the weight, and your recipe and its score become public |
 
+That last row is the timing of `capcomp submit`, which is the path that is
+scored. The chain path is different and will change it: a recipe committed with
+`capcomp commit` unseals at the **start of N+1**, an hour after the run it was
+submitted in closes, because the chain opens it on a drand schedule nobody
+controls. Scores still publish at N+2 either way. See [Committing on
+chain](#committing-on-chain-preview).
+
 The gap between measuring and paying is not a delay for its own sake. A weight
 vector is a statement about a **closed** run's leaderboard. Paying inside the
 run doing the measuring means paying from a leaderboard still being written - a
@@ -372,13 +379,22 @@ Without `--confirm` it commits nothing and prints what it would do: the run the
 commitment would join, the sizes at each stage, the drand round it unseals at,
 and how much of this epoch's budget it costs.
 
-Two limits differ from the API path and are worth knowing now. A recipe must be
-at most **1,536 canonical bytes** - a sealed recipe has to fit one commitment
-field, and sealing adds a fixed 254 bytes. And the chain allows each hotkey
-**3,100 bytes of commitments per epoch** (about 72 minutes), which at typical
-recipe sizes is three or four commits; there is no cap on how many times you may
-submit overall, but you can run out within an epoch and have to wait for the
-next.
+Two limits differ from the API path and are worth knowing now.
+
+**A sealed recipe has to fit one commitment field, which is 1,024 bytes.**
+Sealing adds a fixed 254 bytes to the compressed recipe, so what matters is not
+how long your recipe is but how well it compresses - and recipes compress on
+their repetition. Ten adapters carrying the same weight in every layer group is
+2,218 canonical bytes and seals to 793. The same shape with a distinct
+six-decimal weight for every adapter in every group is 2,547 and seals to 1,063,
+which does not fit. If you are refused, reuse a weight where the value does not
+matter, round to fewer decimals, or select fewer adapters. `capcomp commit`
+without `--confirm` tells you the sizes at every stage before anything is sent.
+
+**The chain allows each hotkey 3,100 bytes of commitments per epoch**, about 72
+minutes. At typical recipe sizes that is three or four commits. There is no cap
+on how many times you may submit overall, but you can run out within an epoch
+and have to wait for the next one.
 
 **First, ask whether it would be admitted.** This costs nothing - no signature,
 no hotkey, no attempt - and it is the engine's own contract answering, not a

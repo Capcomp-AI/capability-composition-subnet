@@ -640,17 +640,25 @@ MAX_COMMITMENT_FIELDS: Final[int] = 3
 MAX_EPOCH_COMMIT_BYTES: Final[int] = 3100
 MIN_COMMIT_SPACE_BYTES: Final[int] = 100
 
-#: The largest recipe that may be committed, canonical bytes.
+#: A cheap upper bound on a recipe headed for the chain, canonical bytes.
 #:
-#: Chosen so a sealed recipe always fits a single field, which is what keeps
-#: resubmission cheap: sealing adds a flat 254 bytes, recipes compress to about
-#: 0.45 at worst, so 1536 canonical bytes seal to roughly 945 and three of them
-#: fit an epoch. Two fields would halve that and buy nothing - every recipe
-#: submitted to date is between 553 and 1535 bytes.
+#: Not the real limit, and deliberately loose. What actually has to fit is the
+#: *sealed* payload, in one MAX_TIMELOCK_FIELD_BYTES field, and how large that
+#: is depends on how well the recipe compresses - which varies by more than
+#: three to one across schema-valid recipes. A recipe of ten adapters with the
+#: same weight everywhere is 2218 canonical bytes and seals to 793; the same
+#: shape with every weight distinct is 2547 and seals to 1063, which does not
+#: fit.
 #:
-#: Distinct from the fetch-path limit, which governs a recipe arriving over
-#: HTTP and is far larger. This one is a fact about what the chain will carry.
-MAX_ONCHAIN_RECIPE_BYTES: Final[int] = 1536
+#: So this is a fast sanity check that catches an absurd recipe before any
+#: compression work, set high enough to admit anything the schema allows. The
+#: sealing step decides the real answer and says so in its own terms.
+#:
+#: An earlier value of 1536 was derived from a worst-case compression ratio and
+#: was wrong in both directions: it refused legitimate recipes that would have
+#: sealed to well under a field, and it would have admitted a poorly
+#: compressing one that did not fit.
+MAX_ONCHAIN_RECIPE_BYTES: Final[int] = 4096
 
 #: Runs between measuring a submission and paying for it.
 #:

@@ -658,20 +658,17 @@ python -m capability_subnet.workflows.cli selftest --count 20 --split ood
 
 The scripted reference solver knows every answer, so anything less than 20/20 means the workflow itself is broken.
 
-### A full engine pass
+### A synthetic pool and pack
 
 ```bash
 ./scripts/run_dev_engine.sh
 ```
 
-This builds a *synthetic* adapter pool - structurally identical to the real one, random weights - generates a small public pack, runs one engine pass in dry-run mode, and renders the dashboard. It exercises reconstruction, hashing and the loop without downloading four gigabytes of real weights, and it cannot reach a live network: synthetic adapters carry no certification record, and preflight refuses to start while any pool member is uncertified.
+This builds a *synthetic* adapter pool - structurally identical to the real one, random weights - and generates a small public pack. It exercises reconstruction, hashing and the workflow contract without downloading four gigabytes of real weights, and it cannot reach a live network: synthetic adapters carry no certification record, and preflight refuses to start while any pool member is uncertified.
 
-For the real pool, `make import-pool` fetches and normalises the certified adapters from their pinned upstream sources. Then:
+It does not run the evaluation engine. The engine is a separate component the subnet operator runs; it is not in this package, and a validator does not install or start one. Endpoint mode reads the engine your operator points you at, over the network.
 
-```bash
-CAPSUB_STATE_DIR=.dev-state python -m capability_subnet.backend.api
-curl localhost:8080/health
-```
+For the real pool, `make import-pool` fetches and normalises the certified adapters from their pinned upstream sources.
 
 ### With a real model
 
@@ -711,10 +708,6 @@ btcli subnet register --netuid 1 --wallet.name owner --wallet.hotkey default \
 Run the pieces against it:
 
 ```bash
-# Engine
-CAPSUB_NETUID=1 CAPSUB_CHAIN_ENDPOINT=ws://127.0.0.1:9944 \
-python -m capability_subnet.backend.service --config backend.yaml
-
 # Validator
 python neurons/validator.py --netuid 1 \
     --wallet.name owner --wallet.hotkey default \
@@ -782,23 +775,6 @@ The last one is not bureaucracy. If validation costs more than it earns, validat
 btcli subnet register --netuid <netuid> --subtensor.network finney \
     --wallet.name <coldkey> --wallet.hotkey <hotkey>
 ```
-
-### Engine
-
-```bash
-docker compose -f docker/docker-compose.sandbox.yml up -d
-docker compose -f docker/docker-compose.engine.yml up -d
-```
-
-Or directly, under a process manager:
-
-```bash
-pm2 start "python -m capability_subnet.backend.service --config backend.yaml" --name capsub-engine
-pm2 start "python -m capability_subnet.backend.api --config backend.yaml"     --name capsub-api
-pm2 save && pm2 startup
-```
-
-Put the API behind TLS. It is read-only and cannot change engine state, but validators are trusting what it returns, and a plaintext channel invites a party that is not you to answer.
 
 ### Validator
 

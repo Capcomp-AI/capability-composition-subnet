@@ -101,16 +101,22 @@ def seal(recipe, run_id: int, *, run_blocks: int = C.DEFAULT_RUN_BLOCKS) -> Seal
     check_round_is_ahead(reveal_round)
     ciphertext = _encrypt(T.frame_payload(compressed), reveal_round)
 
-    capacity = C.MAX_COMMITMENT_FIELDS * C.MAX_TIMELOCK_FIELD_BYTES
-    if len(ciphertext) > capacity:
+    # One field, not three. The pallet allows three, but a commitment is written
+    # as a single sealed payload here, and a ciphertext larger than one field
+    # cannot be stored in one: the chain would refuse the extrinsic. Checking
+    # against the field rather than the commitment is what keeps seal() from
+    # handing commit() something the chain will not take.
+    if len(ciphertext) > C.MAX_TIMELOCK_FIELD_BYTES:
         raise CommitError(
-            f"this recipe seals to {len(ciphertext):,} bytes and one commitment holds "
-            f"{capacity:,}.\n"
-            f"It is {len(body):,} canonical bytes, which is inside the "
-            f"{C.MAX_ONCHAIN_RECIPE_BYTES:,}-byte limit, but it compressed unusually "
-            f"poorly ({len(compressed):,} bytes).\n"
-            "Repetitive adapter names and long free-text fields compress well; random "
-            "identifiers do not. Shorten output.adapter_name and try again."
+            f"this recipe seals to {len(ciphertext):,} bytes and one commitment field "
+            f"holds {C.MAX_TIMELOCK_FIELD_BYTES:,}.\n"
+            f"It is {len(body):,} canonical bytes and compressed to "
+            f"{len(compressed):,}, which is a poorer ratio than most recipes manage - "
+            "sealing then adds a fixed 254 bytes.\n"
+            "Recipes compress on their repetition. Weights that repeat across layer "
+            "groups cost almost nothing; a distinct six-decimal weight for every "
+            "adapter in every group is what pushes one over. Reuse a weight where the "
+            "value does not matter, round to fewer decimals, or select fewer adapters."
         )
 
     return Sealed(
