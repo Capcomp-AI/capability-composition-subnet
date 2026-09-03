@@ -1,11 +1,13 @@
 """How a validator gets the field it measures.
 
-The chain used to carry it. It does not any more — miners submit to the
-submission service — and a validator still reading commitments measures an
-empty subnet and burns every run. These cover the replacement: that the bodies
-are checked against their digests before anything is measured, that a field
-spanning two source runs is assembled correctly, and that a refusal says what
-to do about it.
+Submissions live in the service, not on the chain, and a run's bodies are
+readable only once that run is public. These cover what the client does with
+that: bodies checked against their digests before anything is measured, a field
+assembled correctly across the two source runs, and a refusal that says what
+happened rather than looking like an empty subnet.
+
+There is no signature and no credential here. The route is public or it
+refuses, so nothing in this module can open a run early.
 """
 
 from __future__ import annotations
@@ -89,7 +91,7 @@ class TestBodiesAreCheckedBeforeTheyAreMeasured:
         monkeypatch.setattr(httpx, "get", serving({411: [tampered]}))
 
         with pytest.raises(F.FieldError) as caught:
-            F.fetch_run("http://api.invalid", 411, Wallet())
+            F.fetch_run("http://api.invalid", 411)
 
         assert "hashing to" in str(caught.value)
 
@@ -99,7 +101,7 @@ class TestBodiesAreCheckedBeforeTheyAreMeasured:
         body = {"schema_version": 1, "selected_adapters": ["a", "b"]}
         monkeypatch.setattr(httpx, "get", serving({411: [entry("5Aaa", body, 100)]}))
 
-        got = F.fetch_run("http://api.invalid", 411, Wallet())
+        got = F.fetch_run("http://api.invalid", 411)
 
         assert len(got) == 1
         assert json.loads(got[0].recipe_raw) == body
@@ -121,24 +123,7 @@ class TestBodiesAreCheckedBeforeTheyAreMeasured:
         monkeypatch.setattr(httpx, "get", serving({411: [good, bad]}))
 
         with pytest.raises(F.FieldError):
-            F.fetch_run("http://api.invalid", 411, Wallet())
-
-
-class TestWhatTheSignatureCovers:
-    def test_it_is_bound_to_the_run(self, monkeypatch):
-        """A signature captured for one run must not open the next."""
-        import httpx
-
-        get = serving({413: [], 414: []})
-        monkeypatch.setattr(httpx, "get", get)
-        F.field_for_run("http://api.invalid", 415, Wallet())
-
-        who = Wallet.hotkey.ss58_address
-        for run_id, params in get.captured["params"]:
-            expected = hashlib.sha256(F.signing_message(run_id, who)).digest().hex()
-            assert params["signature"] == expected
-            assert params["hotkey"] == who
-        assert F.signing_message(411, who) != F.signing_message(412, who)
+            F.fetch_run("http://api.invalid", 411)
 
 
 class TestTheFieldSpansTwoSourceRuns:
@@ -170,8 +155,8 @@ class TestTheFieldSpansTwoSourceRuns:
         }
         monkeypatch.setattr(httpx, "get", serving(by_run))
 
-        measured_414 = F.field_for_run("http://api.invalid", 414, Wallet())
-        measured_415 = F.field_for_run("http://api.invalid", 415, Wallet())
+        measured_414 = F.field_for_run("http://api.invalid", 414)
+        measured_415 = F.field_for_run("http://api.invalid", 415)
 
         assert [e.hotkey for e in measured_414] == ["5Early"]
         # Held over, not dropped: run 415 reaches back into run 413 for it.
@@ -182,22 +167,30 @@ class TestTheFieldSpansTwoSourceRuns:
 
         get = serving({})
         monkeypatch.setattr(httpx, "get", get)
-        F.field_for_run("http://api.invalid", 415, Wallet())
+        F.field_for_run("http://api.invalid", 415)
 
         assert sorted(run for run, _ in get.captured["params"]) == [413, 414]
 
 
 class TestRefusalsAreExplained:
-    def test_a_competitor_is_told_why(self, monkeypatch):
+    def test_an_unpublished_run_is_told_apart_from_an_empty_one(self, monkeypatch):
+        """The refusal a validator meets every run it is asked to measure.
+
+        Its field is published two runs after submission, so the run being
+        scored is never readable. That has to arrive as a stated reason, not as
+        a field of zero — the two produce the same weight vector and only one
+        of them is a statement about the miners.
+        """
         import httpx
 
-        detail = "uid 7 submitted into run 411; a run you competed in is readable…"
+        detail = "run 411 is not public yet; its bodies are published when run 413 opens"
         monkeypatch.setattr(httpx, "get", lambda *a, **k: Response(403, {"detail": detail}))
 
         with pytest.raises(F.FieldError) as caught:
-            F.fetch_run("http://api.invalid", 411, Wallet())
+            F.fetch_run("http://api.invalid", 411)
 
-        assert "submitted into run 411" in str(caught.value)
+        assert "not published yet" in str(caught.value)
+        assert "run 413 opens" in str(caught.value)
 
     def test_an_unreachable_service_is_not_an_empty_field(self, monkeypatch):
         """The two must not look alike.
@@ -214,6 +207,6 @@ class TestRefusalsAreExplained:
         monkeypatch.setattr(httpx, "get", boom)
 
         with pytest.raises(F.FieldError) as caught:
-            F.fetch_run("http://api.invalid", 411, Wallet())
+            F.fetch_run("http://api.invalid", 411)
 
         assert "could not reach" in str(caught.value)

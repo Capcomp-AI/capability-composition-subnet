@@ -35,60 +35,45 @@ Each run, your validator fetches the run's field from the submission service, ch
 
 ### Getting the field
 
-Miners submit to the submission service, not to the chain. There is no
-commitment to read: a validator that reads only commitments sees an empty
-subnet and burns every run, however full the network looks.
-
-So `local` mode fetches the field:
+Miners submit to the submission service, not to the chain, and **a run's
+submissions are published two runs after they were made** — the same moment
+they become public to everyone.
 
 ```
-GET {api.url}/run/{run_id}/submissions?hotkey=...&signature=...
+GET {api.url}/run/{run_id}/submissions      # no hotkey, no signature
 ```
 
-A run's recipe bodies are public two runs after they are submitted — which is
-*after* the run has been measured and paid. You need them during it. The route
-serves them early, and only to a hotkey the operator has named:
+There is no early-access route and no credential that opens one. A validator,
+a miner and an auditor are on identical terms.
 
-1. **your hotkey is on the allow-list.** The operator keeps it, per deployment.
-   It is empty by default, so a service that has not been told who to trust
-   serves nobody. Ask to be added before you start; there is no way to earn
-   your way on, deliberately.
-2. **you sign.** Over the exact string `capcomp-validator:v1:{run_id}:{hotkey}`,
-   so the run is part of what was signed and a signature captured for one run
-   does not open the next.
-3. **you did not submit into that run.** A backstop under the list, not a
-   substitute for it: it can only ever deny, and it denies the one thing the
-   list cannot catch — a named reader that is also competing in the very run it
-   is asking to read. The clause lifts once the run is public, because by then
-   `/run/{run_id}` serves the same bodies to anyone.
+**What that means for `local` mode, stated plainly.** The field you would need
+to score run N during run N+1 is not readable then; it is published at N+2,
+after that run has been paid. So a validator cannot derive the run's weight
+vector from the submissions in the window that pays it. What it *can* do is
+measure a published run on its own hardware and compare its numbers against
+the archive — verification after the fact, which is the honest description of
+what is available today.
 
-A validator permit is deliberately **not** what opens this. A permit is earned
-with stake, so a well-staked miner holds one, and several permit holders on
-this subnet also mine — a permit-shaped gate would be a copy channel wearing an
-access list. Everyone not named waits for run N+2 like everyone else.
-
-Your validator does this for you, with the hotkey it already runs as. Point it
-at the service if you are not using the default:
+Point the validator at the service if you are not using the default:
 
 ```bash
 --api.url https://api.capcomp.ai      # or CAPSUB_API_URL
 ```
 
-**What this does and does not take on trust.** The service delivers bytes; it
-does not get to say what they are worth. Every body is hashed and checked
-against the digest its row carries before it becomes a candidate, and a single
-mismatch fails the whole fetch rather than shortening the field — a field
-quietly missing its unverifiable entries is one you would rank and pay from,
-with those miners looking like miners who never submitted. If the service is
-unreachable the validator burns *and says so*: an outage and an empty subnet
-produce the same vector and are not the same event.
+**What is and is not taken on trust.** The service delivers bytes; it does not
+get to say what they are worth. Every body is hashed against the digest its row
+carries before it becomes a candidate, and a single mismatch fails the whole
+fetch rather than shortening the field — a field quietly missing its
+unverifiable entries is one you would rank and pay from, with those miners
+looking like miners who never submitted. A run that is not published yet is
+reported as exactly that, never as an empty field: the two produce the same
+weight vector and only one of them is a statement about the miners.
 
 **Two source runs, not one.** A submission is measured in the run after the one
 it was made in — unless it was made within `min_commitment_age_blocks` (300) of
-that run closing, in which case it is held over one further run. Run N's field
-is therefore the settled part of run N-1 plus the late part of N-2. The
-validator fetches both and selects between them from the submission block
-alone, so every validator assembles the same field from the same chain.
+that run closing, in which case it is held over one further run. A run's field
+is therefore the settled part of N-1 plus the late part of N-2, and both must
+be published before that field can be assembled in full.
 
 A run is 24 hours (7200 blocks) and boundaries are anchored: run 412 opens at block 8,908,667, about 12:00 Eastern on 23 August 2026, and each run after it opens 7200 blocks later. So the pipeline is three runs deep:
 

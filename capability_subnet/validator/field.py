@@ -5,23 +5,16 @@ and any validator could read both without asking anyone. It does not any more �
 miners submit to the submission service — so a validator that still reads
 commitments measures an empty subnet and burns every run.
 
-This closes that, and the shape of the route it calls is the whole of the
-argument for why it is safe to. A run's bodies are public two runs after they
-are submitted, which is after the run has been measured and paid; serving them
-earlier to a competitor would hand them the one thing the delay exists to
-withhold. So the service serves them early only to a **named** validator: an
-allow-list the operator keeps, empty by default, and everybody not on it waits
-for the run to become public like everyone else.
+**A run's bodies are readable only once it is public**, two runs after
+submission. There is no early-access route and no credential that opens one:
+the same rule applies to a validator, a miner and an auditor alike.
 
-A validator permit is deliberately not the gate. It is earned with stake, so a
-well-staked miner holds one, and several permit holders on this subnet also
-submit — a permit-shaped gate would be a copy channel that looked like an
-access-control list. Being on the list is a decision about a specific
-validator, made by the operator, and revocable the same way.
-
-On top of the list the caller signs :data:`SIGNING_PREFIX` with the run in it,
-so the grant proves possession of the key and does not carry from the run it
-was issued for to the next one.
+What that costs is worth naming, because it decides what this module can be
+used for. A validator cannot read the field of the run it is measuring — those
+bodies arrive at N+2, after that run has been paid — so it cannot derive that
+run's weight vector from the submissions themselves in time. What it can do is
+measure a published run and compare its own numbers against the archive, which
+is verification after the fact rather than in the paying window.
 
 Every body is checked against the digest the row carries before it becomes a
 candidate. The service could serve a recipe that is not the one the miner
@@ -38,14 +31,6 @@ from capability_subnet.common import constants as C
 from capability_subnet.common.chain import measured_in_run
 
 log = logging.getLogger(__name__)
-
-#: Signed to read a run's bodies before they are public. Bound to the run, so a
-#: signature captured for one run does not open the next.
-SIGNING_PREFIX = "capcomp-validator:v1"
-
-
-def signing_message(run_id: int, hotkey: str) -> bytes:
-    return f"{SIGNING_PREFIX}:{run_id}:{hotkey}".encode()
 
 
 class FieldError(RuntimeError):
@@ -67,7 +52,6 @@ class FetchedSubmission:
 def field_for_run(
     api_url: str,
     measuring_run: int,
-    wallet,
     *,
     run_blocks: int = C.DEFAULT_RUN_BLOCKS,
     timeout: float = 60.0,
@@ -85,13 +69,18 @@ def field_for_run(
     alone. Every validator reads the same blocks and selects the same field, so
     there is nothing here to disagree about.
 
-    N-2 is already public, so only N-1 needs the early route.
+    Both source runs must be public for this to return a complete field. When
+    ``measuring_run`` is the run currently being measured, N-1 is not — it
+    becomes public at N+1 — and this raises rather than returning the N-2 half
+    alone. A field short of the run it is supposed to measure is one a caller
+    would rank and pay from, with the missing miners looking like miners who
+    never submitted.
     """
     seen: dict[str, FetchedSubmission] = {}
     for source in (measuring_run - 2, measuring_run - 1):
         if source < 0:
             continue
-        for entry in fetch_run(api_url, source, wallet, timeout=timeout):
+        for entry in fetch_run(api_url, source, timeout=timeout):
             if not measured_in_run(entry.first_block, measuring_run, run_blocks):
                 continue
             # A hotkey appearing in both source runs submitted twice; the row
@@ -112,7 +101,6 @@ def field_for_run(
 def fetch_run(
     api_url: str,
     run_id: int,
-    wallet,
     *,
     timeout: float = 60.0,
 ) -> list[FetchedSubmission]:
@@ -125,25 +113,17 @@ def fetch_run(
     """
     import httpx
 
-    hotkey = wallet.hotkey.ss58_address
-    signature = wallet.hotkey.sign(signing_message(run_id, hotkey)).hex()
-
     try:
-        response = httpx.get(
-            f"{api_url.rstrip('/')}/run/{run_id}/submissions",
-            params={"hotkey": hotkey, "signature": signature},
-            timeout=timeout,
-        )
+        response = httpx.get(f"{api_url.rstrip('/')}/run/{run_id}/submissions", timeout=timeout)
     except Exception as exc:
         raise FieldError(f"could not reach the submission service: {exc}") from exc
 
     if response.status_code in (401, 403):
-        # These are refusals with reasons, and the reason is what the operator
-        # needs. "403" alone sends them looking at the network.
-        detail = _detail(response)
-        raise FieldError(f"the submission service refused this hotkey: {detail}")
+        # The run is not public yet. Not a permissions problem to work around:
+        # nothing opens it early, so the reason is the whole answer.
+        raise FieldError(f"run {run_id} is not published yet: {_detail(response)}")
     if response.status_code == 404:
-        raise FieldError(f"run {run_id} is not a run the service will serve: {_detail(response)}")
+        raise FieldError(f"run {run_id} has not closed: {_detail(response)}")
     try:
         response.raise_for_status()
         payload = response.json()

@@ -356,13 +356,16 @@ class ValidatorNeuron:
             fetched = field_for_run(
                 getattr(self.config, "api_url", "") or "https://api.capcomp.ai",
                 run_id,
-                self.wallet,
                 run_blocks=run_blocks,
             )
         except FieldError as exc:
-            # An empty field and an unreachable service produce the same weight
-            # vector — everything burns — and they are not the same event. Say
-            # which one this was, and burn with the reason attached.
+            # Expected, not exceptional, for the run currently being measured:
+            # its submissions are published two runs after they were made, so
+            # this validator cannot read the field it is being asked to score.
+            #
+            # It burns and says so. An empty field and an unreadable one
+            # produce the same weight vector, and reporting the second as the
+            # first would describe a subnet nobody entered.
             log.error("run %s: could not read the field: %s", run_id, exc)
             self._burn(block, reason=f"could not read run {run_id}'s field: {exc}")
             return

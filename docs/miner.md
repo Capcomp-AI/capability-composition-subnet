@@ -457,7 +457,7 @@ information, because there it is your own record you are asking for and
 not have to pull forty rows and find yourself in them:
 
 ```bash
-capcomp result --run 419 --uid 72
+capcomp result --run 419 --uid 7
 capcomp result --run 419 --hotkey <ss58> --recipe    # include the body
 capcomp result --run 419 --json                      # the raw payload
 ```
@@ -933,38 +933,19 @@ reached from the chain and what the digests do and do not prove.
 
 ### Who can read it before it is public
 
-Whoever is scoring it, and nobody else.
+Nobody outside the party that scores it.
 
-Measuring a recipe means reading it, and your recipe is measured in the run
-after you submit it — two runs before it is published. So the parties doing the
-scoring have always been able to read it during that window: the evaluation
-engine does, over an operator-only route, and always has. That is not a change
-and it is not avoidable; a scorer that cannot read a recipe cannot score it.
+Scoring a recipe means reading it, so the evaluation engine does — during the
+run that measures you, two runs before publication. That is unavoidable: a
+scorer that cannot read a recipe cannot score it.
 
-What is new is that this no longer stops at the operator. A validator the
-operator has **named** can fetch a closed run's bodies too, so that somebody
-other than the operator can check the work. The list is short, kept by hand,
-and empty by default. Such a validator's request has to clear three things at
-once:
+Everyone else waits. There is no allow-list, no signed route and no credential
+that opens a run early — not for validators, not for anyone. Your recipe
+becomes readable when the run that paid it opens, at which point it is public
+to the whole network at once.
 
-* the hotkey is on the operator's allow-list, which is empty by default and
-  currently holds two entries;
-* a signature over `capcomp-validator:v1:{run_id}:{hotkey}`, proving the caller
-  holds the key it claims and binding the grant to that one run;
-* that the caller **did not submit into that run**.
-
-A validator permit is *not* what opens this, and that is the point. A permit is
-earned with stake, so a well-staked miner holds one; if the permit were the gate
-the route would hand your recipe to a competitor — by name, on request, exactly
-while it mattered. Several permit holders on this subnet also mine.
-
-Every early fetch is logged with the run and the hotkey served.
-
-What this means for you: while your recipe is being measured it is readable by
-the engine scoring it and by a handful of named validators that are not
-competing in that run. **No rival can read it, and neither can the public.**
-Everyone else sees its digest and nothing more until run N+2 — which is the
-protection that mattered, and it is unchanged.
+Until then a caller sees that your submission exists and its digest, and
+nothing else.
 
 ### How do I know my recipe is valid before submitting?
 
