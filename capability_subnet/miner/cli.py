@@ -554,12 +554,6 @@ def _cmd_commit(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    print(
-        "\nnote      the chain submission path is not live yet. Recipes are still "
-        "submitted with\n          `capcomp submit`, and nothing scores a commitment made "
-        "here. This command\n          exists so you can test it before the switch."
-    )
-
     if not args.confirm:
         print("\nnothing was committed. Pass --confirm to write it on chain.")
         return 0
@@ -573,10 +567,28 @@ def _cmd_commit(args: argparse.Namespace) -> int:
 
 
 def _cmd_submit(args: argparse.Namespace) -> int:
-    """Validate, sign and send. Without --confirm, sends nothing."""
-    from capability_subnet.miner.neuron import MinerNeuron
+    """Refuse, and say where the submission went.
 
-    return MinerNeuron(config=args).submit()
+    Kept as a command rather than deleted because a miner whose script still
+    calls it needs to be told what to call instead. Removing the subcommand
+    would give them `invalid choice: \'submit\'`, which names nothing.
+    """
+    print(
+        "error: `capcomp submit` is gone. Recipes are committed on chain now.\n"
+        "\n"
+        "  capcomp commit --recipe "
+        f"{getattr(args, 'recipe', None) or '<recipe.json>'} \\\n"
+        "      --wallet.name <coldkey> --wallet.hotkey <hotkey> --confirm\n"
+        "\n"
+        "Your recipe is sealed to the drand round your run closes at and written "
+        "into the\ncommitments pallet. Nobody can read it before then, including "
+        "the operator, and\nthe chain opens it on its own - there is no service "
+        "holding it and none to ask.\n"
+        "Run it without --confirm first; it commits nothing and prints what it "
+        "would do.",
+        file=sys.stderr,
+    )
+    return 2
 
 
 def build_parser() -> argparse.ArgumentParser:

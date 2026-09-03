@@ -67,6 +67,15 @@ class MetagraphView:
     hotkeys: list[str]
     owner_hotkey: str
     commitments: list[ChainCommitment]
+    #: The pallet's records as the SDK returns them, undecoded.
+    #:
+    #: ``commitments`` above holds the decoded legacy payloads and drops
+    #: everything a timelocked commitment carries - its reveal round, whether
+    #: the chain has opened it, and the plaintext when it has. A validator
+    #: reading its field needs exactly those, so the raw records travel
+    #: alongside rather than being fetched a second time from a metagraph that
+    #: may have moved.
+    commitment_records: tuple = ()
 
     @property
     def size(self) -> int:
@@ -109,6 +118,7 @@ def fetch_metagraph(subtensor: bt.Subtensor, netuid: int) -> MetagraphView:
     records: list[tuple[Any, int | None]] = [
         (record, uid) for uid, record in sorted(graph.commitments.items())
     ]
+    records_raw = [record for _, record in sorted(graph.commitments.items())]
     records += [(record, None) for _, record in sorted(graph.unregistered_commitments.items())]
 
     for record, uid in records:
@@ -151,6 +161,7 @@ def fetch_metagraph(subtensor: bt.Subtensor, netuid: int) -> MetagraphView:
         hotkeys=list(graph.hotkeys),
         owner_hotkey=str(graph.owner_hotkey),
         commitments=commitments,
+        commitment_records=tuple(records_raw),
     )
 
 

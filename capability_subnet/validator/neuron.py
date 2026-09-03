@@ -384,16 +384,16 @@ class ValidatorNeuron:
 
         try:
             fetched = field_for_run(
-                getattr(self.config, "api_url", "") or "https://api.capcomp.ai",
+                self.subtensor,
                 run_id,
+                netuid=self.config.netuid,
                 run_blocks=run_blocks,
             )
         except FieldError as exc:
-            # A run's field is published as the run measuring it opens, so
-            # this is now a real failure rather than the expected state it used
-            # to be: the service is unreachable, or the run boundary has not
-            # been reached, or this validator's schedule disagrees with the
-            # service's about which run it is in.
+            # The chain is unreadable. Not a miner's malformed commitment -
+            # those are refused one at a time and logged, and the rest of the
+            # field is still measured - but the node itself being unreachable,
+            # which is the operator's problem and not the subnet's.
             #
             # It burns and says so. An empty field and an unreadable one
             # produce the same weight vector, and reporting the second as the
