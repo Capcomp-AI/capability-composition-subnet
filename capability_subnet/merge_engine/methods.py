@@ -27,11 +27,25 @@ from collections.abc import Callable
 import torch
 
 from capability_subnet.common.merge_methods import (
+    METHOD_ALIASES,
     PIPELINES,
     MergePipeline,
     SignMode,
     SparsifyMode,
+    canonical_method,
 )
+
+# Re-exported from their new home so the old import path keeps working.
+# `ruff --fix` removed these once as unused, which is what the names below
+# exist to prevent: they are used by importers, not by this module.
+__all__ = [
+    "METHOD_ALIASES",
+    "PIPELINES",
+    "MergePipeline",
+    "SignMode",
+    "SparsifyMode",
+    "canonical_method",
+]
 from capability_subnet.merge_engine.determinism import WORK_DTYPE, generator_for
 
 
