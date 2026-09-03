@@ -71,8 +71,15 @@ class TestNoDocumentClaimsItIsLive:
 class TestTheDocumentedLimitsAreTheRealOnes:
     """Numbers a miner would size a recipe against."""
 
-    def test_the_recipe_cap_is_the_constant(self):
-        assert f"{C.MAX_ONCHAIN_RECIPE_BYTES:,} canonical bytes" in MINER_DOC
+    def test_the_real_limit_is_documented_as_the_sealed_one(self):
+        """The canonical cap is a sanity check; the field is the real limit.
+
+        Documenting a canonical byte count as *the* limit is what made the
+        earlier number wrong in both directions, so the doc has to name the
+        field and the compression, not a single figure to build against.
+        """
+        assert f"{C.MAX_TIMELOCK_FIELD_BYTES:,} bytes" in MINER_DOC
+        assert "how well it compresses" in MINER_DOC
 
     def test_the_epoch_budget_is_the_constant(self):
         assert f"{C.MAX_EPOCH_COMMIT_BYTES:,} bytes of commitments per epoch" in MINER_DOC
