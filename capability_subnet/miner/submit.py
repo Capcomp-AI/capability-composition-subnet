@@ -1,9 +1,13 @@
 """Sending a recipe to the submission API.
 
 A miner's whole interaction with the network is this: POST the recipe, signed by
-the hotkey. Nothing goes on chain — no commitment, no transaction, no fee — and
+the hotkey. Nothing goes on chain - no commitment, no transaction, no fee - and
 the hotkey is used for one thing only, signing a short string that binds the
 miner to the exact bytes they sent.
+
+This is the path that is scored. :mod:`capability_subnet.miner.commit` is the
+chain-native one being built beside it, and until the engine reads commitments
+this module is the submission and that one is a rehearsal.
 
 Kept apart from the neuron so the signing and the request can be tested without
 a wallet or a network, and so a miner reading this file can see the entire
@@ -64,7 +68,7 @@ def open_run(api_url: str, *, timeout: float = 30.0) -> int:
 
     Unauthenticated, because it has to be: /status is bound to the run, so a
     caller needs the run before it can sign for it. The number itself is
-    public — the chain head over a published constant.
+    public - the chain head over a published constant.
     """
     import httpx
 

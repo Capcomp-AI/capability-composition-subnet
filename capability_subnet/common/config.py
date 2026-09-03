@@ -166,7 +166,7 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
         dest="weight_interval",
         type=int,
         # 150 blocks is 30 minutes at 12s. The chain's own floor is
-        # WeightsSetRateLimit — 100 blocks — so this sits clear of it; a
+        # WeightsSetRateLimit - 100 blocks - so this sits clear of it; a
         # submission refused for rate is retried, not lost.
         default=_env_int("CAPSUB_WEIGHT_INTERVAL", 150),
         help=("Minimum blocks between weight submissions. 150 is about 30 minutes."),
@@ -183,7 +183,7 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
         dest="burn_percentage",
         type=float,
         # 0.0: a validator adds nothing to whatever the ladder already burns
-        # unless its operator asks for it. Not a protocol constant — this is one
+        # unless its operator asks for it. Not a protocol constant - this is one
         # validator's own decision about its own stake.
         default=_env_float("CAPSUB_BURN_PERCENTAGE", 0.0),
         help=(
@@ -205,10 +205,14 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
         choices=("local", "endpoint"),
         default=_env("CAPSUB_VALIDATOR_MODE", "local"),
         help=(
-            "local: measure every candidate on this host's GPUs and set weights "
-            "from what you measured. endpoint: take scores from a published "
-            "engine, verify them, and set weights from those. local is the "
-            "stronger claim and the default; endpoint needs no GPU."
+            "endpoint: take scores from a published engine, verify their "
+            "signatures, and set weights from those. Needs no GPU, and it is "
+            "what works today. local: measure every candidate on this host's "
+            "GPUs - the stronger claim, but it cannot be made at the moment, "
+            "because a run's recipes are published two runs after they are "
+            "submitted and local mode needs the field of the run it is "
+            "measuring. A local validator therefore burns every run and says "
+            "so in its log. Use endpoint until that changes."
         ),
     )
     parser.add_argument(
@@ -217,12 +221,24 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
         type=str,
         default=_env("CAPSUB_API_URL", "https://api.capcomp.ai"),
         help=(
-            "Submission service. local mode reads the run's field from here: "
-            "miners submit to it rather than to the chain, so a validator that "
-            "reads only commitments measures an empty subnet. Bodies are served "
-            "early only to hotkeys the operator has named and that did not "
-            "submit into the run, "
-            "and every one is checked against its digest on arrival."
+            "Submission service. Miners submit to it rather than to the chain, "
+            "so a validator that reads only commitments measures an empty "
+            "subnet. Bodies are published two runs after they are submitted, to "
+            "everyone at once - there is no early access and no credential that "
+            "grants it. Every body is checked against its digest on arrival."
+        ),
+    )
+    parser.add_argument(
+        "--neuron.backend_url",
+        "--backend.url",
+        dest="backend_url",
+        type=str,
+        default=_env("CAPSUB_BACKEND_URL", ""),
+        help=(
+            "Engine this validator reads signed reports from. Required by "
+            "--neuron.mode=endpoint; ignored in local mode, which measures for "
+            "itself. The engine is not a public host - your operator gives you "
+            "the URL. Both spellings are accepted."
         ),
     )
     parser.add_argument(
@@ -303,8 +319,8 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
 def add_miner_args(parser: argparse.ArgumentParser) -> None:
     """Miner arguments.
 
-    A miner's on-chain action is a single commitment. Everything else — the
-    composition search itself — happens privately, on whatever hardware the
+    A miner's on-chain action is a single commitment. Everything else - the
+    composition search itself - happens privately, on whatever hardware the
     miner chooses, and is not configured here.
     """
     parser.add_argument(
@@ -325,7 +341,7 @@ def add_miner_args(parser: argparse.ArgumentParser) -> None:
         dest="api_url",
         type=str,
         default=_env("CAPSUB_API_URL", "https://api.capcomp.ai"),
-        help="Submission API. This is where a recipe is sent; nothing goes on chain.",
+        help="Submission API. This is where a recipe is sent, and the only path that is scored.",
     )
     parser.add_argument(
         "--backend.url",
@@ -389,7 +405,7 @@ def build_config(role: str) -> Config:
     """Assemble the config object for ``role`` (``miner``/``validator``/``backend``)."""
     parser = argparse.ArgumentParser(
         prog=f"capability-subnet-{role}",
-        description=f"Capability Composition Subnet — {role}",
+        description=f"Capability Composition Subnet - {role}",
     )
     add_wallet_args(parser)
     add_common_args(parser)
@@ -410,7 +426,23 @@ def build_config(role: str) -> Config:
 
 
 def _finalise(config: Config) -> None:
-    """Derive the state directory and make sure it exists."""
+    """Derive the state directory, and refuse a config that cannot work.
+
+    Endpoint mode with no engine URL used to fall through to a localhost
+    default, which on a validator's box is nothing at all: the neuron started,
+    read no reports, and set no weights, looking healthy the whole time. A
+    validator that cannot reach its engine should fail at start-up, loudly,
+    with the flag it is missing named.
+    """
+    if getattr(config, "mode", "") == "endpoint" and not getattr(config, "backend_url", ""):
+        raise SystemExit(
+            "error: --neuron.mode=endpoint needs --neuron.backend_url, and none was given.\n"
+            "Endpoint mode reads signed reports from an engine; without one there is "
+            "nothing to set weights from.\n"
+            "Your operator gives you the URL - the engine is not a public host. Set it "
+            "with --neuron.backend_url or CAPSUB_BACKEND_URL."
+        )
+
     name = getattr(config, "neuron_name", None)
     if not name:
         return

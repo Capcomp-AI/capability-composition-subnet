@@ -1,9 +1,15 @@
 """Miner command line.
 
-Everything a miner needs that does not touch the chain: inspect the pool, build a
-recipe, validate it, predict its artifact size, and see exactly what would be
-committed. Committing itself lives in the neuron, behind an explicit confirmation,
-because it is the one irreversible step.
+Almost everything a miner needs, and almost none of it touches the chain:
+inspect the pool, build a recipe, validate it, predict its artifact size, and
+see exactly what would be sent. Sending itself lives in the neuron, behind an
+explicit confirmation, because it is the one irreversible step.
+
+The exception is ``commit``, which seals a recipe and writes it into the
+commitments pallet. It is a preview of the chain-native submission path and
+nothing scores what it writes yet, which the command says every time it runs -
+a miner who mistakes it for the live path loses a run in silence, because the
+chain raises no error for a submission nobody reads.
 """
 
 from __future__ import annotations
@@ -53,7 +59,7 @@ def _cmd_pool(args: argparse.Namespace) -> int:
 def _starting_selection(snapshot) -> list[str]:
     """Adapters `init` starts from when none are named.
 
-    The whole pool is not a valid recipe — a selection is bounded above, and the
+    The whole pool is not a valid recipe - a selection is bounded above, and the
     bound is well below the number of certified adapters. Taking every one of
     them produced a recipe the schema then rejected, which made a miner's first
     command fail for a reason that looked like the pool's fault.
@@ -208,7 +214,7 @@ def _cmd_pack(args: argparse.Namespace) -> int:
 def _cmd_timing(args: argparse.Namespace) -> int:
     """Which run a submission made now would be measured and paid in.
 
-    Submitting inside the run's closing window is not refused — but it costs a
+    Submitting inside the run's closing window is not refused - but it costs a
     run, and it is almost never what a miner means, so it is said out loud here
     rather than discovered a run later when nothing was scored.
     """
@@ -234,7 +240,7 @@ def _cmd_timing(args: argparse.Namespace) -> int:
             f"{C.MIN_COMMITMENT_AGE_BLOCKS} blocks when a run opens to be measured by it, "
             f"and it cannot be.\n"
             f"Nothing is stored and no attempt is spent. Wait for run "
-            f"{position.run_id + 1} to open, then send it — it is measured in run "
+            f"{position.run_id + 1} to open, then send it - it is measured in run "
             f"{position.run_id + 2}."
         )
         return 3 if args.strict_timing else 0
@@ -259,7 +265,7 @@ def _cmd_check(args: argparse.Namespace) -> int:
 
     Local `validate` already answers most of this from the shipped pool. This
     asks the *running* engine, which is the one that decides, and needs no
-    wallet — so it can be run on any machine, as often as you like.
+    wallet - so it can be run on any machine, as often as you like.
     """
     import httpx
 
@@ -280,7 +286,7 @@ def _cmd_check(args: argparse.Namespace) -> int:
         return 4
 
     if payload.get("ok"):
-        print("ok — this recipe would be admitted")
+        print("ok - this recipe would be admitted")
         return 0
     for problem in payload.get("problems") or []:
         print(f"  {problem}", file=sys.stderr)
@@ -302,7 +308,7 @@ def _cmd_result(args: argparse.Namespace) -> int:
             # A uid is a slot, not an identity: it is reissued when a miner
             # deregisters, so the hotkey holding uid 7 today need not be the one
             # that submitted in the run being asked about. Resolved here, once,
-            # and printed — so the answer names who it is actually about.
+            # and printed - so the answer names who it is actually about.
             import bittensor as bt
 
             graph = bt.subtensor(args.network).subnets.metagraph(netuid=args.netuid)
@@ -378,10 +384,10 @@ def _cmd_result(args: argparse.Namespace) -> int:
         print(f"            {c['verdict_reason']}")
 
     if c.get("grade") is None:
-        print("  grade     — (not graded)")
+        print("  grade     - (not graded)")
     else:
         print(f"  grade     {c['grade']:.6f}")
-        print(f"  rank      {c.get('rank') or '—'}   weight {c.get('weight') or 0:.6f}")
+        print(f"  rank      {c.get('rank') or '-'}   weight {c.get('weight') or 0:.6f}")
 
     axes = [
         ("end-to-end", "end_to_end"),
@@ -479,6 +485,93 @@ def _cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_commit(args: argparse.Namespace) -> int:
+    """Seal a recipe and write it on chain. Without --confirm, commits nothing.
+
+    Every check that can be made before the extrinsic is made before it, and
+    the dry run performs all of them - because the chain accepts a wrong recipe
+    as readily as a right one, and the miner finds out a run later.
+    """
+    import bittensor as bt
+
+    from capability_subnet.miner import commit as chain
+    from capability_subnet.miner.recipe import check_recipe, load_recipe
+
+    try:
+        recipe = load_recipe(args.recipe)
+    except RecipeError as exc:
+        print(f"error: {args.recipe} could not be read as a recipe: {exc}", file=sys.stderr)
+        return 2
+
+    problems = check_recipe(recipe)
+    if problems:
+        print("error: this recipe is not valid, so nothing was committed:", file=sys.stderr)
+        for problem in problems:
+            print(f"  - {problem}", file=sys.stderr)
+        print(
+            "\nThe chain does not check recipes - it accepts any bytes - so a commitment "
+            "made now would cost you the run and report as unreadable.",
+            file=sys.stderr,
+        )
+        return 2
+
+    subtensor = bt.subtensor(args.network)
+    block = subtensor.block
+    joins = chain.run_for_commit(block)
+
+    try:
+        if args.run is not None:
+            chain.check_window(block, args.run)
+        sealed = chain.seal(recipe, args.run if args.run is not None else joins)
+    except chain.CommitError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    print(f"recipe    {sealed.recipe_sha256}")
+    print(
+        f"joins     run {sealed.run_id}, measured in {sealed.run_id + 1}, paid in "
+        f"{sealed.run_id + 2}"
+    )
+    print(
+        f"sealed    {sealed.canonical_bytes:,} canonical -> {sealed.compressed_bytes:,} "
+        f"compressed -> {len(sealed.ciphertext):,} bytes"
+    )
+    print(f"unseals   drand round {sealed.reveal_round}, when run {sealed.run_id} closes")
+    wallet = _wallet(args)
+    budget = chain.read_budget(subtensor, args.netuid, wallet.hotkey.ss58_address)
+    print(
+        f"costs     {sealed.epoch_cost:,} bytes; this hotkey has used {budget.used:,} of "
+        f"{budget.limit:,} this epoch, {budget.remaining:,} left"
+    )
+    print(
+        f"          {sealed.commits_per_epoch} commits per epoch at this size; the budget "
+        f"resets in {budget.blocks_to_reset} blocks"
+    )
+
+    try:
+        chain.check_budget(budget, sealed)
+    except chain.CommitError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    print(
+        "\nnote      the chain submission path is not live yet. Recipes are still "
+        "submitted with\n          `capcomp submit`, and nothing scores a commitment made "
+        "here. This command\n          exists so you can test it before the switch."
+    )
+
+    if not args.confirm:
+        print("\nnothing was committed. Pass --confirm to write it on chain.")
+        return 0
+
+    try:
+        print("\n" + chain.commit(subtensor, wallet, args.netuid, sealed))
+    except chain.CommitError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def _cmd_submit(args: argparse.Namespace) -> int:
     """Validate, sign and send. Without --confirm, sends nothing."""
     from capability_subnet.miner.neuron import MinerNeuron
@@ -493,9 +586,10 @@ def build_parser() -> argparse.ArgumentParser:
             "Build, check and submit composition recipes for the Capability Composition Subnet."
         ),
         epilog=(
-            "A submission is one signed request: nothing goes on chain and "
-            "nothing is published anywhere. Start with `capcomp init`, then "
-            "`capcomp check`, then `capcomp submit --confirm`."
+            "A submission is one signed request, and nothing is published until the "
+            "run that pays it opens. Start with `capcomp init`, then `capcomp check`, "
+            "then `capcomp submit --confirm`. `capcomp commit` previews the "
+            "chain-native path and is not scored yet."
         ),
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -622,6 +716,31 @@ def build_parser() -> argparse.ArgumentParser:
     _add_api(result)
     _add_wallet(result)
     result.set_defaults(func=_cmd_result)
+
+    commit = subparsers.add_parser(
+        "commit",
+        help="Seal a recipe and commit it on chain. Without --confirm, commits nothing.",
+    )
+    commit.add_argument("--recipe", required=True)
+    commit.add_argument(
+        "--run",
+        type=int,
+        default=None,
+        help="The run to submit to. Derived from the current block by default, "
+        "which is almost always what you want - a recipe sealed for one run and "
+        "committed in another unseals at the wrong time.",
+    )
+    commit.add_argument("--netuid", type=int, default=int(os.environ.get("CAPSUB_NETUID", "103")))
+    commit.add_argument(
+        "--subtensor.network", dest="network", default=os.environ.get("CAPSUB_NETWORK", "finney")
+    )
+    commit.add_argument(
+        "--confirm",
+        action="store_true",
+        help="Actually commit. Omit for a dry run that checks everything.",
+    )
+    _add_wallet(commit)
+    commit.set_defaults(func=_cmd_commit)
 
     submit = subparsers.add_parser(
         "submit", help="Sign and send a recipe. Without --confirm, sends nothing."

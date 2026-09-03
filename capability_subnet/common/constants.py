@@ -30,7 +30,7 @@ COMMITMENT_VERSION: Final[str] = "v1"
 #: The arena rather than the maintenance chain, because it is the one that can
 #: answer whether a merge beat its constituents: one turn, pre-measured item
 #: difficulty, nothing judged by a model. The maintenance workflow remains
-#: registered and selectable — it demonstrates what composition is *for*, but its
+#: registered and selectable - it demonstrates what composition is *for*, but its
 #: oracle needs ten of twelve turns and no adapter in the pool covers German or
 #: SQL, so a null result on it measures calibration rather than composition.
 DEFAULT_WORKFLOW_ID: Final[str] = "lora_merger_logic_v1"
@@ -194,7 +194,7 @@ SVD_CLAMP_QUANTILE_MAX: Final[float] = 1.00
 RANDOM_SEED_MIN: Final[int] = 0
 RANDOM_SEED_MAX: Final[int] = 4_294_967_295
 
-#: A recipe must select at least two adapters — a single-adapter "merge" is one
+#: A recipe must select at least two adapters - a single-adapter "merge" is one
 #: of the reference baselines, not a candidate.
 MIN_SELECTED_ADAPTERS: Final[int] = 2
 
@@ -226,20 +226,20 @@ MAX_SELECTED_ADAPTERS: Final[int] = 10
 #:
 #: 20 GiB: about 15.3 GiB of weights, the KV cache, and the ~0.9 GiB a runtime
 #: carries on top. Measured at SERVING_MAX_MODEL_LEN it leaves 29,552 tokens of
-#: KV — 3.61x what one full-length sequence uses, which is what pays for
-#: SANDBOX_BATCH_CONCURRENCY — and peaks at about 21 GiB.
+#: KV - 3.61x what one full-length sequence uses, which is what pays for
+#: SANDBOX_BATCH_CONCURRENCY - and peaks at about 21 GiB.
 #:
 #: It also has to fit on a card somebody owns, and that is what moved this
 #: number. The 20 GiB it held was sized for a 24 GB card: such a card exposes
 #: about 22.0 GiB, roughly 21.7 GiB of it free once the driver context is
-#: resident, so a 22 GiB reservation is refused at start-up — measured, not
+#: resident, so a 22 GiB reservation is refused at start-up - measured, not
 #: predicted: vLLM answers "free memory (21.65/22.04 GiB) is less than desired
 #: utilization (0.9984, 22.0 GiB)" and exits. Every candidate then records a
 #: serving failure, which scores every miner zero for the validator's hardware.
 #:
 #: The validator floor is now a 32 GB card (see the hardware requirements in the
 #: README), which retires that ceiling. 24 GiB leaves about 8.7 GiB of KV at
-#: SERVING_MAX_MODEL_LEN — roughly double what 20 GiB allowed — and that is what
+#: SERVING_MAX_MODEL_LEN - roughly double what 20 GiB allowed - and that is what
 #: SANDBOX_BATCH_CONCURRENCY is actually spending. At 20 GiB on the same
 #: hardware the configured batch width could not be filled: the cache held
 #: 29,552 tokens against a p90 instance of 2,017, so about fourteen sequences
@@ -247,7 +247,7 @@ MAX_SELECTED_ADAPTERS: Final[int] = 10
 #:
 #: Honest about provenance: the 20 GiB figures above were measured on real
 #: cards. The 24 GiB figures are derived from those measurements plus the KV
-#: arithmetic for this model (36 layers, 8 KV heads, 128 head dim, bf16 —
+#: arithmetic for this model (36 layers, 8 KV heads, 128 head dim, bf16 -
 #: 144 KiB per token), not measured on a 32 GB card, because none was available
 #: when this changed. A validator bringing up 32 GB hardware should confirm the
 #: runtime accepts the reservation before trusting a run run on it.
@@ -257,7 +257,7 @@ SERVING_RESERVED_GIB: Final[float] = 24.0
 #:
 #: Forced by SERVING_RESERVED_GIB, not chosen alongside it. A candidate reserves
 #: 24 GiB, the driver context holds about 1 GiB before anything loads, and a
-#: merge sharing the card peaks near 2.5 GiB — so a card must offer about 27.5
+#: merge sharing the card peaks near 2.5 GiB - so a card must offer about 27.5
 #: GiB before it can serve and reconstruct at once. 32 GiB is the smallest
 #: commodity size above that, and validator.serving.utilization_for refuses
 #: anything smaller at start-up with the arithmetic in the message rather than
@@ -269,8 +269,8 @@ MIN_VALIDATOR_CARD_GIB: Final[float] = 32.0
 #: Not forced by the reference schedule: batched serving finishes the eight
 #: reference packages in about 3.7 hours on a single card, well inside a 72-hour
 #: run. It is forced by challenger throughput at the cadence this network is
-#: moving to. Measured at the current rate — 2100 instances, about 0.47 hours a
-#: package — a validator covers roughly this many challengers per run:
+#: moving to. Measured at the current rate - 2100 instances, about 0.47 hours a
+#: package - a validator covers roughly this many challengers per run:
 #:
 #:      cards       3-day run        1-day run
 #:          1                 106                  30
@@ -291,15 +291,15 @@ MIN_VALIDATOR_CARDS: Final[int] = 4
 #: asks. Measured over 300 real arena instances the prompt runs to a median of
 #: 552 tokens, p99 of 3190 and a maximum of 3456; against the runner's 1024-token
 #: answer budget the worst case needs 4480, and a 4096 run refused it. Not
-#: hypothetical — an engine run answered 400 with "your prompt contains at least
+#: hypothetical - an engine run answered 400 with "your prompt contains at least
 #: 3073 input tokens ... for a total of at least 4097 tokens" on ordinary
 #: instances, scoring candidates zero for a truncation the contract permitted.
 #:
 #: 8192 clears the worst observed case by 3712 tokens. It is not larger because
 #: nothing needs it to be: the KV cache holds one sequence at a time, so a wider
 #: run buys unreachable headroom and costs reserved memory a smaller
-#: validator card does not have. A workflow whose turns accumulate — the
-#: maintenance chain runs twelve — must be sized against this before it is made
+#: validator card does not have. A workflow whose turns accumulate - the
+#: maintenance chain runs twelve - must be sized against this before it is made
 #: the default.
 SERVING_MAX_MODEL_LEN: Final[int] = 8192
 
@@ -309,14 +309,14 @@ MAX_ARTIFACT_BYTES: Final[int] = 500 * 1024 * 1024  # 500 MB
 #
 # vLLM reserves SERVING_RESERVED_GIB up front, so peak tracks the reservation
 # and not the package: measured, every candidate lands at 20.9-21.1 GiB whatever
-# it merged. The largest adapter the artifact cap admits — rank 96, 499.5 MB —
+# it merged. The largest adapter the artifact cap admits - rank 96, 499.5 MB -
 # adds 0.325 GiB, against roughly 3 GiB of headroom, so no recipe could reach a
 # ceiling even in principle. As a gate it always passed; as a score term it was
 # the same constant for every candidate, diluting artifact_efficiency by half
 # against a size term that genuinely varies twelvefold across the allowed ranks.
 #
-# It also disagreed across the network. Validators never measured it — they
-# substituted the ceiling — so the engine scored a headroom term that no
+# It also disagreed across the network. Validators never measured it - they
+# substituted the ceiling - so the engine scored a headroom term that no
 # validator reproduced. Deployment cost is now artifact size alone, which is a
 # property of the recipe and identical everywhere.
 MAX_AGENT_TURNS: Final[int] = 12
@@ -342,7 +342,7 @@ MAX_OUTPUT_TOKENS: Final[int] = 8192
 #: Retained general capability below which a package is refused.
 #:
 #: Zero, which disables the gate. Retention is still measured, still weighted in
-#: the qualified score, and still published on every candidate — what it no
+#: the qualified score, and still published on every candidate - what it no
 #: longer does is refuse one.
 #:
 #: The probe is scored ``k/correct``, where ``correct`` is the base model's own
@@ -350,7 +350,7 @@ MAX_OUTPUT_TOKENS: Final[int] = 8192
 #: reachable values about three points apart, and a fixed floor always fell
 #: between two of them: a package was one drawn question from qualifying or not.
 #: Run 415 drew a base score of 34, so only 0.9706 and 1.0 could pass a 0.95
-#: floor, and 26 of 36 candidates landed on 0.9412 — including uid 7 at 0.1484
+#: floor, and 26 of 36 candidates landed on 0.9412 - including uid 7 at 0.1484
 #: and uid 73 at 0.1483, the two highest end-to-end packages in the field, both
 #: of which would have graded above the candidate that won.
 #:
@@ -378,7 +378,7 @@ MAX_CRITICAL_UNSAFE_ACTIONS: Final[int] = 0
 
 # Breadth is the product. stage_balance is the geometric mean across the twelve
 # capability axes, so it asks whether a package is broadly capable rather than
-# strong on a few axes and absent on the rest — which is what a subnet buying
+# strong on a few axes and absent on the rest - which is what a subnet buying
 # *composition* is for. The other axes, end-to-end completion included, share
 # the remaining tenth in the ratio they held before.
 # Quality dominates efficiency: a cheap but unreliable artifact cannot win.
@@ -399,7 +399,7 @@ WEIGHT_RETENTION: Final[float] = 0.05
 # instances with the reasoning channel off, as production runs it: latency
 # spread 5.9x, output tokens spread 5.8x, seconds-per-token spread only 1.2x,
 # and the correlation between latency and tokens was 0.9992. The base model is
-# the base model — what varies is how much a package says, so the latency term
+# the base model - what varies is how much a package says, so the latency term
 # was token count with a constant of proportionality, counted a second time.
 #
 # Token efficiency is the better-formed of the pair. It is measured per
@@ -408,7 +408,7 @@ WEIGHT_RETENTION: Final[float] = 0.05
 # the way a ratio against the incumbent's median does.
 #
 # It also cost the most to collect. Latency needed an uncontended clock, which
-# meant a sequential prefix of every draw — 50 instances at 13.9s against 1440
+# meant a sequential prefix of every draw - 50 instances at 13.9s against 1440
 # batched at 0.67s, so 38% of an evaluation was spent on 3.4% of the instances,
 # re-deriving with more noise something the token counter already reported
 # exactly.
@@ -426,8 +426,8 @@ QUALIFIED_SCORE_WEIGHTS: Final[dict[str, float]] = {
 
 #: Output tokens per completed instance treated as the reference cost.
 #:
-#: Token spend is the operating cost of the finished package — the thing a buyer
-#: actually pays per workflow run — and until now it was measured and reported
+#: Token spend is the operating cost of the finished package - the thing a buyer
+#: actually pays per workflow run - and until now it was measured and reported
 #: but never scored, so a package that reached the same answer twice as
 #: expensively ranked identically. Scored against a fixed budget rather than
 #: against the incumbent, so the target does not drift with whoever holds the
@@ -438,14 +438,14 @@ REFERENCE_OUTPUT_TOKENS: Final[int] = 3000
 #:
 #: The merge is 99.7% decomposition, and the decomposition was computing every
 #: singular component of a few-thousand-square matrix to keep sixty-four of
-#: them. Sketching the range instead is 99x faster measured on one card — 15.1s
-#: to 0.15s for the seven projections in a layer — and the error lands in the
+#: them. Sketching the range instead is 99x faster measured on one card - 15.1s
+#: to 0.15s for the seven projections in a layer - and the error lands in the
 #: tail that truncation discards anyway.
 #:
 #: Oversampling is what buys the accuracy: a sketch exactly as wide as the rank
 #: recovers the leading directions and smears the last few. Ten extra columns
 #: put the measured error against the exact top-64 subspace at ~1e-4 relative,
-#: an order of magnitude below what bfloat16 can represent — and the artifact is
+#: an order of magnitude below what bfloat16 can represent - and the artifact is
 #: written in bfloat16.
 #:
 #: Consensus-relevant. This decides the artifact bytes, so it decides the
@@ -491,7 +491,7 @@ DEFAULT_MIN_AXIS_SAMPLES: Final[int] = 20
 #:
 #: What the instance count buys is *stability*, and that is the thing to weigh
 #: against a lower bar. Run-to-run variation on identical artifacts is about
-#: 0.017 — batched serving is not deterministic — so at 0.02 a package whose
+#: 0.017 - batched serving is not deterministic - so at 0.02 a package whose
 #: true edge is exactly the bar clears it roughly half the time, and one a
 #: little under it sometimes clears. See DEFAULT_HIDDEN_INSTANCES: the noise
 #: falls with the square root of the draw, so a bar this close to it is a
@@ -506,7 +506,7 @@ DEFAULT_END_TO_END_MARGIN: Final[float] = 0.02
 #: when the incumbent counted as a reference, every new champion had to beat the
 #: previous one by a further three points. Completion is bounded by one, so that
 #: ratchet admits at most a few dozen dethrones in principle and stalls after a
-#: handful in practice — after which one package holds the throne forever, no
+#: handful in practice - after which one package holds the throne forever, no
 #: further work can ever be bought, and the network pays a permanent rent.
 DEFAULT_CHAMPION_MARGIN: Final[float] = 0.01
 
@@ -530,7 +530,7 @@ BOOTSTRAP_CONFIDENCE: Final[float] = 0.95
 #: Blocks per evaluation run. At 12s blocks this is 24 hours exactly. Hidden
 #: instances are resampled and the references re-measured once per run.
 #:
-#: Three days was the price of 1350 instances at 13.9s each — about 5.6 hours a
+#: Three days was the price of 1350 instances at 13.9s each - about 5.6 hours a
 #: package, and 45 hours of references before a challenger was touched.
 #: Continuous batching and a four-card fleet took the same 1350 instances to
 #: roughly half an hour a package and the whole reference schedule to about an
@@ -543,13 +543,13 @@ BOOTSTRAP_CONFIDENCE: Final[float] = 0.95
 #: records the value in force when a run ran, which is what lets a reader check
 #: an old beacon against the length that actually produced it rather than
 #: against whatever is configured today. Runs already closed keep the length
-#: they ran at — see RUN_EPOCH_BLOCK.
+#: they ran at - see RUN_EPOCH_BLOCK.
 DEFAULT_RUN_BLOCKS: Final[int] = 7200
 
 #: Where the daily schedule begins, and the run that opens there.
 #:
 #: A run id used to be the block divided by the run length, which put boundaries
-#: wherever the arithmetic landed — for three-day runs, 04:26 Eastern on a
+#: wherever the arithmetic landed - for three-day runs, 04:26 Eastern on a
 #: rotating three-day cycle. Nobody chose that time and it drifts across the
 #: working day, which makes "when does my submission get measured" a question
 #: with a different answer every week.
@@ -566,7 +566,7 @@ DEFAULT_RUN_BLOCKS: Final[int] = 7200
 #:
 #: History is frozen rather than renumbered. Blocks before the epoch keep the
 #: run ids they were measured under, computed at LEGACY_RUN_BLOCKS and capped at
-#: RUN_EPOCH_ID - 1, so run 411 simply runs long — from 19 August to the epoch —
+#: RUN_EPOCH_ID - 1, so run 411 simply runs long - from 19 August to the epoch -
 #: instead of every published report, stored run and console row shifting to a
 #: number it was never filed under.
 RUN_EPOCH_BLOCK: Final[int] = 8_908_667
@@ -577,6 +577,80 @@ RUN_EPOCH_ID: Final[int] = 412
 #: The run length in force before RUN_EPOCH_BLOCK. Not configurable: it is a
 #: fact about runs that have already closed, and the ids they were filed under.
 LEGACY_RUN_BLOCKS: Final[int] = 21600
+
+#: Wall-clock time of RUN_EPOCH_BLOCK, as a Unix timestamp.
+#:
+#: RUN_EPOCH_BLOCK pins a run boundary to a block height, which is all the run
+#: schedule needs. A timelocked commitment needs the other half: drand releases
+#: its pulses on wall-clock time, so choosing the round a recipe unseals at
+#: means converting a future block height into a future *instant*, and no chain
+#: read can do that - the block has not happened yet.
+#:
+#: Read from finney at the epoch block: 2026-08-23 15:59:36 UTC. Everything
+#: about the reveal schedule derives from this pair, which is what lets a miner
+#: and the engine compute the same round from constants alone, with no service
+#: to ask and nothing to agree on.
+#:
+#: The estimate is good. Over the 78,892 blocks from the epoch to 3 September
+#: 2026 finney held 12.0006 s/block - 48 seconds of drift in eleven days, so a
+#: single run accumulates about four. REVEAL_MARGIN_BLOCKS covers far more than
+#: that; re-anchor alongside RUN_EPOCH_BLOCK if it ever stops being true.
+RUN_EPOCH_UNIX: Final[int] = 1_787_500_776
+
+#: Nominal seconds per block, for converting block heights to instants.
+#:
+#: Only ever an estimate of the future. Where a real timestamp is available,
+#: read it instead of multiplying by this.
+BLOCK_SECONDS: Final[int] = 12
+
+#: How long after a run's close its recipes are scheduled to unseal, in blocks.
+#:
+#: The margin exists for one failure and it is worth naming, because the safe
+#: direction is not the obvious one. A drand round fires on wall-clock time
+#: whatever the chain is doing. If finney runs *slow*, the chain reaches the
+#: submission cutoff later than the estimate predicts while the pulse arrives on
+#: schedule - so recipes would unseal while miners could still submit, and the
+#: last miner to commit would be choosing against a field they had already read.
+#: That is the whole property this design exists to protect.
+#:
+#: Erring the other way costs nothing: a pulse that arrives after the run has
+#: closed leaves the engine waiting a few minutes at the top of a run it has a
+#: full day to finish. So the target sits an hour past the nominal close, which
+#: absorbs an hour of accumulated slowness against an observed four seconds.
+REVEAL_MARGIN_BLOCKS: Final[int] = 300
+
+#: What one commitment can carry, mirrored from the commitments pallet.
+#:
+#: Not ours to change - ``MAX_TIMELOCK_COMMITMENT_SIZE_BYTES`` and
+#: ``MaxCommitFieldsInner`` in the runtime, at spec 452. Mirrored anyway so the
+#: miner CLI can refuse an oversized recipe before it costs anyone a block,
+#: with a message naming the real limit rather than relaying a pallet error.
+MAX_TIMELOCK_FIELD_BYTES: Final[int] = 1024
+MAX_COMMITMENT_FIELDS: Final[int] = 3
+
+#: The per-hotkey, per-epoch commitment budget, charged by ciphertext length.
+#:
+#: ``DefaultMaxSpace`` in the pallet, raisable only by sudo. On the chain path a
+#: miner may re-commit as often as they like and this is what stops them: no
+#: count, just whatever fits in an epoch. Each commitment is charged at least
+#: MIN_COMMIT_SPACE_BYTES however small it is.
+#:
+#: It does not replace RESUBMISSION_LIMIT yet. That still governs the API, which
+#: is still the path that is scored, and the two coexist until the API retires.
+MAX_EPOCH_COMMIT_BYTES: Final[int] = 3100
+MIN_COMMIT_SPACE_BYTES: Final[int] = 100
+
+#: The largest recipe that may be committed, canonical bytes.
+#:
+#: Chosen so a sealed recipe always fits a single field, which is what keeps
+#: resubmission cheap: sealing adds a flat 254 bytes, recipes compress to about
+#: 0.45 at worst, so 1536 canonical bytes seal to roughly 945 and three of them
+#: fit an epoch. Two fields would halve that and buy nothing - every recipe
+#: submitted to date is between 553 and 1535 bytes.
+#:
+#: Distinct from the fetch-path limit, which governs a recipe arriving over
+#: HTTP and is far larger. This one is a fact about what the chain will carry.
+MAX_ONCHAIN_RECIPE_BYTES: Final[int] = 1536
 
 #: Runs between measuring a submission and paying for it.
 #:
@@ -604,7 +678,7 @@ WEIGHT_LAG_RUNS: Final[int] = 1
 #: and there is no such record: the chain keeps one commitment per hotkey, and a
 #: validator reading it sees the current block and nothing about what stood
 #: there before. Counting attempts would mean keeping local state, which is the
-#: thing measured_in_run exists to avoid — two validators with different uptime
+#: thing measured_in_run exists to avoid - two validators with different uptime
 #: would disagree about whose turn it was.
 #:
 #: Age is the part that *is* on the chain. A commitment measured in the run
@@ -615,8 +689,8 @@ WEIGHT_LAG_RUNS: Final[int] = 1
 #: hour of a run is not measured in the next one and waits a further run.
 #:
 #: It is also what stops a submission being timed against the field. A miner who
-#: commits at the closing block has watched the entire run — every published
-#: result and every recipe another miner disclosed — before choosing. An hour is
+#: commits at the closing block has watched the entire run - every published
+#: result and every recipe another miner disclosed - before choosing. An hour is
 #: not a large tax on someone who searched, and it is the whole advantage of
 #: someone who waited.
 MIN_COMMITMENT_AGE_BLOCKS: Final[int] = 300
@@ -626,7 +700,7 @@ MIN_COMMITMENT_AGE_BLOCKS: Final[int] = 300
 #: "Earliest commit wins" used to reach over the whole history: a submission was
 #: a copy if any identical one had ever been made. That is the strongest form of
 #: the rule and it never expires, which means a recipe submitted once is removed
-#: from the search space permanently — including for the miner who has to
+#: from the search space permanently - including for the miner who has to
 #: rediscover it independently, and including long after the run it competed in
 #: was paid and forgotten.
 #:
@@ -638,7 +712,7 @@ MIN_COMMITMENT_AGE_BLOCKS: Final[int] = 300
 #:
 #: This is a real loosening and worth stating plainly: a recipe revealed at N+2
 #: may be re-filed by anyone from N+3 on. What still makes copying a poor
-#: strategy is the rest of the design — a copy is measured a run later than what
+#: strategy is the rest of the design - a copy is measured a run later than what
 #: it copied, it cannot beat the champion's margin by reproducing the champion,
 #: and the reference it must clear moves as the field improves.
 COPY_LOOKBACK_RUNS: Final[int] = 2
@@ -646,8 +720,8 @@ COPY_LOOKBACK_RUNS: Final[int] = 2
 #: Hidden instances drawn per run for the canonical comparison.
 #:
 #: What this buys is a stable verdict rather than a possible one. Nothing
-#: declines a challenger on statistical grounds — every hard gate is arithmetic
-#: — so a bar is crossable at any draw size. The draw decides how *reliably* the
+#: declines a challenger on statistical grounds - every hard gate is arithmetic
+#: - so a bar is crossable at any draw size. The draw decides how *reliably* the
 #: same package gets the same answer: 1350 instances resolve about 0.0241, 2000
 #: resolve 0.0198 and 400 resolve 0.0443, and a margin near or below that figure
 #: is decided partly by which instances came up.
@@ -682,8 +756,8 @@ PUBLIC_PACK_INSTANCES: Final[int] = 120
 #: deliberate:
 #:
 #: * A run whose leader does not take the throne pays nobody, so all of it
-#:   burns. The subnet buys one thing — a package better than the one it
-#:   already has — and a run that did not produce one is not bought.
+#:   burns. The subnet buys one thing - a package better than the one it
+#:   already has - and a run that did not produce one is not bought.
 #: * An unfilled rank among the first five burns rather than being promoted
 #:   into the ranks above. ``RANK_SHARES`` names those five, and a share nobody
 #:   occupies is not redistributed. ``TAIL_SHARE`` is different: it is split
@@ -717,8 +791,8 @@ PAID_RANKS: Final[int] = 10
 #:
 #: A validator asks a core every validator has in common, so two of them can be
 #: compared on identical instances, plus a tail only it holds, so nobody can
-#: predict or shop for their set. A host measuring the whole draw — an engine
-#: scoring the field itself — asks all of it.
+#: predict or shop for their set. A host measuring the whole draw - an engine
+#: scoring the field itself - asks all of it.
 #:
 #: Bound to DEFAULT_END_TO_END_MARGIN rather than free. The resolvable effect
 #: falls with the square root of the count: at DEFAULT_HIDDEN_INSTANCES the
@@ -741,7 +815,7 @@ DEFAULT_TAIL_FRACTION: Final[float] = 0.15
 #: changes hands.
 #: How many times a hotkey may submit in one run, the first included. Only the
 #: last is measured. High enough to correct a mistake, low enough that a miner
-#: cannot iterate against the measurement — a limit you could search with would
+#: cannot iterate against the measurement - a limit you could search with would
 #: turn the run into a free evaluation service.
 RESUBMISSION_LIMIT = 3
 
@@ -749,7 +823,7 @@ RESUBMISSION_LIMIT = 3
 #: improvement take the throne rather than sitting just under it for a run.
 #:
 #: It stays a fixed number rather than one that drifts with the field, because
-#: the grade's axes are measured against fixed points — the run's own instances
+#: the grade's axes are measured against fixed points - the run's own instances
 #: and the base model.
 #:
 #: Worth knowing what this size means against a real field. In run 414's, the
@@ -759,8 +833,8 @@ RESUBMISSION_LIMIT = 3
 #: changes hands on a difference smaller than the one separating most ranks.
 #:
 #: What has not been measured is how much of that is the package and how much
-#: is the measurement. Batch composition changes replies — 1 of 48 matched
-#: between batched and sequential — so the same package scored twice does not
+#: is the measurement. Batch composition changes replies - 1 of 48 matched
+#: between batched and sequential - so the same package scored twice does not
 #: give the same number, and nothing here establishes that the spread is below
 #: 0.0005. If a throne starts changing hands on reruns rather than on new
 #: submissions, that is the thing to measure.
@@ -770,8 +844,8 @@ CHAMPION_DETHRONE_MARGIN: Final[float] = 0.0005
 #: improvement and token efficiency share the remainder in proportion to
 #: their former weights.
 #:
-#: Every term is measured against fixed points — the run's own instances and
-#: the base model — so a grade means the same thing in every run. That is what
+#: Every term is measured against fixed points - the run's own instances and
+#: the base model - so a grade means the same thing in every run. That is what
 #: lets CHAMPION_DETHRONE_MARGIN be a fixed number: a threshold on a quantity
 #: whose scale moved between runs would be a different bar each time.
 #: Proximity to the champion is not among these. A term measured against the
@@ -779,7 +853,7 @@ CHAMPION_DETHRONE_MARGIN: Final[float] = 0.0005
 #: CHAMPION_DETHRONE_MARGIN is a fixed number on that scale.
 #:
 #: Its share goes to improvement rather than being split. Cost enters the grade
-#: twice — here, and again inside the qualified score — so raising it here
+#: twice - here, and again inside the qualified score - so raising it here
 #: raises it twice: split proportionally it would carry 0.193 of the grade
 #: against the 0.15 it carried when proximity existed, enough that a package
 #: spending nothing outranks one finishing half as much again.
@@ -789,7 +863,7 @@ CONTRIBUTION_WEIGHT_COST: Final[float] = 0.10
 
 #: Fallback UID for burned emission when the subnet owner cannot be resolved.
 #:
-#: Note that UID 0 is *not* an incinerator — it belongs to whichever neuron
+#: Note that UID 0 is *not* an incinerator - it belongs to whichever neuron
 #: registered into the first slot. Live components resolve the owner's UID from
 #: the metagraph instead (see ``chain.MetagraphView.owner_uid``) and decline to
 #: submit at all when there is none; this constant exists only so offline
@@ -805,13 +879,13 @@ BURN_UID: Final[int] = 0
 #:
 #: One at a time left the card decode-bound and idle between tokens of a single
 #: stream: measured on this corpus, sequential runs 15.89s an instance and
-#: continuous batching at 32 runs 1.08s — 14.7x, on identical hardware and
+#: continuous batching at 32 runs 1.08s - 14.7x, on identical hardware and
 #: identical greedy settings. A run that spent seven hours a package spends
 #: half an hour.
 #:
 #: Consensus-relevant, and not only for cadence. Batch composition changes
 #: kernel selection and reduction order, so a batched reply is not token-identical
-#: to a sequential one — measured, 1 of 48 replies matched. Every package in a
+#: to a sequential one - measured, 1 of 48 replies matched. Every package in a
 #: run is therefore asked the same way, and the number is pinned so that two
 #: validators ask the same way as each other.
 SANDBOX_BATCH_CONCURRENCY: Final[int] = 32
@@ -822,7 +896,7 @@ SANDBOX_TOP_P: Final[float] = 1.0
 #: Whether the served model is asked to emit its separate reasoning channel.
 #: Off: the base model's template enables it by default, and one thinking block
 #: exhausts MAX_OUTPUT_TOKENS before the agent has called a single tool. This is
-#: consensus-relevant — it changes what every candidate is asked.
+#: consensus-relevant - it changes what every candidate is asked.
 SANDBOX_ENABLE_THINKING: Final[bool] = False
 
 #: Wall-clock ceiling for a single hidden instance, including model generation
