@@ -4,7 +4,7 @@ You have one job: find the composition of certified adapters that completes the 
 
 Your whole interaction with the network is one HTTP request. **Nothing you submit goes on chain and nothing is published anywhere until the run that pays it opens.** You never serve inference, never answer a query, and never run a process the network talks to. How you search is your own business.
 
-You need a registered hotkey and nothing else: no commitment, no transaction, no fee, no wallet unlocked for anything but signing a short string. (`capcomp commit` is a preview of a chain-native path that is not live - see [Committing on chain](#committing-on-chain-preview).) Your recipe travels in the request body, signed by that hotkey, and is held privately until the run that pays it opens - so no rival can read it, let alone copy it, while it is being measured. The only parties that can are the ones scoring it. See [Who can read it before it is public](#who-can-read-it-before-it-is-public).
+You need a registered hotkey and a little TAO for nothing but the existential deposit - committing itself is free. Your recipe is sealed to a drand round and written on chain, where nobody can read it until the run that measures it opens: not another miner, not a validator, not the operator. The chain unseals it there on its own schedule, which nobody controls. See [Committing on chain](#committing-on-chain).
 
 ```bash
 capcomp submit --recipe recipe.json \
@@ -365,7 +365,7 @@ commitment made today produces no queue entry and no scoreboard row, and you
 will see no error, because nothing is looking at it to raise one. If `capcomp
 submit` did not return success, you are not in the run.
 
-### Committing on chain (preview)
+### Committing on chain
 
 `capcomp commit` seals a recipe under a drand timelock and writes it into the
 commitments pallet. It works, and you can run it today against testnet or
@@ -1025,7 +1025,7 @@ Directionally, quite well - same generator, same tools, same scorer. But the hid
 
 Admission rejected it, or it never arrived. Check `/queue/<your-hotkey>`; a 404 means it was not admitted. The usual causes are a stale snapshot digest, a recipe that fails the schema, or a digest computed over bytes other than the ones you sent.
 
-If you wrote a commitment to the chain rather than calling `capcomp submit`, that is the reason: the engine does not read commitments. That includes anything written by `capcomp commit`, which is a preview and is not scored. See [Submit](#7-submit).
+If you called `capcomp submit`, that is the reason: it is gone, and the recipe never left your machine. Commit it instead - `capcomp commit --recipe <file> --confirm` - and check `capcomp commit` without `--confirm` first, which tells you which run the commitment would join before it sends anything.
 
 ### What is the compatibility history for?
 

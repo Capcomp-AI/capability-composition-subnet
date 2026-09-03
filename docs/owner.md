@@ -130,9 +130,10 @@ To the submission API the owner runs. There is no on-chain step, no upload to a
 third party, and nothing for a miner to host.
 
 `capcomp commit` writes a timelocked recipe into the commitments pallet, and is
-the preview of the chain-native path. Nothing reads it: the engine builds its
-field from the API, so a commitment made with it is inert until engine ingest
-ships. The command says so on every run.
+the submission path. A miner seals a recipe to the drand round their run
+closes at and writes it into the commitments pallet; the chain opens it there
+on its own, and the engine reads what it opened. There is no submission service
+any more, and nothing for the operator to hold or hand over.
 
 `capcomp commit` writes a timelocked recipe into the commitments pallet and is
 the chain-native path being built beside this one. Nothing reads it yet, so a

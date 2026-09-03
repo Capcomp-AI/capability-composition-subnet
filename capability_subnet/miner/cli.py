@@ -598,10 +598,11 @@ def build_parser() -> argparse.ArgumentParser:
             "Build, check and submit composition recipes for the Capability Composition Subnet."
         ),
         epilog=(
-            "A submission is one signed request, and nothing is published until the "
-            "run that pays it opens. Start with `capcomp init`, then `capcomp check`, "
-            "then `capcomp submit --confirm`. `capcomp commit` previews the "
-            "chain-native path and is not scored yet."
+            "A submission is one commitment on chain, sealed until the run that "
+            "measures it opens. Start with `capcomp init`, then `capcomp check`, "
+            "then `capcomp commit --confirm`. Nothing is sent to any service; "
+            "the chain unseals it on its own and every validator reads the same "
+            "field out of it."
         ),
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
