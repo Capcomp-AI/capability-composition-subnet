@@ -7,6 +7,17 @@
 
 # LoRA Merger
 
+```
+ ██████╗ █████╗ ██████╗  ██████╗ ██████╗ ███╗   ███╗██████╗
+██╔════╝██╔══██╗██╔══██╗██╔════╝██╔═══██╗████╗ ████║██╔══██╗
+██║     ███████║██████╔╝██║     ██║   ██║██╔████╔██║██████╔╝
+██║     ██╔══██║██╔═══╝ ██║     ██║   ██║██║╚██╔╝██║██╔═══╝
+╚██████╗██║  ██║██║     ╚██████╗╚██████╔╝██║ ╚═╝ ██║██║
+ ╚═════╝╚═╝  ╚═╝╚═╝      ╚═════╝ ╚═════╝ ╚═╝     ╚═╝╚═╝
+
+             CAPABILITY COMPOSITION SUBNET
+```
+
 ### The Capability Composition Subnet
 
 **Which combination of existing specialist adapters actually finishes a real business workflow — and can it beat every off-the-shelf alternative?**

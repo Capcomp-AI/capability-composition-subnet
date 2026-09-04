@@ -1024,7 +1024,15 @@ class ValidatorNeuron:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from capability_subnet.common.banner import show
+
     del argv  # configuration comes from the shared argument parser
+
+    # Before the config is built, so it is on screen even if the config is
+    # refused - a validator reading a start-up error is a validator looking at
+    # this terminal. stderr only, and only to a terminal, so nothing that reads
+    # a validator's output sees it.
+    show()
     setup_logging()
     try:
         ValidatorNeuron().run()

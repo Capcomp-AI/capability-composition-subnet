@@ -757,6 +757,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from capability_subnet.common.banner import show
+
+    # Before parsing, so it appears even when the parse fails and argparse
+    # exits - which is exactly when a miner is looking at the terminal. It
+    # writes to stderr and only to a terminal, so a piped `--json` is
+    # untouched.
+    show()
+
     setup_logging("WARNING")
     args = build_parser().parse_args(argv)
     return int(args.func(args))
