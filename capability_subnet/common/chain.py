@@ -844,13 +844,15 @@ def storage_key(hotkey: str, *, netuid: int, revealed: bool) -> str:
 
 
 def explorer_url(*, rpc: str = FINNEY_RPC) -> str:
-    """The chain-state page of an explorer pointed at this network.
+    """The raw-storage tab of an explorer pointed at this network.
 
-    Only as far as the page: polkadot.js takes the endpoint in the URL but not
-    a storage query with its arguments, so the key above is what actually
-    reproduces a row. Linking somewhere that cannot answer the question would
-    be worse than linking nowhere.
+    That tab is the one that takes a key. The Storage tab builds one from
+    dropdowns, has no field to paste 74 bytes into, and opens on Timestamp.Now
+    - a 32-byte key for a plain value, which is nobody's commitment.
+
+    Only as far as the tab: polkadot.js takes the endpoint in the URL but not
+    the query itself, so the key above is what reproduces a row.
     """
     from urllib.parse import quote
 
-    return f"{POLKADOT_APPS}?rpc={quote(rpc, safe='')}#/chainstate"
+    return f"{POLKADOT_APPS}?rpc={quote(rpc, safe='')}#/chainstate/raw"

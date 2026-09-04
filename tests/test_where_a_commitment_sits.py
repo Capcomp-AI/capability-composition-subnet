@@ -104,7 +104,9 @@ class TestTheExplorerLink:
     def test_it_points_at_this_network(self):
         assert "entrypoint-finney" in explorer_url()
 
-    def test_it_lands_on_the_chain_state_page(self):
-        """Only as far as the page: polkadot.js takes the endpoint in the URL
-        but not a query with its arguments, so the key does the rest."""
-        assert explorer_url().endswith("#/chainstate")
+    def test_it_lands_on_the_tab_that_takes_a_key(self):
+        """The Storage tab builds a key from dropdowns and cannot be given one;
+        it opens on Timestamp.Now, a 32-byte key for a plain value that is
+        nobody's commitment. Raw storage is the tab with a field to paste
+        into."""
+        assert explorer_url().endswith("#/chainstate/raw")
