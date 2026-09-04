@@ -214,6 +214,79 @@ def run_for_commit(commit_block: int, *, run_blocks: int = C.DEFAULT_RUN_BLOCKS)
     return measuring_run_for(commit_block, run_blocks) - 1
 
 
+def check_not_closing(
+    commit_block: int,
+    *,
+    run_blocks: int = C.DEFAULT_RUN_BLOCKS,
+    cutoff_blocks: int = C.COMMIT_CUTOFF_BLOCKS,
+) -> None:
+    """Refuse a commitment made too close to the run's close.
+
+    The chain would take it, and it would be sealed and filed correctly - for
+    the *next* run, because the settling window has passed. What it also does is
+    overwrite whatever this hotkey has sealed for the run now closing, since a
+    hotkey holds one commitment and the pallet keeps no history. That one is
+    unrecoverable: it never opens, so it is never measured, and nothing reports
+    it.
+
+    Waiting until the next run opens costs a miner the remainder of the window
+    and keeps both submissions.
+
+    Raises:
+        CommitError: if ``commit_block`` is within ``cutoff_blocks`` of the
+            close of the run it sits in.
+    """
+    from capability_subnet.common.chain import run_id_for_block, run_opens_block
+
+    run = run_id_for_block(commit_block, run_blocks)
+    close = run_opens_block(run + 1, run_blocks)
+    left = close - commit_block
+    if left > cutoff_blocks:
+        return
+
+    # Standing exactly MIN_COMMITMENT_AGE_BLOCKS counts as settled:
+    # measuring_run_for compares block + the window against the next opening
+    # and takes equality as in time. Off by one here would tell a miner their
+    # commitment had moved runs when it had not.
+    minutes = left * C.BLOCK_SECONDS // 60
+    head = (
+        f"run {run} closes in {left} blocks (~{minutes} minutes) and this command "
+        f"stops {cutoff_blocks} blocks out, so nothing was committed."
+    )
+
+    if left >= C.MIN_COMMITMENT_AGE_BLOCKS:
+        # The run does not change here: a commitment still joins run `run`, and
+        # replacing one already held for that same run is ordinary
+        # resubmission, not a loss. What the margin buys is the few blocks
+        # between reading the head and the extrinsic landing, which is the only
+        # way a miner crosses the protocol cutoff without meaning to.
+        raise CommitError(
+            f"{head}\n"
+            f"  A commitment now would still join run {run} - the protocol's cutoff "
+            f"is {C.MIN_COMMITMENT_AGE_BLOCKS} blocks and {left} remain - so this is "
+            f"a margin, not a rule. Between reading the block and the extrinsic "
+            f"landing you could cross it, and on the other side a commitment joins "
+            f"run {run + 1} and destroys whatever this hotkey holds for run {run}.\n"
+            f"  Pass --run {run} to commit to run {run} anyway, which is safe while "
+            f"{left} blocks remain, or wait for run {run + 1} to open."
+        )
+
+    raise CommitError(
+        f"{head}\n"
+        f"  A commitment now joins run {run + 1}, not run {run}: it has to stand "
+        f"{C.MIN_COMMITMENT_AGE_BLOCKS} blocks before the measuring run opens and it "
+        f"would stand {left}.\n"
+        f"  If this hotkey holds a commitment for run {run}, writing one now DESTROYS "
+        f"it - a hotkey holds exactly one, the pallet keeps no history, and a sealed "
+        f"commitment replaced before it opens is never measured and never reported. "
+        f"Run {run} is already lost to you either way; this decides whether you also "
+        f"lose what you have.\n"
+        f"  Wait {left} blocks for run {run + 1} to open and commit there, or pass "
+        f"--run {run + 1} to commit to run {run + 1} now and accept losing anything "
+        f"held for run {run}."
+    )
+
+
 def check_window(commit_block: int, run_id: int, *, run_blocks: int = C.DEFAULT_RUN_BLOCKS) -> None:
     """Refuse a commitment that would land in a different run than it is sealed for.
 

@@ -535,7 +535,12 @@ def _cmd_commit(args: argparse.Namespace) -> int:
     joins = chain.run_for_commit(block)
 
     try:
-        if args.run is not None:
+        # Before anything is sealed. Naming --run is how a miner says they meant
+        # the next run and accept what that costs, so the refusal is skipped
+        # there rather than made un-overridable.
+        if args.run is None:
+            chain.check_not_closing(block)
+        else:
             chain.check_window(block, args.run)
         sealed = chain.seal(recipe, args.run if args.run is not None else joins)
     except chain.CommitError as exc:

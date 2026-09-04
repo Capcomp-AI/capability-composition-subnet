@@ -703,6 +703,26 @@ WEIGHT_LAG_RUNS: Final[int] = 1
 #: someone who waited.
 MIN_COMMITMENT_AGE_BLOCKS: Final[int] = 300
 
+#: How close to a run's close ``capcomp commit`` refuses to commit, in blocks.
+#:
+#: Twice MIN_COMMITMENT_AGE_BLOCKS, and deliberately not the same number. That
+#: one is consensus: ``measured_in_run`` decides from it which run a commitment
+#: joins, so every validator has to agree on it and it cannot move without a
+#: coordinated upgrade. This one is a client-side refusal and moving it changes
+#: nothing any validator computes.
+#:
+#: The gap between them is the point. Inside the settling window a commitment
+#: joins the *next* run - correctly, and the pallet takes it without complaint -
+#: while destroying whatever that hotkey had sealed for the current one, because
+#: a hotkey holds exactly one commitment. A miner who commits twice in a run
+#: reasonably expects the second to replace the first; across this boundary the
+#: second belongs to a different run and the first is simply gone, unmeasured.
+#: Fourteen submissions were lost that way in run 423 alone.
+#:
+#: So the command stops an hour before the protocol would, and says why. The
+#: hour it costs is a wait; the hour it saves is a run.
+COMMIT_CUTOFF_BLOCKS: Final[int] = 600
+
 #: How far back the anti-copy check looks, in runs.
 #:
 #: "Earliest commit wins" used to reach over the whole history: a submission was
