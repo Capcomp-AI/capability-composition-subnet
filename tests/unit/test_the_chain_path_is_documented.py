@@ -67,8 +67,12 @@ class TestNothingStillPointsAtTheService:
         miner who typed the old name is told the new one either way.
         """
         text = _cli("submit", "--recipe", "x.json")
-        assert "invalid choice: 'submit'" in text
-        assert "'commit'" in text
+
+        # Unquoted, because argparse quotes the choice list on 3.10 and 3.11
+        # and stops on 3.12. The assertion is about which commands are offered,
+        # not about how the interpreter punctuates them.
+        assert "invalid choice" in text and "submit" in text
+        assert "commit" in text
         assert "commit" in _cli("-h")
 
     def test_no_guide_calls_the_chain_path_a_preview(self):
