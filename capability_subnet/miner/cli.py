@@ -1,15 +1,14 @@
 """Miner command line.
 
-Almost everything a miner needs, and almost none of it touches the chain:
-inspect the pool, build a recipe, validate it, predict its artifact size, and
-see exactly what would be sent. Sending itself lives in the neuron, behind an
-explicit confirmation, because it is the one irreversible step.
+Most of it never touches the chain: inspect the pool, build a recipe, validate
+it, predict its artifact size, and see exactly what would be committed. Those
+are free and repeatable, and a miner should exhaust them first.
 
-The exception is ``commit``, which seals a recipe and writes it into the
-commitments pallet. It is a preview of the chain-native submission path and
-nothing scores what it writes yet, which the command says every time it runs -
-a miner who mistakes it for the live path loses a run in silence, because the
-chain raises no error for a submission nobody reads.
+Two commands reach the chain. ``commit`` seals a recipe and writes it into the
+commitments pallet: it is the submission path, the only one, and what it writes
+is what validators measure. It sits behind ``--confirm`` because it is the one
+irreversible step. ``status`` reads back what a hotkey has committed, and needs
+a node and no credential at all.
 """
 
 from __future__ import annotations
@@ -414,74 +413,90 @@ def _cmd_result(args: argparse.Namespace) -> int:
 
 
 def _cmd_status(args: argparse.Namespace) -> int:
-    """What this hotkey has submitted in the current run."""
-    import httpx
+    """What a hotkey has committed on chain, read from the chain.
 
-    from capability_subnet.miner import submit as api
+    Needs a node and nothing else: no signature, no credential, no service. A
+    commitment is public the moment it lands and stays unreadable until its
+    round regardless of who looks, so there is nothing to prove and nobody to
+    ask.
 
-    # The open run's standing is signed for: it describes a run still in
-    # flight, and answering it to anyone about anyone made the field
-    # enumerable. --hotkey is still accepted, but only the holder can read it.
-    wallet = _wallet(args)
-    hotkey = args.hotkey or wallet.hotkey.ss58_address
-    if args.hotkey and args.hotkey != wallet.hotkey.ss58_address:
-        print(
-            f"error: {args.hotkey[:12]}… is not this wallet's hotkey. A run still "
-            "open can only be read by its owner; for a published run use "
-            "`capcomp result --run N --hotkey ...`.",
-            file=sys.stderr,
-        )
-        return 4
+    It reports what a miner has to get right and cannot otherwise see: whether
+    a commitment is there, which run its reveal round puts it in, and whether
+    the chain has opened it yet.
+    """
+    import bittensor as bt
 
+    from capability_subnet.common import timelock as T
+    from capability_subnet.common.chain import fetch_metagraph, run_id_for_block
+    from capability_subnet.miner.commit import run_for_commit
+
+    subtensor = bt.subtensor(args.network)
     try:
-        run_id = api.open_run(args.api_url)
-        signature = wallet.hotkey.sign(api.status_message(run_id, hotkey)).hex()
-        response = httpx.get(
-            f"{args.api_url.rstrip('/')}/status/{hotkey}",
-            params={"signature": signature},
-            timeout=45.0,
-        )
-        response.raise_for_status()
-        payload = response.json()
-    except Exception as exc:
-        print(f"error: could not reach the submission API: {exc}", file=sys.stderr)
+        view = fetch_metagraph(subtensor, args.netuid)
+    except Exception as exc:  # noqa: BLE001 - reported, not absorbed
+        print(f"error: could not read netuid {args.netuid}: {exc}", file=sys.stderr)
         return 4
 
-    run = payload["run_id"]
-    if not payload.get("submitted"):
-        print(f"run {run}: nothing submitted. {payload['remaining']} attempts available.")
-        return 0
-
-    print(f"run {run}: measured in run {run + 1}, paid in run {run + 2}")
-    print(f"  holding   {payload['recipe_sha256']}")
-    print(f"  attempts  {payload['submission_count']} used, {payload['remaining']} left")
-    for superseded in payload.get("superseded") or []:
-        print(f"  replaced  {superseded}")
-
-    admission = payload.get("admission")
-    if not admission:
-        print("  state     accepted; the engine has not reached it yet")
-        return 0
-
-    state = admission.get("state")
-    if state == "rejected":
-        # Non-zero, so a script that submits and checks notices. This is the
-        # one outcome a miner has to act on, and acting on it means submitting
-        # a corrected recipe while the run is still open.
-        print(f"\n  REJECTED: {admission['reason']}")
-        print(
-            f"  Nothing will be measured for run {run} unless you submit a "
-            f"corrected recipe. {payload['remaining']} attempts left."
-        )
-        return 1
-
-    if state == "measured":
-        print(
-            f"  state     measured in run {admission['measured_in_run']}; "
-            f"the result opens in run {run + 2}"
-        )
+    wanted: set[str] = set()
+    if args.all:
+        wanted = set(view.hotkeys)
+    elif args.uid is not None:
+        if not 0 <= args.uid < len(view.hotkeys):
+            print(f"error: uid {args.uid} is not on netuid {args.netuid}", file=sys.stderr)
+            return 4
+        wanted = {view.hotkeys[args.uid]}
+    elif args.hotkey:
+        wanted = {args.hotkey}
     else:
-        print(f"  state     {state}, to be measured in run {admission['measured_in_run']}")
+        wanted = {_wallet(args).hotkey.ss58_address}
+
+    open_run = run_id_for_block(view.block, C.DEFAULT_RUN_BLOCKS)
+    joining = run_for_commit(view.block)
+    print(f"block {view.block}; run {open_run} is open")
+    if joining != open_run:
+        print(
+            f"  a commitment made now joins run {joining}, not {open_run} - "
+            f"the last {C.MIN_COMMITMENT_AGE_BLOCKS} blocks are the settling window"
+        )
+    print()
+
+    records = {getattr(r, "hotkey", ""): r for r in view.commitment_records}
+    rounds = {T.reveal_round_for_run(run): run for run in range(open_run - 3, open_run + 2)}
+
+    found = 0
+    for hotkey in sorted(wanted, key=lambda h: view.uid_of(h) if h in view.hotkeys else -1):
+        uid = view.uid_of(hotkey)
+        record = records.get(hotkey)
+        if record is None:
+            if not args.all:
+                print(f"  uid {str(uid):>4} {hotkey[:12]}…  nothing committed")
+            continue
+        found += 1
+
+        reveal = int(getattr(record, "reveal_round", 0) or 0)
+        # Which run a commitment belongs to is its reveal round, not its block:
+        # the round is what the chain will actually open it on, and a recipe
+        # sealed to the wrong run is exactly the mistake worth surfacing here.
+        belongs = rounds.get(reveal)
+        opened = bool(getattr(record, "revealed", None))
+        state = "open" if opened else "sealed"
+        run_note = (
+            f"run {belongs}"
+            if belongs is not None
+            else f"round {reveal} - no run in this window seals to it"
+        )
+        print(
+            f"  uid {str(uid):>4} {hotkey[:12]}…  {state:<6} {run_note}, "
+            f"committed at block {getattr(record, 'block', '?')}"
+        )
+        if belongs is not None and not opened:
+            print(
+                f"        measured in run {belongs + 1}, paid in run {belongs + 2}; "
+                f"opens at drand round {reveal}"
+            )
+
+    if args.all:
+        print(f"\n  {found} of {len(view.hotkeys)} registered hotkeys hold a commitment")
     return 0
 
 
@@ -669,14 +684,28 @@ def build_parser() -> argparse.ArgumentParser:
     check.set_defaults(func=_cmd_check)
 
     status = subparsers.add_parser(
-        "status", help="What this hotkey has submitted in the current run."
+        "status", help="What a hotkey has committed on chain, read from the chain."
     )
     status.add_argument(
         "--hotkey",
         default="",
         help="An ss58 address. Defaults to the wallet's hotkey.",
     )
-    _add_api(status)
+    status.add_argument(
+        "--uid",
+        type=int,
+        default=None,
+        help="A uid on the metagraph, resolved to whoever holds it now.",
+    )
+    status.add_argument(
+        "--all",
+        action="store_true",
+        help="Every registered hotkey holding a commitment.",
+    )
+    status.add_argument("--netuid", type=int, default=int(os.environ.get("CAPSUB_NETUID", "103")))
+    status.add_argument(
+        "--subtensor.network", dest="network", default=os.environ.get("CAPSUB_NETWORK", "finney")
+    )
     _add_wallet(status)
     status.set_defaults(func=_cmd_status)
 

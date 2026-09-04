@@ -366,7 +366,7 @@ class ValidatorNeuron:
         """
         from capability_subnet.common.chain import block_beacon
         from capability_subnet.common.schemas import Recipe
-        from capability_subnet.validator.field import FieldError, field_for_run
+        from capability_subnet.validator.field import FieldError, FieldPending, field_for_run
         from capability_subnet.validator.run import Candidate, evaluate_run
 
         run_blocks = C.DEFAULT_RUN_BLOCKS
@@ -389,6 +389,14 @@ class ValidatorNeuron:
                 netuid=self.config.netuid,
                 run_blocks=run_blocks,
             )
+        except FieldPending as exc:
+            # The commitments are there and the chain has not opened them yet.
+            # Setting no weights at all is the whole point: this returns without
+            # touching last_weight_block, so the next poll tries again and the
+            # run is measured as soon as its field is readable. Burning here
+            # would pay nobody for a run that was, in fact, entered.
+            log.info("run %s: %s Waiting; nothing set this pass.", run_id, exc)
+            return
         except FieldError as exc:
             # The chain is unreadable. Not a miner's malformed commitment -
             # those are refused one at a time and logged, and the rest of the
@@ -453,10 +461,15 @@ class ValidatorNeuron:
             )
 
         if not candidates:
+            # Genuinely empty, and now it means that: anything merely unopened
+            # was refused above as pending, and an unreadable chain burned with
+            # its own reason. What is left is a run nobody entered.
             log.warning(
-                "run %s: no candidates. The field came back empty from %s, so this run burns.",
+                "run %s: no candidates. The chain holds no readable commitment for "
+                "runs %s-%s, so this run burns.",
                 run_id,
-                getattr(self.config, "api_url", ""),
+                run_id - 2,
+                run_id - 1,
             )
 
         reigning = self._reigning_grade(run_id)

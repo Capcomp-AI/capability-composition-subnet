@@ -5,8 +5,7 @@ Validates a recipe and, with --confirm, commits it on chain.
 
 Equivalent to `capcomp commit`, which is the documented way in. This file
 exists because Bittensor convention puts a neuron entry point here, and a
-miner who looks for one should find the same thing the CLI does rather than
-a route that no longer answers.
+miner who looks for one should find exactly what the CLI does.
 
     python neurons/miner.py \
         --netuid 103 \
@@ -14,10 +13,12 @@ a route that no longer answers.
         --recipe recipe.json \
         --confirm
 
-Nothing goes on chain and nothing is published anywhere: the recipe travels in
-the request body, signed by the hotkey. Run without --confirm first — the miner
-prints exactly what it would send, what it would replace, and how many of the
-run's attempts it would use, then exits without sending anything.
+The recipe goes on chain, sealed: it is written into the commitments pallet
+signed by the hotkey, timelocked to the drand round its run closes at, so
+nobody can read it - including the operator - until the run that measures it
+opens. Run without --confirm first — the miner prints the digest, the sealed
+size against the field and epoch limits, which run the commitment would join
+and when it would unseal, then exits without sending anything.
 """
 
 import sys

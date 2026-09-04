@@ -126,53 +126,49 @@ The model needs about 15.3 GiB of weights and about 0.6 GiB of KV cache for the 
 
 ## Where miners submit recipes
 
-To the submission API the owner runs. There is no on-chain step, no upload to a
-third party, and nothing for a miner to host.
+On chain, into the commitments pallet. There is no submission service, no
+upload to a third party, and nothing for a miner to host.
 
-`capcomp commit` writes a timelocked recipe into the commitments pallet, and is
-the submission path. A miner seals a recipe to the drand round their run
-closes at and writes it into the commitments pallet; the chain opens it there
-on its own, and the engine reads what it opened. There is no submission service
-any more, and nothing for the operator to hold or hand over.
+`capcomp commit` seals a recipe to the drand round its run closes at and writes
+it into the pallet, signed by the hotkey. The chain opens it there on its own
+schedule, and every validator reads what it opened. Nothing about entering a
+run passes through the operator, so there is nothing for the operator to
+withhold, substitute or hand over.
 
-`capcomp commit` writes a timelocked recipe into the commitments pallet and is
-the chain-native path being built beside this one. Nothing reads it yet, so a
-commitment made today produces no queue entry and no scoreboard row. It is a
-rehearsal, not a second way in.
-
-A miner POSTs the recipe signed by their hotkey. The service checks the
 The pallet checks that the hotkey is registered on the subnet and that it has
-epoch space left, then stores it - replacing whatever it held for them. It does
-not check the contents; the engine does that when the chain opens it.
+epoch space left, then stores it - replacing whatever it held for that hotkey.
+It does not check the contents; the engine and every validator do that when the
+chain opens it.
 
 ```
 Commitments.set_commitment(netuid, {fields: [[{TimelockEncrypted: {…}}]]})
 ```
 
-Signed over `capcomp-submit:v1:<run_id>:sha256:<hex>`, which binds the signature
-to both the run and the recipe so it cannot be replayed into either.
-
 | | |
 |---|---|
-| Attempts per run | `RESUBMISSION_LIMIT`, currently 3; only the last is measured |
-| Identical resend | Costs no attempt |
-| Max recipe size | 256 KB |
-| Stored | The final recipe only - the rest survive as digests and a count |
+| Commits per run | Unlimited; the last one standing before the settling window is measured |
+| Cost | None - `Pays::No`, and no coldkey is unlocked |
+| Max recipe size | `MAX_ONCHAIN_RECIPE_BYTES` (4096) canonical bytes |
+| Max sealed field | `MAX_TIMELOCK_FIELD_BYTES` (1024) bytes of ciphertext |
+| Epoch budget | `MAX_EPOCH_COMMIT_BYTES` (3100) bytes per hotkey per epoch |
+| Stored | The final commitment only - the pallet keeps no history |
 
-Bodies are held privately until the run that measures them opens, one run after
-the one submitted in. That is what makes copying pointless: by the time a
-recipe is readable, the run it competed in is closed and paid.
+Bodies are unreadable until the chain opens them, `REVEAL_MARGIN_BLOCKS` after
+the run that measures them opens. That is what makes copying pointless: by the
+time a recipe is readable, the run it competed in has closed. Nobody can read
+it early, the operator included - which is the property the old service could
+assert but never prove.
 
 The anti-copy check covers the same span from the other side - it compares a
 submission against everything admitted in the last `COPY_LOOKBACK_RUNS` (2)
 runs, so a duplicate arriving while the original is still unpaid is refused,
 and one arriving after the original has been paid and published is not.
 
-Miners do not write to the chain at all. That is a deliberate trade: the
-submission set is this operator's record rather than something a third party can
-rebuild from a public ledger. What it buys is a recipe nobody can copy before it
-has been scored, a resubmission limit that can be enforced, and a recipe that
-stays retrievable rather than depending on a repository its author may delete.
+The trade this makes is worth stating plainly. A commitment costs a block of
+chain space and the field is now enumerable by anyone watching the pallet -
+sealed, but visibly there. What it buys is that no participant has to trust the
+operator's record: the submission set is a public ledger every validator reads
+identically, rather than a database the operator could edit.
 
 Validators read the record from the API - `/run/{id}`, `/run/{id}/results`,
 `/run/{id}/weights` and `/run/{id}/instances/{hotkey}` - all of which open when

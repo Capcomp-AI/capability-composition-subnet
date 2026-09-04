@@ -19,15 +19,17 @@ and pass its endpoint:
 
     python examples/quickstart_miner.py --tries 20 --serve http://127.0.0.1:8000/v1
 
-Then submit the winner:
+Then commit the winner:
 
-    capcomp submit --recipe recipe.json \
+    capcomp commit --recipe recipe.json \
         --wallet.name <coldkey> --wallet.hotkey <hotkey> --confirm
 
-That is one HTTP request. The recipe travels in the body, signed by your
-hotkey — nothing is written to the chain, nothing is published anywhere, and
-there is no file for anyone to fetch. A recipe hosted somewhere and named in an
-on-chain commitment is not a submission and is not read.
+That is one extrinsic. The recipe is sealed to the drand round its run closes
+at and written into the commitments pallet, signed by your hotkey — no fee, no
+coldkey unlocked, and nobody can read it until the run that measures it opens.
+Run it without --confirm first: it prints which run the commitment would join
+and refuses if that is not the one you meant. A recipe hosted somewhere and
+merely named on chain is not a submission and is not read.
 """
 
 from __future__ import annotations
@@ -158,8 +160,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"\nwritten to {args.out}")
     print(f"digest      {recipe.digest()}")
 
-    print("\nSubmit it:")
-    print(f"  capcomp submit --recipe {args.out} \\")
+    print("\nCommit it (drop --confirm for a dry run that sends nothing):")
+    print(f"  capcomp commit --recipe {args.out} \\")
     print("      --wallet.name <coldkey> --wallet.hotkey <hotkey> --confirm")
 
     if not args.serve:

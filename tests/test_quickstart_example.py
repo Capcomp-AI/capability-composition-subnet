@@ -38,19 +38,20 @@ def test_it_produces_a_valid_recipe(tmp_path):
     assert recipe.digest() in result.stdout
 
 
-def test_it_points_at_the_api_and_not_at_the_chain(tmp_path):
+def test_it_points_at_the_chain_and_not_at_a_service(tmp_path):
     """The example is where a miner learns the route, so it has to be the real one.
 
-    It used to print an on-chain commitment payload and ask for a URL to publish
-    the recipe at. Both are gone: a recipe named on the chain is not a submission
-    and is not read, and a miner following the example would have waited a run to
-    find that out.
+    A miner who follows a wrong route finds out a run later, when nothing was
+    scored. So the example must name the live command, and must not describe a
+    scheme where the recipe lives somewhere else and the chain merely points at
+    it.
     """
     result = _run("--tries", "3", "--seed", "2", "--out", str(tmp_path / "r.json"))
 
     assert result.returncode == 0, result.stderr[-2000:]
-    assert "capcomp submit" in result.stdout, "the example must show the submit command"
-    assert "capsub1|" not in result.stdout, "no commitment payload may be printed"
+    assert "capcomp commit" in result.stdout, "the example must show the commit command"
+    assert "capcomp submit" not in result.stdout, "that command no longer exists"
+    assert "capsub1|" not in result.stdout, "no digest-only commitment payload may be printed"
     assert "--recipe-uri" not in result.stdout
 
 

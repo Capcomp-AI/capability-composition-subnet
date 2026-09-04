@@ -41,6 +41,46 @@ class FieldError(RuntimeError):
     """The field could not be read, or could not be trusted once it was."""
 
 
+class FieldPending(RuntimeError):
+    """The field is on chain but the chain has not opened it yet.
+
+    Deliberately not a :class:`FieldError`. Both mean "no usable field right
+    now" and they call for opposite responses: an unreadable chain is a
+    permanent condition this validator cannot fix, so it burns and says so; an
+    unopened one resolves by itself within the hour, and burning through it
+    would pay nobody for a run a field was in fact entered for.
+
+    A run's commitments unseal ``REVEAL_MARGIN_BLOCKS`` after the measuring run
+    opens - an hour, at twelve seconds a block. A validator whose weight
+    interval lands in that hour sees a chain holding every recipe and readable
+    payloads for none of them.
+    """
+
+
+def _pending_reveals(records, measuring_run: int, *, run_blocks: int) -> list[str]:
+    """Commitments this run must measure that the chain has not opened yet.
+
+    Keyed on the reveal round each source run pins, not on "sealed" alone. A
+    commitment sealed to some other round is not this run's to wait for - a
+    miner who sealed to the wrong run would otherwise hold every later run
+    hostage, since their payload never opens on a schedule this run cares
+    about.
+    """
+    from capability_subnet.common.timelock import reveal_round_for_run
+
+    expected = {
+        reveal_round_for_run(source, run_blocks=run_blocks)
+        for source in (measuring_run - 2, measuring_run - 1)
+        if source >= 0
+    }
+    return [
+        getattr(record, "hotkey", "")
+        for record in records
+        if int(getattr(record, "reveal_round", 0) or 0) in expected
+        and not getattr(record, "revealed", None)
+    ]
+
+
 @dataclass(slots=True)
 class FetchedSubmission:
     """One submission, unsealed from the chain and checked."""
@@ -89,6 +129,19 @@ def field_for_run(
         view = fetch_metagraph(subtensor, netuid)
     except Exception as exc:  # noqa: BLE001 - reported, never absorbed
         raise FieldError(f"could not read netuid {netuid} from the chain: {exc}") from exc
+
+    # Before anything is read: is there anything left to open? An unopened
+    # commitment and no commitment at all are indistinguishable further down -
+    # field_from_commitments skips a record with no revealed payload - so the
+    # question has to be asked here, while the sealed records are still in hand.
+    pending = _pending_reveals(view.commitment_records, measuring_run, run_blocks=run_blocks)
+    if pending:
+        raise FieldPending(
+            f"run {measuring_run}: {len(pending)} commitment(s) for this run have "
+            f"not unsealed yet. They open at the round their run pins; until then "
+            f"the field is incomplete and measuring it would score a fraction of "
+            f"it and burn the rest."
+        )
 
     registered = set(view.hotkeys)
     seen: dict[str, FetchedSubmission] = {}
