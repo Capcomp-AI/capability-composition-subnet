@@ -21,6 +21,23 @@ import pytest
 from capability_subnet.validator.neuron import ValidatorNeuron
 
 
+@pytest.fixture
+def a_card(monkeypatch):
+    """Make the host look like it has a CUDA device.
+
+    The tests that assert a *healthy* host starts were reading the machine they
+    ran on. They passed here because this box has cards, and passed on CI
+    because torch was absent and the check skipped - so neither was exercising
+    the branch, and the day torch arrived without a GPU they both failed for a
+    reason that had nothing to do with the code under test.
+    """
+    try:
+        import torch
+    except ImportError:
+        return
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+
+
 def _config(**overrides):
     base = dict(evaluation="own", serve_url="http://127.0.0.1:8000", pool_dir="pool", device="cuda")
     base.update(overrides)
@@ -35,7 +52,7 @@ def _preflight(config):
 
 
 class TestOwnModeRefusesAHostThatCannotMeasure:
-    def test_a_complete_host_starts(self, tmp_path):
+    def test_a_complete_host_starts(self, tmp_path, a_card):
         (tmp_path / "pool").mkdir()
         _preflight(_config(pool_dir=str(tmp_path / "pool")))
 
@@ -119,6 +136,6 @@ class TestOwnModeRequiresAGpu:
         with pytest.raises(SystemExit):
             _preflight(_config(device="cuda", pool_dir=str(tmp_path / "pool")))
 
-    def test_an_indexed_cuda_device_is_accepted(self, tmp_path):
+    def test_an_indexed_cuda_device_is_accepted(self, tmp_path, a_card):
         (tmp_path / "pool").mkdir()
         _preflight(_config(device="cuda:1", pool_dir=str(tmp_path / "pool")))
