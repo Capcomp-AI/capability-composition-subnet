@@ -680,3 +680,66 @@ def run_position(
         blocks_remaining=closes - block,
         settles_by_block=closes - min_age_blocks,
     )
+
+
+class RunUnknown(ValueError):
+    """Nothing given identifies the run a commitment joined."""
+
+
+def run_for_commitment(
+    *,
+    stated_run: int | None = None,
+    commit_block: int | None = None,
+    revealed_at_block: int | None = None,
+    run_blocks: int = C.DEFAULT_RUN_BLOCKS,
+) -> int:
+    """The run a commitment entered. The only place this question is answered.
+
+    It was answered in about twenty places, from four different rules, all fed
+    by one field whose meaning changes: ``block`` is the commit block while a
+    commitment is sealed and the block the *reveal* landed at once the pallet
+    opens it - one shared value for a whole field, a run later than the run it
+    belongs to. So every caller silently changed its answer at the reveal, and
+    two of them disagreed on the same input even before that, because
+    ``run_id_for_block`` gives the run the clock was in while the settling rule
+    gives the run actually joined. Those differ for every commitment made in a
+    run's closing window, which is where eleven miners were.
+
+    The sources are tried in order of how much they know:
+
+    ``stated_run``
+        Recorded when the commitment was admitted or first seen sealed, which
+        is the only moment the answer is certain. Always preferred.
+    ``commit_block``
+        The settling rule, which is what a miner's own tooling applied when it
+        chose the round to seal to. Correct only while this really is the
+        commit block.
+    ``revealed_at_block``
+        Last resort, for a commitment already opened and never recorded before.
+        A run pins one reveal round and consecutive runs are a day apart, so the
+        block a commitment opened at identifies its run - see
+        :func:`~capability_subnet.common.timelock.opened_in_run`.
+
+    Raises:
+        RunUnknown: rather than guessing. A wrong run here files a field under
+            a run that never measures it, which is the failure this exists to
+            end.
+    """
+    if stated_run is not None:
+        return int(stated_run)
+    if commit_block:
+        return measuring_run_for(int(commit_block), run_blocks) - 1
+    if revealed_at_block:
+        from capability_subnet.common.timelock import opened_in_run
+
+        here = run_id_for_block(int(revealed_at_block), run_blocks)
+        for candidate in (here - 1, here, here - 2):
+            if candidate >= 0 and opened_in_run(
+                int(revealed_at_block), candidate, run_blocks=run_blocks
+            ):
+                return candidate
+    raise RunUnknown(
+        "no stated run, no commit block and no usable reveal block: the run "
+        "cannot be determined, and guessing it files the submission under a "
+        "run that will not measure it"
+    )
