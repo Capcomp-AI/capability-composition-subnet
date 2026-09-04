@@ -490,7 +490,7 @@ Three things make this system's threat model unusual:
 
 1. **Recipes are public.** They must be, or nobody could verify an evaluation. So copying is trivially easy and has to be made *worthless* rather than impossible.
 2. **Candidate-written code executes.** The diagnostic stage is not scoreable otherwise.
-3. **The hidden instances come from a secret root.** Validators each measure the field on their own cards, so no single party's numbers decide anything - but the draw itself is derived from a root one operator holds, mixed with a block hash nobody chooses. That is where the residual trust sits.
+3. **The hidden instances come from a block hash.** Seeds are `sha256("open|run|label|beacon")` where the beacon is the hash of the block the run opened at - no operator secret, nothing held. Any party with that block hash derives the same 1,350 instances and can check the ones a run reported against them.
 
 Each is addressed by a different mechanism, and the mechanisms are described honestly below, including where they stop.
 
@@ -640,9 +640,9 @@ Being explicit about this is more useful than a longer list of defences.
 
 **A miner's private search.** Miners may use any hardware and any method. The network judges the artifact, not the process. There is no attempt to detect or constrain how a recipe was found.
 
-**Operator honesty about the hidden set.** Nothing proves the hidden instances were drawn fairly. The generator is published and the draw is deterministic given the root, but the root is secret, so the fairness of the draw rests on the operator.
+**Operator honesty about the scoring arithmetic.** The draw is checkable - the seeds are a pure function of the hash of the block the run opened at, so anyone holding that hash derives the same instances. What the draw being fair does not prove is that the numbers reported over it are the ones measured. That is what the signed per-candidate reports and the published traces are for: a validator re-scores sampled instances against them and burns rather than paying for a number that does not follow.
 
-**Availability of a miner's pointer.** If a recipe's host goes down before admission, the submission is not admitted. The engine keeps its own copy afterwards so a champion can keep defending, but it does not fetch pre-emptively.
+**A malformed commitment.** The chain stores whatever bytes a miner seals and vouches for none of them. One that does not decompress, parse or hash correctly is refused with a reason in the run report - but the chain itself raised no error when it was made, so a miner who seals rubbish learns it a run later.
 
 **Model-level attacks on the base model.** The base is pinned upstream and taken as given.
 
@@ -712,14 +712,6 @@ Roughly `(1 reference + the incumbent + the challenger) × instances × per-inst
 
 Yes, and they are published in the contract so miners can see them. Do not tune them in response to a specific candidate - that converts the engine from a measuring instrument into a decision-maker.
 
-### What if a champion's recipe URL goes dead?
-
-The engine keeps its own copy of every admitted recipe under `state/recipes/`, so a champion whose pointer went dead keeps defending.
-
-### Can I run the engine without Docker?
-
-Yes, but the container boundaries are the primary isolation for candidate-written code. The in-process resource limits are defence in depth, not a substitute.
-
 ### Do I earn anything while I wait in the queue?
 
 A small, tapered share - most at the front of the queue, least at the back. It
@@ -749,19 +741,3 @@ Clearing the gates is the threshold, and it is not negotiable. Grading applies
 within the qualified set - it is not a consolation prize for producing something
 undeployable.
 
-### Does the subnet owner run code the rest of us cannot see?
-
-Not for anything that decides a score. Everything that turns evidence into a
-number - instance generation, the deterministic scorers, aggregation, the hard
-gates, retention, the comparator, ranking, contribution and the weight vector -
-is in this repository, and a test enforces that none of it depends on the
-operator's engine.
-
-The engine itself is operator-only: the run loop, candidate serving, the
-store, the read-only API and the configuration surface. None of that changes what
-a candidate scores, and a validator does not need it - it recomputes a published
-score from published traces using the public rules, and burns rather than paying
-for a number that does not follow.
-
-What an operator keeps private beyond the engine is the hidden seed root, wallet
-material, filled-in configuration, host inventory and runbooks.
