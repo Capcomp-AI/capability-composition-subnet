@@ -706,6 +706,16 @@ class QueueEntry(StrictModel):
     recipe_uri: str = ""
     first_block: int
     admitted_at_block: int
+    #: The run this commitment entered, stated rather than re-derived.
+    #:
+    #: A reader given only a block has to apply the settling rule to it, and
+    #: the block stops being the commit block the moment the pallet opens the
+    #: commitment - it becomes the block the reveal landed at, one value for
+    #: the whole field, a run later. Everything downstream that derived the run
+    #: from it filed an entire field a run late and disagreed with itself about
+    #: which run a miner had entered. The engine knows the answer when it
+    #: admits, so it says so.
+    submitted_run: int | None = None
     status: Literal["sealed", "queued", "evaluating", "champion", "terminated", "rejected"] = (
         "queued"
     )
