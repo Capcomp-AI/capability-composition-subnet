@@ -59,11 +59,17 @@ class TestNothingStillPointsAtTheService:
         for name, doc in (("miner.md", MINER_DOC), ("owner.md", OWNER_DOC)):
             assert "capcomp submit --confirm" not in doc, f"{name} still sends miners to the API"
 
-    def test_the_retired_command_names_its_replacement(self):
-        """Rather than argparse's `invalid choice`, which names nothing."""
+    def test_the_retired_command_is_not_offered_and_commit_is(self):
+        """argparse lists what a miner may run, which is the answer they need.
+
+        The command was briefly kept as a redirect. It is gone outright now:
+        `capcomp -h` and the invalid-choice error both name `commit`, so the
+        miner who typed the old name is told the new one either way.
+        """
         text = _cli("submit", "--recipe", "x.json")
-        assert "is gone" in text
-        assert "capcomp commit" in text
+        assert "invalid choice: 'submit'" in text
+        assert "'commit'" in text
+        assert "commit" in _cli("-h")
 
     def test_no_guide_calls_the_chain_path_a_preview(self):
         for name, doc in (("miner.md", MINER_DOC), ("owner.md", OWNER_DOC)):

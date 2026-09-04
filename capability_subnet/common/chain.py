@@ -149,7 +149,16 @@ def fetch_metagraph(subtensor: bt.Subtensor, netuid: int) -> MetagraphView:
         )
 
     if skipped:
-        log.info("skipped %d malformed commitments on netuid %s", skipped, netuid)
+        # Not malformed, and saying so on every pass of every validator was
+        # alarming about nothing. These are the pointer-era commitments from
+        # before recipes were sealed into the pallet: a payload naming a URL
+        # rather than carrying a body. Nothing reads them and nothing will, so
+        # they are counted at debug and named for what they are.
+        log.debug(
+            "ignored %d commitment(s) on netuid %s in a format this subnet no longer reads",
+            skipped,
+            netuid,
+        )
     if sealed:
         log.info("%d commitments on netuid %s are still sealed", sealed, netuid)
 

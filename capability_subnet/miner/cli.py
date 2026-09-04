@@ -566,31 +566,6 @@ def _cmd_commit(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_submit(args: argparse.Namespace) -> int:
-    """Refuse, and say where the submission went.
-
-    Kept as a command rather than deleted because a miner whose script still
-    calls it needs to be told what to call instead. Removing the subcommand
-    would give them `invalid choice: \'submit\'`, which names nothing.
-    """
-    print(
-        "error: `capcomp submit` is gone. Recipes are committed on chain now.\n"
-        "\n"
-        "  capcomp commit --recipe "
-        f"{getattr(args, 'recipe', None) or '<recipe.json>'} \\\n"
-        "      --wallet.name <coldkey> --wallet.hotkey <hotkey> --confirm\n"
-        "\n"
-        "Your recipe is sealed to the drand round your run closes at and written "
-        "into the\ncommitments pallet. Nobody can read it before then, including "
-        "the operator, and\nthe chain opens it on its own - there is no service "
-        "holding it and none to ask.\n"
-        "Run it without --confirm first; it commits nothing and prints what it "
-        "would do.",
-        file=sys.stderr,
-    )
-    return 2
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="capcomp",
@@ -754,26 +729,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_wallet(commit)
     commit.set_defaults(func=_cmd_commit)
-
-    submit = subparsers.add_parser(
-        "submit", help="Sign and send a recipe. Without --confirm, sends nothing."
-    )
-    submit.add_argument("--recipe", required=True)
-    submit.add_argument("--netuid", type=int, default=int(os.environ.get("CAPSUB_NETUID", "103")))
-    submit.add_argument(
-        "--subtensor.network", dest="network", default=os.environ.get("CAPSUB_NETWORK", "finney")
-    )
-    submit.add_argument(
-        "--confirm",
-        action="store_true",
-        help="Actually send. Omit for a dry run that checks everything.",
-    )
-    submit.add_argument(
-        "--log.level", dest="log_level", default=os.environ.get("CAPSUB_LOG_LEVEL", "INFO")
-    )
-    _add_api(submit)
-    _add_wallet(submit)
-    submit.set_defaults(func=_cmd_submit)
 
     timing = subparsers.add_parser(
         "timing", help="Which run a submission made now is measured and paid in."
