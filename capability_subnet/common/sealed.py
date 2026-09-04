@@ -54,6 +54,16 @@ log = logging.getLogger(__name__)
 MAX_DECOMPRESSED_BYTES = 1024 * 1024
 
 
+class NotThisRun(Exception):
+    """The commitment is sound, and belongs to a different run.
+
+    Not a refusal. A field is built by asking each source run in turn, so every
+    commitment is offered to a run it does not belong to at least once, and
+    answering "refused" there marks a perfectly good submission rejected -
+    which is the miner's only record of why a run was lost.
+    """
+
+
 class SealedError(Exception):
     """A revealed commitment is not a submission. The message says why."""
 
@@ -111,9 +121,9 @@ def unseal(
         try:
             T.check_reveal_round(run_id, reveal_round, run_blocks=run_blocks)
         except T.RevealRoundError as exc:
-            raise SealedError(str(exc)) from exc
+            raise NotThisRun(str(exc)) from exc
     elif not T.opened_in_run(block, run_id, run_blocks=run_blocks):
-        raise SealedError(
+        raise NotThisRun(
             f"opened at block {block}, which is not when run {run_id}'s "
             f"commitments open; this commitment is not a submission to run {run_id}"
         )
@@ -240,6 +250,12 @@ def field_from_commitments(
                     run_blocks=run_blocks,
                 )
             )
+        except NotThisRun:
+            # Belongs to another source run, which this loop will ask about in
+            # turn. Silent: reporting it would mark a sound submission rejected
+            # every pass, because every commitment is offered to a run it does
+            # not belong to.
+            continue
         except SealedError as exc:
             refused.append((hotkey, str(exc)))
 

@@ -80,17 +80,27 @@ class TestAGoodCommitmentBecomesASubmission:
 
 class TestTheRevealRoundDecidesWhichRunItIs:
     def test_a_round_from_another_run_is_not_a_submission_to_this_one(self, sealed_payload):
-        with pytest.raises(sealed.SealedError, match="not run 900's pinned round"):
+        with pytest.raises(sealed.NotThisRun, match="not run 900's pinned round"):
             _unseal(sealed_payload, reveal_round=T.reveal_round_for_run(RUN + 1))
 
-    def test_a_round_that_already_passed_is_refused(self, sealed_payload):
+    def test_a_round_that_already_passed_is_not_this_run_s(self, sealed_payload):
         """It was never sealed: the key was public when it landed."""
-        with pytest.raises(sealed.SealedError, match="not run 900's pinned round"):
+        with pytest.raises(sealed.NotThisRun, match="not run 900's pinned round"):
             _unseal(sealed_payload, reveal_round=T.reveal_round_for_run(RUN - 5))
 
-    def test_a_round_off_by_one_is_refused_like_any_other(self, sealed_payload):
-        with pytest.raises(sealed.SealedError):
+    def test_a_round_off_by_one_is_rejected_like_any_other(self, sealed_payload):
+        with pytest.raises(sealed.NotThisRun):
             _unseal(sealed_payload, reveal_round=T.reveal_round_for_run(RUN) + 1)
+
+    def test_a_wrong_round_is_not_a_refusal(self, sealed_payload):
+        """Belonging to another run is not a fault, and must not read as one.
+
+        A field is built by asking each source run in turn, so every commitment
+        is offered to a run it does not belong to at least once. Reporting that
+        as a refusal marked every sound submission rejected once a pass, and
+        the queue's status is a miner's only record of why a run was lost.
+        """
+        assert not issubclass(sealed.NotThisRun, sealed.SealedError)
 
 
 class TestWhatElseCanBePutInACommitment:
@@ -176,7 +186,8 @@ class TestBuildingTheFieldFromWhatTheChainHolds:
         rec = self._Record(HOTKEY, sealed_payload, T.reveal_round_for_run(RUN))
         admitted, refused = sealed.field_from_commitments([rec], RUN + 1)
         assert admitted == []
-        assert "pinned round" in refused[0][1]
+        # Skipped, not refused: it is a sound commitment to a different run.
+        assert refused == []
 
     def test_the_settling_rule_is_not_applied_here(self, sealed_payload):
         """Deliberately the caller's job.
