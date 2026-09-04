@@ -31,14 +31,24 @@ Checking this network needs no GPU and no validator registration. `capability-au
 
 ## What you are doing
 
-Each run, your validator fetches the run's field from the submission service, checks every recipe against the digest it was stored under, reconstructs the merged adapter locally, serves it through your own endpoint, and scores it against hidden instances it regenerates from seeds derived from a block hash. It then ranks what it measured, writes the result to a run report, and submits the weights from the run **before** this one.
+Each run, your validator reads the run's field from the chain, checks every recipe by unsealing it and hashing its canonical form, reconstructs the merged adapter locally, serves it through your own endpoint, and scores it against hidden instances it regenerates from seeds derived from a block hash. It then ranks what it measured, writes the result to a run report, and submits the weights from the run **before** this one.
 
 ### Getting the field
 
-Miners submit to the submission service, not to the chain, and **a run's
-submissions are published when the run measuring them opens** - one run after
-they were made, to everyone at once. That is the run you need them in: measuring
-run N+1 means reading run N's field, and run N's field opens with N+1.
+Miners commit to the chain, timelocked, and **the chain opens a run's
+commitments an hour after the run that measures them opens** - `REVEAL_MARGIN_BLOCKS`,
+300 blocks. That is the run you need them in: measuring run N+1 means reading
+run N's field, and run N's field opens an hour into N+1.
+
+The hour is not slack. A drand pulse fires on wall-clock time while the run
+boundary is a block height, so a slow chain would otherwise open the field
+while miners could still commit to it. Erring the other way costs a validator
+a few minutes of a run it has a day to finish.
+
+Until then `field_for_run` raises `FieldPending` rather than returning an empty
+field. Waiting is the correct response: an unopened field and a run nobody
+entered produce the same weight vector and mean opposite things, and burning
+through the wait pays nobody for a run that was fully entered.
 
 ```python
 from capability_subnet.validator.field import field_for_run

@@ -38,6 +38,17 @@ if TYPE_CHECKING:  # pragma: no cover - import cycle avoidance for type checkers
 
 log = logging.getLogger(__name__)
 
+
+class ChainError(RuntimeError):
+    """The chain could not be read.
+
+    Named in two docstrings before it existed, which is its own small lesson: a
+    reader was told to expect it and a caller could not catch it. Raised where
+    the alternative is a sentinel that reads as data - a head of 0 resolves to
+    run 0, and every caller then reasons about a run that is not happening.
+    """
+
+
 #: Largest payload the Commitments pallet accepts in one ``Raw`` field.
 MAX_RAW_FIELD_BYTES = 128
 
@@ -174,26 +185,6 @@ def fetch_metagraph(subtensor: bt.Subtensor, netuid: int) -> MetagraphView:
     )
 
 
-def read_commitments(
-    subtensor: bt.Subtensor,
-    netuid: int,
-    *,
-    min_block: int = 0,
-) -> list[ChainCommitment]:
-    """Every commitment belonging to this subnet, in commit order.
-
-    Returns:
-        Commitments sorted by the block they were made at, earliest first. That
-        ordering is the queue order the scheduler uses.
-    """
-    try:
-        view = fetch_metagraph(subtensor, netuid)
-    except Exception:
-        log.exception("failed to read commitments for netuid %s", netuid)
-        return []
-    return [c for c in view.commitments if c.block >= min_block]
-
-
 def is_registered(view: MetagraphView, hotkey: str) -> bool:
     return hotkey in view.hotkeys
 
@@ -309,12 +300,21 @@ def _is_rate_limit(message: str) -> bool:
 
 
 def current_block(subtensor: bt.Subtensor) -> int:
-    """Chain head, or 0 if the endpoint is unreachable."""
+    """The chain head.
+
+    Raises rather than returning a sentinel. It used to answer 0, which is a
+    valid-looking block that resolves to run 0 - so an unreachable node became
+    a run id every caller then reasoned about. Both callers run inside a loop
+    that logs and backs off, so raising costs a pass and states the cause;
+    returning 0 cost the truth.
+
+    Raises:
+        ChainError: if the head cannot be read.
+    """
     try:
         return int(subtensor.block)
-    except Exception:
-        log.warning("could not read chain head", exc_info=True)
-        return 0
+    except Exception as exc:
+        raise ChainError(f"could not read the chain head: {exc}") from exc
 
 
 def block_beacon(subtensor: bt.Subtensor, block: int) -> str:

@@ -311,7 +311,7 @@ engine recorded, which is the one part a reader cannot reconstruct.
 
 ## What the network trusts
 
-Nothing, in the sense that matters: no participant takes an *unverified* number from another participant. A local validator takes no numbers at all - it fetches the miners' recipes from the submission service, but a recipe is an input it hashes against the digest it was stored under, not a result it believes. An endpoint validator takes only signed reports it has checked against its own allow-list and spot-checked.
+Nothing, in the sense that matters: no participant takes an *unverified* number from another participant. A local validator takes no numbers at all - it reads the miners' recipes off the chain, and a recipe is an input it unseals and hashes for itself, not a result it believes. An endpoint validator takes only signed reports it has checked against its own allow-list and spot-checked.
 
 In its default **local** mode a validator reads the run's submissions from the API, reconstructs the merged adapter on its own hardware, serves it, and scores it against instances it regenerates itself. Its weights come from work it did - the stronger claim, and the reason a local validator needs a GPU.
 
@@ -319,7 +319,7 @@ A validator without a GPU can instead run in **endpoint** mode: it fetches the e
 
 Validators are not required to agree on artifact bytes. Six of the seven merge methods run an SVD, which is not bitwise reproducible across devices, so two honest validators on different cards build different weights from the same recipe. They are compared on **outcomes** over a shared core of instances every validator measures, with a band wide enough for device divergence and narrow enough to catch a validator that did no work. A validator inconsistent with most of its peers is reported; one that disagrees with a single peer is not, because a two-way split names the wrong party as readily as the right one.
 
-The subnet owner runs an evaluation engine. It publishes signed reports and a weight vector. A local-mode validator would consume none of them: it reads the field from the submission service and hash-checks it, and its weights come from its own hardware, so an engine that stopped, lied, or was never started would not change what a local validator pays - once the field is readable in time for it to do so. An endpoint-mode validator does consume the signed reports - that is the whole of what it runs on - but only after verifying each signature against its own allow-list and spot-checking a re-scored instance, so it too refuses a number it cannot stand behind. The reports also serve as a reference set to compare validators against, and as a disclosure feed anyone can replay.
+The subnet owner runs an evaluation engine. It publishes signed reports and a weight vector. A local-mode validator would consume none of them: it reads the field from the chain and checks each body itself, and its weights come from its own hardware, so an engine that stopped, lied, or was never started would not change what a local validator pays - once the field is readable in time for it to do so. An endpoint-mode validator does consume the signed reports - that is the whole of what it runs on - but only after verifying each signature against its own allow-list and spot-checking a re-scored instance, so it too refuses a number it cannot stand behind. The reports also serve as a reference set to compare validators against, and as a disclosure feed anyone can replay.
 
 ---
 

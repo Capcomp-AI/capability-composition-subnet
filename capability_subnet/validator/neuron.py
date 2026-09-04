@@ -375,6 +375,13 @@ class ValidatorNeuron:
 
         try:
             beacon = block_beacon(self.subtensor, opened_at)
+            if not beacon:
+                # It answers "" on its own fallback path rather than raising,
+                # so an unreadable hash arrived here looking like a value. The
+                # open draw refuses an empty beacon further down, but by then
+                # the failure reads as a sampler error rather than as a chain
+                # this validator could not read.
+                raise ValueError("the chain returned no hash for this block")
         except Exception as exc:
             # Without the beacon there is no draw, and a fabricated one would be
             # this validator choosing the test. Burn rather than invent.

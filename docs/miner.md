@@ -986,7 +986,7 @@ You can regenerate the questions independently: instances are drawn from
 manifest, so nothing about the draw rests on the operator's word.
 
 ```bash
-# your scores and rank, from the submission API
+# your scores and rank, from the disclosure API
 capcomp result --run <N> --uid <your uid>
 
 # the whole run's published record, checked against the chain
