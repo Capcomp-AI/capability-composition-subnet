@@ -1,13 +1,14 @@
 """Sending a recipe to the submission API.
 
-A miner's whole interaction with the network is this: POST the recipe, signed by
-the hotkey. Nothing goes on chain - no commitment, no transaction, no fee - and
-the hotkey is used for one thing only, signing a short string that binds the
-miner to the exact bytes they sent.
+Nothing here is a submission any more. Recipes are committed on chain by
+:mod:`capability_subnet.miner.commit`, and the service this module posted to
+does not accept them.
 
-This is the path that is scored. :mod:`capability_subnet.miner.commit` is the
-chain-native one being built beside it, and until the engine reads commitments
-this module is the submission and that one is a rehearsal.
+What survives is the part that had nothing to do with the transport:
+``canonical_body`` and ``digest_of`` decide what a recipe *is* and what it
+hashes to, and the commit path calls both. Deleting the module would move two
+definitions that the whole protocol agrees on into the middle of the thing that
+happens to use them today.
 
 Kept apart from the neuron so the signing and the request can be tested without
 a wallet or a network, and so a miner reading this file can see the entire

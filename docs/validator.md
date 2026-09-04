@@ -40,8 +40,9 @@ submissions are published when the run measuring them opens** - one run after
 they were made, to everyone at once. That is the run you need them in: measuring
 run N+1 means reading run N's field, and run N's field opens with N+1.
 
-```
-GET {api.url}/run/{run_id}/submissions      # no hotkey, no signature
+```python
+from capability_subnet.validator.field import field_for_run
+field = field_for_run(subtensor, measuring_run)   # no service, no credential
 ```
 
 There is no early-access route and no credential that opens one. A validator,
@@ -55,13 +56,13 @@ measure a published run on its own hardware and compare its numbers against
 the archive - verification after the fact, which is the honest description of
 what is available today.
 
-Point the validator at the service if you are not using the default:
+Point the validator at a different chain if you are not using the default:
 
 ```bash
---api.url https://api.capcomp.ai      # or CAPSUB_API_URL
+--subtensor.network finney      # or a local node while testing
 ```
 
-**What is and is not taken on trust.** The service delivers bytes; it does not
+**What is and is not taken on trust.** The chain delivers bytes; it does not
 get to say what they are worth. Every body is hashed against the digest its row
 carries before it becomes a candidate, and a single mismatch fails the whole
 fetch rather than shortening the field - a field quietly missing its
@@ -717,9 +718,9 @@ python neurons/validator.py --netuid 1 \
     --neuron.pool_dir pool
 
 # Miner
-capcomp submit --netuid 1 \
+capcomp commit --netuid 1 \
     --wallet.name miner --wallet.hotkey default \
-    --recipe recipe.json --api.url http://127.0.0.1:8081 --confirm
+    --recipe recipe.json --subtensor.network ws://127.0.0.1:9944 --confirm
 ```
 
 ### What to verify before moving on

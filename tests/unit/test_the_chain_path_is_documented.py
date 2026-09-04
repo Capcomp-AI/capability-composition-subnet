@@ -55,9 +55,25 @@ class TestNothingStillPointsAtTheService:
     service that would have refused them is gone.
     """
 
-    def test_no_guide_tells_a_miner_to_submit_over_http(self):
-        for name, doc in (("miner.md", MINER_DOC), ("owner.md", OWNER_DOC)):
-            assert "capcomp submit --confirm" not in doc, f"{name} still sends miners to the API"
+    def test_no_guide_tells_a_miner_to_run_the_command_that_is_gone(self):
+        """Checked as the command name, not as one spelling of its flags.
+
+        This asserted "capcomp submit --confirm" and passed while three places
+        in the miner guide still printed the command - because they wrote it
+        across two lines and the --confirm was on the second. A miner following
+        any of them got `invalid choice`.
+        """
+        for name, doc in (
+            ("miner.md", MINER_DOC),
+            ("owner.md", OWNER_DOC),
+            ("validator.md", VALIDATOR_DOC),
+            ("README.md", (REPO / "README.md").read_text()),
+        ):
+            for line in doc.split("\n"):
+                if "capcomp submit" not in line:
+                    continue
+                # The troubleshooting entry names it in order to say it is gone.
+                assert "is gone" in line, f"{name} still tells a miner to run it: {line[:70]}"
 
     def test_the_retired_command_is_not_offered_and_commit_is(self):
         """argparse lists what a miner may run, which is the answer they need.

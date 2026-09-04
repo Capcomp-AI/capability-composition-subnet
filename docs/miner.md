@@ -7,7 +7,7 @@ Your whole interaction with the network is one HTTP request. **Nothing you submi
 You need a registered hotkey and a little TAO for nothing but the existential deposit - committing itself is free. Your recipe is sealed to a drand round and written on chain, where nobody can read it until the run that measures it opens: not another miner, not a validator, not the operator. The chain unseals it there on its own schedule, which nobody controls. See [Committing on chain](#committing-on-chain).
 
 ```bash
-capcomp submit --recipe recipe.json \
+capcomp commit --recipe recipe.json \
     --wallet.name <coldkey> --wallet.hotkey <hotkey> --confirm
 ```
 
@@ -207,10 +207,23 @@ so the next run faces the same grade rather than a rising one.
 
 ```bash
 git clone <repository-url> lora-merger && cd lora-merger
+
+# A virtualenv first, and stay inside it for everything below.
+python3 -m venv .venv && source .venv/bin/activate
+
 pip install -e .
 
 # Add the reconstruction + evaluation extras if you have a GPU
 pip install -e ".[miner]"
+```
+
+`capcomp` is installed *into* that virtualenv. A shell that has not activated it
+answers `capcomp: command not found` and says nothing about why - so if you open
+a second terminal, or come back tomorrow, activate it again first:
+
+```bash
+source .venv/bin/activate
+capcomp -h
 ```
 
 ## 2. Learn the arena
@@ -369,10 +382,9 @@ submit` did not return success, you are not in the run.
 
 `capcomp commit` seals a recipe under a drand timelock and writes it into the
 commitments pallet. It works, and you can run it today against testnet or
-mainnet - but **nothing scores what it writes.** It exists so you can exercise
-the path, check your recipe fits the on-chain size limit, and see your epoch
-budget before the switch. Until this guide says otherwise, `capcomp submit` is
-the submission.
+mainnet. It is the submission: the recipe is sealed to the drand round your run
+closes at and written into the commitments pallet, where nobody can read it
+before then - not another miner, not a validator, not the operator.
 
 ```bash
 capcomp commit --recipe recipe.json \
@@ -415,12 +427,12 @@ ok - this recipe would be admitted
 Iterate until it says that. Then send it:
 
 ```bash
-capcomp submit --recipe recipe.json \
+capcomp commit --recipe recipe.json \
     --wallet.name <coldkey> --wallet.hotkey <hotkey>
 ```
 
 Without `--confirm` this is a dry run: it validates the recipe, reads the run
-from the API, prints the digest, says what it would replace and how many of the
+from the chain, prints the digest, says which run the commitment would join and how many of the
 run's three attempts you would have left - and sends nothing.
 
 ```
@@ -440,8 +452,8 @@ cannot be replayed into a later run or against a different recipe. The client
 serialises the recipe canonically before sending, so formatting in your editor
 is irrelevant and there is exactly one number to check.
 
-`--api.url` (or `CAPSUB_API_URL`) points at the submission service if you need
-to override it.
+`--subtensor.network` points at a different chain if you need one - a local
+node while you are testing, say. The commitment goes nowhere else.
 
 ## 8. Track it
 
@@ -862,23 +874,26 @@ measured on its own terms.
 
 ## Submitting
 
-One request. The recipe is the body, signed by your hotkey:
+One commitment. The recipe is inside it, sealed until the run that measures it
+opens:
 
 ```
-POST /submit
-{"hotkey": "5…", "recipe": "<the recipe JSON>", "signature": "0x…"}
+canonical recipe JSON
+  -> zlib
+  -> SCALE compact length prefix
+  -> timelock encrypt to the run's drand round
+  -> Commitments.set_commitment(netuid, {fields: [[{TimelockEncrypted: …}]]})
 ```
 
-The signature is over this exact string, where the run is the one the API is
-currently in and the digest is your recipe's canonical digest:
+Signed by your hotkey, because a commitment is a statement by the neuron. The
+reveal round is not yours to choose: it is derived from the run's close block,
+and a commitment carrying any other round is not a submission to that run. A
+round already past would mean the recipe was public the moment it landed.
 
-```
-capcomp-submit:v1:<run_id>:sha256:<hex>
-```
-
-Both are inside it, so a signature cannot be replayed into a later run or
-against a different recipe. `capcomp submit` does all of this; the shape is
-here so you can build your own client if you would rather.
+`capcomp commit` does all of this; the shape is here so you can build your own
+client if you would rather. `capability_subnet.common.timelock` computes the
+round from constants alone, so your client and the engine reach the same number
+with nothing to agree on.
 
 | | |
 |---|---|

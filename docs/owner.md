@@ -141,12 +141,12 @@ commitment made today produces no queue entry and no scoreboard row. It is a
 rehearsal, not a second way in.
 
 A miner POSTs the recipe signed by their hotkey. The service checks the
-signature, that the hotkey is registered on the subnet, and that they have
-attempts left in the run, then stores it - replacing whatever it held for them.
+The pallet checks that the hotkey is registered on the subnet and that it has
+epoch space left, then stores it - replacing whatever it held for them. It does
+not check the contents; the engine does that when the chain opens it.
 
 ```
-POST /submit
-{"hotkey": "5…", "recipe": "<the recipe JSON>", "signature": "0x…"}
+Commitments.set_commitment(netuid, {fields: [[{TimelockEncrypted: {…}}]]})
 ```
 
 Signed over `capcomp-submit:v1:<run_id>:sha256:<hex>`, which binds the signature

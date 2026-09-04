@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """Miner entry point.
 
-Validates a recipe and, with --confirm, sends it to the submission API.
+Validates a recipe and, with --confirm, commits it on chain.
+
+Equivalent to `capcomp commit`, which is the documented way in. This file
+exists because Bittensor convention puts a neuron entry point here, and a
+miner who looks for one should find the same thing the CLI does rather than
+a route that no longer answers.
 
     python neurons/miner.py \
         --netuid 103 \

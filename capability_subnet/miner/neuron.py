@@ -29,8 +29,6 @@ from capability_subnet.common import constants as C
 from capability_subnet.common.chain import fetch_metagraph, is_registered
 from capability_subnet.common.config import build_config
 from capability_subnet.common.logging import setup_logging
-from capability_subnet.miner import submit as api
-from capability_subnet.miner.recipe import RecipeError, advise, check_recipe, describe, load_recipe
 from capability_subnet.registry.snapshot import load_snapshot
 
 log = logging.getLogger(__name__)
@@ -80,82 +78,16 @@ class MinerNeuron:
     # -- submit -------------------------------------------------------------
 
     def submit(self) -> int:
-        """Validate, sign and — with confirmation — send.
+        """Validate and, with confirmation, commit on chain.
 
-        Returns:
-            A process exit code. Non-zero means nothing was submitted.
+        The whole of this used to be an HTTP request: canonicalise, sign a
+        short string, POST, read the service's answer. There is no service now,
+        so it delegates to the commit path rather than keeping a second copy of
+        the sealing rules that could disagree with it.
         """
-        if not self.config.recipe:
-            log.error("no recipe given. Pass --recipe path/to/recipe.json")
-            return 2
+        from capability_subnet.miner.cli import _cmd_commit
 
-        try:
-            recipe = load_recipe(self.config.recipe)
-        except RecipeError as exc:
-            log.error("%s", exc)
-            return 2
-
-        problems = check_recipe(recipe, self.snapshot)
-        if problems:
-            for problem in problems:
-                log.error("recipe problem: %s", problem)
-            return 2
-
-        for note in advise(recipe, self.snapshot):
-            log.warning("advisory: %s", note)
-
-        if not self.check_registered():
-            return 3
-
-        hotkey = self.wallet.hotkey.ss58_address
-        body = api.canonical_body(recipe)
-        digest = api.digest_of(body)
-
-        try:
-            # The wallet is already open, so the standing is fetched signed.
-            run_id, standing = api.current_run(
-                self.config.api_url, hotkey, sign=self.wallet.hotkey.sign
-            )
-        except api.SubmitError as exc:
-            log.error("%s", exc)
-            return 4
-
-        print(describe(recipe, self.snapshot))
-        self._report_standing(run_id, standing, digest)
-
-        if not self.config.confirm:
-            print("\nNothing was sent. Re-run with --confirm to submit.")
-            return 0
-
-        signature = self.wallet.hotkey.sign(api.signing_message(run_id, digest))
-        signature_hex = (
-            signature.hex() if isinstance(signature, (bytes, bytearray)) else str(signature)
-        )
-
-        try:
-            accepted = api.send(self.config.api_url, hotkey, body, signature_hex)
-        except api.SubmitError as exc:
-            log.error("%s", exc)
-            return 5
-
-        if accepted.unchanged:
-            print(
-                f"\nAlready held for run {accepted.run_id}: {accepted.recipe_sha256}\n"
-                f"Identical to what was there, so it cost no attempt "
-                f"({accepted.remaining} of {C.RESUBMISSION_LIMIT} left)."
-            )
-            return 0
-
-        print(
-            f"\nSubmitted for run {accepted.run_id} as uid {accepted.uid}.\n"
-            f"  digest     {accepted.recipe_sha256}\n"
-            f"  attempt    {accepted.submission_count} of {C.RESUBMISSION_LIMIT}"
-            f" ({accepted.remaining} left)\n"
-            + (f"  replaced   {accepted.replaced}\n" if accepted.replaced else "")
-            + f"\nMeasured in run {accepted.run_id + 1}, paid in run {accepted.run_id + 2}.\n"
-            f"Track it at {self.config.api_url.rstrip('/')}/status/{hotkey}"
-        )
-        return 0
+        return _cmd_commit(self.config)
 
     def _report_standing(self, run_id: int, standing: dict, digest: str) -> None:
         """What this submission costs against the run's budget, before sending."""

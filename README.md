@@ -226,6 +226,11 @@ candidate scores.
 ```bash
 git clone <repository-url> lora-merger && cd lora-merger
 
+# A virtualenv, and stay in it. capcomp is installed inside one, so a shell
+# that has not activated it answers `capcomp: command not found` and gives no
+# hint why.
+python3 -m venv .venv && source .venv/bin/activate
+
 # Install what your role needs. A validator never touches the tensor stack.
 pip install -e .              # validator, auditor  (~50 MB)
 pip install -e ".[miner]"     # + reconstruction and local evaluation
