@@ -684,15 +684,31 @@ class ChampionRecord(StrictModel):
 
 
 class QueueEntry(StrictModel):
-    """One admitted challenger awaiting evaluation."""
+    """One challenger, from the moment it is committed to the moment it is paid.
+
+    ``sealed`` is the state before the rest. A commitment is on chain the whole
+    run it was made in and the chain does not open it until an hour into the run
+    that measures it, so for a day there is a submission nobody can read -
+    including the engine. It is still a fact worth recording: a miner otherwise
+    cannot tell a commitment that landed from one that never did, and the
+    leaderboard shows an empty run either way.
+
+    A sealed entry carries no ``recipe_sha256`` because there is none to carry.
+    The digest of a ciphertext is not the digest of a recipe, and putting one
+    there would be a number that never matches anything.
+    """
 
     hotkey: str
     uid: int
-    recipe_sha256: str
-    recipe_uri: str
+    #: Empty while sealed. Set when the chain opens the commitment and admission
+    #: has checked the body against it.
+    recipe_sha256: str = ""
+    recipe_uri: str = ""
     first_block: int
     admitted_at_block: int
-    status: Literal["queued", "evaluating", "champion", "terminated", "rejected"] = "queued"
+    status: Literal["sealed", "queued", "evaluating", "champion", "terminated", "rejected"] = (
+        "queued"
+    )
     status_reason: str = ""
 
 
