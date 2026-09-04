@@ -41,6 +41,11 @@ classifiers = [
 # common, workflows, scoring, miner, validator and audit import nothing heavy.
 dependencies = [
   "bittensor>=11.0.0,<12",
+  # Timelock encryption, and not a transitive dependency of bittensor - it
+  # ships as its own wheel and was present on every machine here by accident of
+  # having installed it once. Sealing a recipe is the submission path now, so a
+  # miner without this cannot submit at all, and CI without it cannot tell.
+  "bittensor-drand>=2.0",
   "pydantic>=2.6",
   "httpx>=0.27",
   "jsonschema>=4.21",

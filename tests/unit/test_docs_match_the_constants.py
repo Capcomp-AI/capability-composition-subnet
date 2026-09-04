@@ -113,12 +113,17 @@ CHECKS = [
         rf"commitments per epoch)",
     ),
     (
-        "the chain path is a preview and is not scored",
-        # The claim that would be the expensive one to leave stale: a miner told
-        # that committing on chain submits them loses runs in silence, because
-        # nothing raises an error for a submission nobody reads.
-        r"(?i)commit(ting)? on chain (submits|is how you submit)"
-        r"|(?i)`?capcomp commit`? (submits|is the submission|is scored)",
+        "recipes are submitted on chain, not to a service",
+        # Inverted from what it checked for a day. The expensive stale claim is
+        # now the opposite one: a miner told to POST a recipe loses runs in
+        # silence, because there is no service to refuse them and the chain
+        # never heard from them.
+        #
+        # Written without inline (?i) mid-pattern. Python 3.11 rejects a global
+        # flag anywhere but position zero, and 3.10 accepts it - so the version
+        # this file was written on was the only one where it compiled.
+        r"(?:POST|post) (?:your |the )?recipe to|capcomp submit --confirm"
+        r"|submissions? (?:API|service) is (?:the|where)",
     ),
 ]
 

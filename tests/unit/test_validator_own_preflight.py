@@ -72,12 +72,22 @@ class TestOwnModeRefusesAHostThatCannotMeasure:
         assert "refusing to start" in str(caught.value)
 
     def test_every_problem_is_reported_in_one_pass(self, tmp_path, caplog):
-        """An operator should fix a host once, not once per restart."""
+        """An operator should fix a host once, not once per restart.
+
+        Asserted as "both of the problems this test caused are named, and the
+        count in the summary matches the lines logged" rather than as a fixed
+        total. The host contributes problems of its own - a machine without the
+        merge extra installed adds one - and pinning the number made the test a
+        statement about the machine it was written on.
+        """
         with caplog.at_level("ERROR"):
             with pytest.raises(SystemExit) as caught:
                 _preflight(_config(serve_url="", pool_dir=str(tmp_path / "absent")))
-        assert "2 problem(s)" in str(caught.value)
-        assert sum("preflight:" in r.message for r in caplog.records) == 2
+
+        reported = [r.message for r in caplog.records if "preflight:" in r.message]
+        assert any("serve_url" in m for m in reported)
+        assert any("pool" in m for m in reported)
+        assert f"{len(reported)} problem(s)" in str(caught.value)
 
     def test_delegated_mode_is_untouched(self, tmp_path):
         """The thin mode genuinely does run on the base install, and must keep
