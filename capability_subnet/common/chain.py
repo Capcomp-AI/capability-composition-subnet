@@ -20,6 +20,7 @@ queued because its block could not be read.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -743,3 +744,113 @@ def run_for_commitment(
         "cannot be determined, and guessing it files the submission under a "
         "run that will not measure it"
     )
+
+
+#: The pallet and storage a submission lives in, and the explorer that reads it.
+COMMITMENTS_PALLET = "Commitments"
+SEALED_STORAGE = "CommitmentOf"
+REVEALED_STORAGE = "RevealedCommitments"
+POLKADOT_APPS = "https://polkadot.js.org/apps"
+FINNEY_RPC = "wss://entrypoint-finney.opentensor.ai:443"
+
+
+_SS58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+_SS58_INDEX = {character: value for value, character in enumerate(_SS58_ALPHABET)}
+_SS58_CONTEXT = b"SS58PRE"
+
+
+class AddressError(ValueError):
+    """The address is not one this can decode."""
+
+
+def _b58decode(text: str) -> bytes:
+    number = 0
+    for character in text:
+        value = _SS58_INDEX.get(character)
+        if value is None:
+            raise AddressError(f"{character!r} is not a base58 character")
+        number = number * 58 + value
+    body = number.to_bytes((number.bit_length() + 7) // 8, "big")
+    return b"\x00" * (len(text) - len(text.lstrip("1"))) + body
+
+
+def public_key(address: str) -> bytes:
+    """The 32-byte public key an SS58 address encodes.
+
+    A base58 decode and a blake2b, both stdlib, so this runs wherever it is
+    called: the engine, its CI and any miner on the current stack carry no
+    substrate codec library, and an import of one costs the caller the whole
+    function.
+
+    The checksum is verified. It is the only thing standing between a mistyped
+    address and a storage key that addresses a real, empty slot - which reads
+    exactly like a submission that was never made.
+    """
+    raw = _b58decode(address)
+    if len(raw) < 35:
+        raise AddressError(f"{address[:12]}... is too short to be an ss58 address")
+
+    # One byte of network prefix below 64, two above it. Bittensor uses 42, but
+    # the key is derived the same way whatever the network, and refusing the
+    # two-byte form would refuse addresses that are perfectly decodable.
+    prefix = 1 if raw[0] < 64 else 2
+    body, checksum = raw[:-2], raw[-2:]
+    if hashlib.blake2b(_SS58_CONTEXT + body, digest_size=64).digest()[:2] != checksum:
+        raise AddressError(f"{address[:12]}... does not checksum")
+
+    account = body[prefix:]
+    if len(account) != 32:
+        raise AddressError(f"{address[:12]}... does not carry a 32-byte key")
+    return account
+
+
+def _twox64(raw: bytes, seed: int = 0) -> bytes:
+    """One xxh64, little-endian - which is the half that is easy to get wrong.
+
+    ``xxhash.digest()`` is big-endian and Substrate's is not, so a key built
+    from it is byte-reversed in every segment and matches nothing. Checked
+    against a key read out of the explorer rather than against the spec.
+    """
+    import xxhash
+
+    return xxhash.xxh64(raw, seed=seed).intdigest().to_bytes(8, "little")
+
+
+def storage_key(hotkey: str, *, netuid: int, revealed: bool) -> str:
+    """The exact storage key a commitment sits at, for anyone to query.
+
+    Given so a reader does not have to take this subnet's word for a
+    submission. Paste it into a node's raw-storage query and the chain returns
+    the same bytes the field was built from - no service in between, and
+    nothing here that could substitute one recipe for another without the key
+    changing.
+
+    ``twox128(pallet) ++ twox128(storage) ++ netuid ++ twox64concat(account)``.
+    The netuid is stored under the identity hasher, so it appears as its plain
+    little-endian encoding rather than a hash.
+    """
+    account = public_key(hotkey)
+    storage = REVEALED_STORAGE if revealed else SEALED_STORAGE
+    key = (
+        _twox64(COMMITMENTS_PALLET.encode(), 0)
+        + _twox64(COMMITMENTS_PALLET.encode(), 1)
+        + _twox64(storage.encode(), 0)
+        + _twox64(storage.encode(), 1)
+        + int(netuid).to_bytes(2, "little")
+        + _twox64(account)
+        + account
+    )
+    return "0x" + key.hex()
+
+
+def explorer_url(*, rpc: str = FINNEY_RPC) -> str:
+    """The chain-state page of an explorer pointed at this network.
+
+    Only as far as the page: polkadot.js takes the endpoint in the URL but not
+    a storage query with its arguments, so the key above is what actually
+    reproduces a row. Linking somewhere that cannot answer the question would
+    be worse than linking nowhere.
+    """
+    from urllib.parse import quote
+
+    return f"{POLKADOT_APPS}?rpc={quote(rpc, safe='')}#/chainstate"
