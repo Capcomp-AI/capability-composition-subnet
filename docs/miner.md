@@ -55,10 +55,11 @@ gives you one evaluated attempt per day, because a recipe sent after a run
 opened is not measured in it. Nothing is terminated: a package that loses costs
 you that run, not the hotkey.
 
-**Three submissions per run.** Only your last one is measured, and only it is
-stored - the ones it replaced survive as digests and a count, so you can always
-check what you used. Re-sending an identical recipe does not cost an attempt, so
-retrying a request that timed out is safe.
+**Commit as often as you like.** There is no submission count. The last
+commitment standing before the settling window is the one measured, and each
+one replaces whatever the pallet held for your hotkey. What bounds you is the
+pallet's own per-epoch budget of 3100 bytes: a recipe seals to roughly 750-800
+bytes, so about four commitments an epoch.
 
 The limit is real because there is now a record to enforce it against. It is
 high enough to correct a mistake and low enough that you cannot iterate against
@@ -432,8 +433,8 @@ capcomp commit --recipe recipe.json \
 ```
 
 Without `--confirm` this is a dry run: it validates the recipe, reads the run
-from the chain, prints the digest, says which run the commitment would join and how many of the
-run's three attempts you would have left - and sends nothing.
+from the chain, prints the digest, says which run the commitment would join,
+what it seals to against the field and epoch limits - and sends nothing.
 
 ```
 run 412: measured in run 413, paid in run 414
@@ -604,9 +605,9 @@ Submitting takes any machine: a recipe is a few hundred bytes of JSON, signed
 by your hotkey and sent over HTTP.
 
 Evaluating takes a 32 GB GPU, and evaluating is how you find a recipe worth
-submitting. You have three submissions a run and each unmeasured guess spends
-one. The entry gate alone is 0.02 of end-to-end completion over the strongest
-reference, and adjacent paid ranks are routinely under 0.001 apart.
+committing. Only your last commitment is measured, so an unmeasured guess is a
+run spent on it. The entry gate alone is 0.02 of end-to-end completion over the
+strongest reference, and adjacent paid ranks are routinely under 0.001 apart.
 
 | What you are doing | What you need |
 |---|---|
@@ -897,10 +898,12 @@ with nothing to agree on.
 
 | | |
 |---|---|
-| Attempts per run | 3, and only the last is measured |
-| Identical resend | Free - it costs no attempt |
-| Max recipe size | 256 KB |
-| Refusals | `401` signature, `403` not registered, `429` no attempts left |
+| Commits per run | Unlimited; the last before the settling window is measured |
+| Cost | None - no fee, and no coldkey is unlocked |
+| Max recipe size | 4096 canonical bytes |
+| Max sealed field | 1024 bytes of ciphertext |
+| Epoch budget | 3100 bytes per hotkey, about four commitments |
+| Refusals | The pallet refuses an unregistered hotkey or an exhausted epoch budget |
 
 `GET /contract` returns all of this as JSON.
 

@@ -630,13 +630,13 @@ MAX_COMMITMENT_FIELDS: Final[int] = 3
 
 #: The per-hotkey, per-epoch commitment budget, charged by ciphertext length.
 #:
-#: ``DefaultMaxSpace`` in the pallet, raisable only by sudo. On the chain path a
-#: miner may re-commit as often as they like and this is what stops them: no
-#: count, just whatever fits in an epoch. Each commitment is charged at least
+#: ``DefaultMaxSpace`` in the pallet, raisable only by sudo. A miner may
+#: re-commit as often as they like and this is the only thing that stops them:
+#: no count, just whatever fits in an epoch. Each commitment is charged at least
 #: MIN_COMMIT_SPACE_BYTES however small it is.
 #:
-#: It does not replace RESUBMISSION_LIMIT yet. That still governs the API, which
-#: is still the path that is scored, and the two coexist until the API retires.
+#: This is the whole of the limit. A recipe of the sizes seen in practice seals
+#: to around 750-800 bytes, so a hotkey gets roughly four commitments an epoch.
 MAX_EPOCH_COMMIT_BYTES: Final[int] = 3100
 MIN_COMMIT_SPACE_BYTES: Final[int] = 100
 
@@ -821,12 +821,7 @@ DEFAULT_TAIL_FRACTION: Final[float] = 0.15
 #: reference, so a field is paid on what it is rather than on how strong an
 #: earlier run happened to be. This margin decides only whether the throne
 #: changes hands.
-#: How many times a hotkey may submit in one run, the first included. Only the
-#: last is measured. High enough to correct a mistake, low enough that a miner
-#: cannot iterate against the measurement - a limit you could search with would
-#: turn the run into a free evaluation service.
-RESUBMISSION_LIMIT = 3
-
+#:
 #: Quartered from 0.002, in two steps. A smaller margin lets a genuine, narrow
 #: improvement take the throne rather than sitting just under it for a run.
 #:
