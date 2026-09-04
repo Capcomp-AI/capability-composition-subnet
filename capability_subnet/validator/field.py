@@ -19,9 +19,11 @@ commitments when the run that measures them opens, so the field is readable for
 exactly as long as it is needed, and a validator measuring run N+1 has run N's
 recipes for the whole of it.
 
-Every body is checked before it becomes a candidate: the reveal round must be
-the one the run pins, the payload must decompress and parse, and the digest is
-taken over the canonical form rather than over what was sealed. The chain
+Every body is checked before it becomes a candidate: the commitment must
+belong to the run being built - by its reveal round while sealed, and by the
+block it opened at once the pallet has discarded that round - the payload must
+decompress and parse, and the digest is taken over the canonical form rather
+than over what was sealed. The chain
 stores whatever a miner puts there and vouches for none of it, so all of that
 happens here. :mod:`capability_subnet.common.sealed` is where it lives.
 """
@@ -32,7 +34,6 @@ import logging
 from dataclasses import dataclass
 
 from capability_subnet.common import constants as C
-from capability_subnet.common.chain import measured_in_run
 
 log = logging.getLogger(__name__)
 
@@ -102,25 +103,27 @@ def field_for_run(
 ) -> list[FetchedSubmission]:
     """Everything ``measuring_run`` is supposed to measure.
 
-    Two source runs, not one. A submission is measured in the run after the one
-    it was made in - unless it was made inside the settling window, in which
-    case it is held over one further run. So this run's field is the settled
-    part of run N-1 plus the late part of N-2, and a validator that read only
-    N-1 would leave the held-over miners unmeasured and unpaid.
+        Two source runs, not one. A submission is measured in the run after the one
+        it was made in - unless it was made inside the settling window, in which
+        case it is held over one further run. So this run's field is the settled
+        part of run N-1 plus the late part of N-2, and a validator that read only
+        N-1 would leave the held-over miners unmeasured and unpaid.
 
-    :func:`measured_in_run` decides which is which, from the commitment's block
-    alone. Every validator reads the same chain and selects the same field, so
-    there is nothing here to disagree about.
+    Which is which is decided by the round a miner sealed to: they choose it
+        under the settling rule when they commit, and the chain opens the
+        commitment at that round and no other. Every validator reads the same
+        chain and selects the same field, so there is nothing here to disagree
+        about.
 
-    Refusals are logged rather than raised. One miner sealing something
-    malformed is that miner's run to lose, not a reason to stop measuring the
-    rest of the field - but it is said out loud, because the chain gave them no
-    error and this is the only place the reason exists.
+        Refusals are logged rather than raised. One miner sealing something
+        malformed is that miner's run to lose, not a reason to stop measuring the
+        rest of the field - but it is said out loud, because the chain gave them no
+        error and this is the only place the reason exists.
 
-    Raises:
-        FieldError: if the chain cannot be read at all. An unreadable chain and
-            an empty field produce the same weight vector, and reporting the
-            second as the first would describe a subnet nobody entered.
+        Raises:
+            FieldError: if the chain cannot be read at all. An unreadable chain and
+                an empty field produce the same weight vector, and reporting the
+                second as the first would describe a subnet nobody entered.
     """
     from capability_subnet.common.chain import fetch_metagraph
     from capability_subnet.common.sealed import field_from_commitments
@@ -158,8 +161,17 @@ def field_for_run(
         )
         refusals.extend(refused)
         for entry in admitted:
-            if not measured_in_run(entry.block, measuring_run, run_blocks):
-                continue
+            # No settling check here any more, and none is needed. It read the
+            # commit block to decide which run a commitment joined - but the
+            # pallet replaces that block with the reveal block once it opens
+            # the commitment, so post-reveal it asked the question of the wrong
+            # number and dropped the entire field.
+            #
+            # field_from_commitments has already answered it. A miner seals to
+            # the round of the run they are entering, choosing that round under
+            # the settling rule, and the chain opens the commitment at that
+            # round and no other. The run is settled by the time an entry gets
+            # here; re-deriving it from a block is what broke.
             # A hotkey with a commitment in both source runs re-sealed; the one
             # this run measures is the one whose block says so, and both have
             # already been filtered to exactly that.

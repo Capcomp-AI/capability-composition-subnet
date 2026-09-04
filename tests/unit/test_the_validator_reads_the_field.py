@@ -126,13 +126,20 @@ class TestTheFieldSpansTwoSourceRuns:
 
         The half a validator reading only N-1 would drop: the miner's row looks
         submitted and never gets scored.
+
+        Which run holds it is decided when the miner commits, not when the
+        field is read. `run_for_commit` applies the settling rule to the commit
+        block and `capcomp commit` seals to that run's round, so a commitment
+        made inside 422's settling window is sealed to 423's round and opens
+        with 423's field. It cannot be re-derived at read time: the pallet
+        discards the commit block when it opens a commitment, replacing it with
+        the block the reveal landed at.
         """
-        late = _opens(422) - C.MIN_COMMITMENT_AGE_BLOCKS + 10
-        record = Record(ALICE, zlib.compress(body), 421, block=late)
+        record = Record(ALICE, zlib.compress(body), 423, block=_opens(423) + 100)
         _patched(monkeypatch, View([record]))
 
-        assert field_for_run(object(), 422) == []
-        assert len(field_for_run(object(), 423)) == 1
+        assert field_for_run(object(), 423) == []
+        assert len(field_for_run(object(), 424)) == 1
 
     def test_a_hotkey_in_both_source_runs_appears_once(self, monkeypatch, body):
         early = Record(ALICE, zlib.compress(body), 420, block=_opens(420) + 50)

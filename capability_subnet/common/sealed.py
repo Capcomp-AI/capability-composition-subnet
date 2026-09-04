@@ -95,10 +95,28 @@ def unseal(
     Raises:
         SealedError: on any failed check, naming the check.
     """
-    try:
-        T.check_reveal_round(run_id, reveal_round, run_blocks=run_blocks)
-    except T.RevealRoundError as exc:
-        raise SealedError(str(exc)) from exc
+    # Two ways to bind a commitment to a run, because the pallet reports
+    # different things before and after it opens one. While sealed it carries
+    # the reveal round, and that is compared exactly. Once opened it reports no
+    # round at all - and no commit block either, `block` becoming the block the
+    # reveal landed at - so the run is recovered from when it opened instead.
+    #
+    # Not a relaxation. A run pins one round, the chain opens at that round and
+    # no other, and consecutive runs are a day apart; the block a commitment
+    # opened at names its run as surely as the round did. Requiring the round
+    # here refused every commitment in the first run that ever reached this
+    # code with real revealed data - all 41 of them, for a round the pallet had
+    # already discarded.
+    if reveal_round:
+        try:
+            T.check_reveal_round(run_id, reveal_round, run_blocks=run_blocks)
+        except T.RevealRoundError as exc:
+            raise SealedError(str(exc)) from exc
+    elif not T.opened_in_run(block, run_id, run_blocks=run_blocks):
+        raise SealedError(
+            f"opened at block {block}, which is not when run {run_id}'s "
+            f"commitments open; this commitment is not a submission to run {run_id}"
+        )
 
     if framed:
         try:

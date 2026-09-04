@@ -115,6 +115,38 @@ def reveal_round_for_run(
     return round_at(block_instant(close_block + margin_blocks))
 
 
+def opened_in_run(
+    reveal_block: int,
+    run_id: int,
+    *,
+    run_blocks: int = C.DEFAULT_RUN_BLOCKS,
+    margin_blocks: int = C.REVEAL_MARGIN_BLOCKS,
+    tolerance_blocks: int = 600,
+) -> bool:
+    """Whether a commitment opened at ``reveal_block`` belongs to ``run_id``.
+
+    For a record the chain has already opened. The pallet reports a sealed
+    commitment's reveal round and, once it opens it, reports ``None`` - the
+    round is gone from the record along with the commit block, which becomes
+    the block the reveal landed at. So the round cannot be compared after the
+    fact and the run has to be recovered from *when* it opened.
+
+    That is sound, and it is not a weaker check than comparing the round. A run
+    pins exactly one round, the chain opens a commitment at that round and at
+    no other, and consecutive runs' rounds are a day apart. So the block a
+    commitment opened at identifies its run outright, and the tolerance only
+    has to absorb the difference between the round's wall-clock instant and the
+    block that carried it.
+
+    ``tolerance_blocks`` is two hours against a day of separation. Reveals have
+    been observed a few blocks either side: the round fires on wall-clock time
+    while the block height it lands on depends on how fast the chain is
+    running, which is the same drift REVEAL_MARGIN_BLOCKS exists for.
+    """
+    expected = run_opens_block(run_id + 1, run_blocks) + margin_blocks
+    return abs(reveal_block - expected) <= tolerance_blocks
+
+
 def check_reveal_round(
     run_id: int,
     reveal_round: int,
