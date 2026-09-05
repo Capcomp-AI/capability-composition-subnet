@@ -723,6 +723,18 @@ MIN_COMMITMENT_AGE_BLOCKS: Final[int] = 300
 #: hour it costs is a wait; the hour it saves is a run.
 COMMIT_CUTOFF_BLOCKS: Final[int] = 600
 
+#: How long after a run opens the miner CLI holds a commitment back when it
+#: cannot read what the hotkey already holds. The protocol opens the previous
+#: run's commitments REVEAL_MARGIN_BLOCKS in; this waits an hour beyond that, so
+#: a miner is clear of the reveal rather than racing it, and is covered for the
+#: lag between a commitment opening and the subnet recording it.
+#:
+#: Only the fallback. When the chain is readable the check is exact - it asks
+#: whether this hotkey holds a sealed commitment for a *different* run - because
+#: a blanket hold turns away miners with nothing to lose, and replacing a
+#: commitment made for the run being committed to is ordinary resubmission.
+COMMIT_HOLD_AFTER_OPEN_BLOCKS: Final[int] = 600
+
 #: How far back the anti-copy check looks, in runs.
 #:
 #: "Earliest commit wins" used to reach over the whole history: a submission was

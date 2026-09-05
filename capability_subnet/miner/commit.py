@@ -242,7 +242,27 @@ def check_not_closing(
     close = run_opens_block(run + 1, run_blocks)
     left = close - commit_block
     if left > cutoff_blocks:
-        return
+        # The other half of the boundary, reached only when the exact check
+        # could not read the chain. Distance to this run's close says nothing
+        # here: the run before this one has not opened its commitments yet, so
+        # a commitment now is a correct entry to this run that destroys that
+        # one on the way in.
+        since_open = commit_block - run_opens_block(run, run_blocks)
+        if since_open >= C.COMMIT_HOLD_AFTER_OPEN_BLOCKS:
+            return
+        opens = run_opens_block(run, run_blocks) + C.REVEAL_MARGIN_BLOCKS
+        raise CommitError(
+            f"run {run} opened {since_open} blocks ago and run {run - 1}'s commitments "
+            f"open at block {opens}. If this hotkey holds one for run {run - 1}, "
+            f"committing now REPLACES it - a hotkey holds exactly one, the pallet keeps "
+            f"no history, and a sealed commitment replaced before it opens is never "
+            f"measured. Nothing was committed.\n"
+            f"  Commit from block "
+            f"{run_opens_block(run, run_blocks) + C.COMMIT_HOLD_AFTER_OPEN_BLOCKS}, an "
+            f"hour past that, so you are clear of the reveal rather than racing it.\n"
+            f"  Pass --run {run} to commit now and accept losing anything held for "
+            f"run {run - 1}."
+        )
 
     # Standing exactly MIN_COMMITMENT_AGE_BLOCKS counts as settled:
     # measuring_run_for compares block + the window against the next opening
@@ -284,6 +304,67 @@ def check_not_closing(
         f"  Wait {left} blocks for run {run + 1} to open and commit there, or pass "
         f"--run {run + 1} to commit to run {run + 1} now and accept losing anything "
         f"held for run {run}."
+    )
+
+
+def held_reveal_round(subtensor, netuid: int, hotkey: str) -> int | None:
+    """The round a sealed, unopened commitment of this hotkey's opens at.
+
+    ``None`` when the hotkey holds nothing sealed, and ``None`` when the chain
+    cannot be read - the caller falls back to a time window there rather than
+    treating an unreadable chain as permission.
+    """
+    from capability_subnet.common.chain import fetch_metagraph
+
+    try:
+        view = fetch_metagraph(subtensor, netuid)
+    except Exception:  # noqa: BLE001 - the caller degrades to the time window
+        return None
+    for record in getattr(view, "commitment_records", ()) or ():
+        if getattr(record, "hotkey", None) != hotkey:
+            continue
+        if getattr(record, "status", "") != "sealed":
+            return None
+        return int(getattr(record, "reveal_round", 0) or 0) or None
+    return None
+
+
+def check_not_overwriting(
+    held_round: int | None,
+    joins_run: int,
+    *,
+    run_blocks: int = C.DEFAULT_RUN_BLOCKS,
+) -> None:
+    """Refuse a commitment that would destroy a sealed one made for another run.
+
+    A hotkey holds exactly one commitment and the pallet keeps no history, so
+    writing a second replaces the first. Replacing one made for the run being
+    committed to is ordinary resubmission and the newest is what gets measured.
+    Replacing one made for a *different* run is not a replacement at all - the
+    miner meant to enter both - and the older never opens and is never measured.
+
+    Thirteen of run 424's sixty-nine entrants were lost that way in a single
+    window, eight of them in the hour after the next run opened, where every
+    time-based check said yes because the distance to this run's close had gone
+    quiet.
+
+    Raises:
+        CommitError: if ``held_round`` belongs to a run other than ``joins_run``.
+    """
+    from capability_subnet.common.timelock import reveal_round_for_run
+
+    if not held_round:
+        return
+    if held_round == reveal_round_for_run(joins_run, run_blocks=run_blocks):
+        return
+    raise CommitError(
+        f"this hotkey holds a sealed commitment that opens at round {held_round}, and it "
+        f"was not made for run {joins_run}. A hotkey holds exactly one commitment and the "
+        f"pallet keeps no history, so committing now REPLACES it: that one never opens, is "
+        f"never measured, and is never reported. Nothing was committed.\n"
+        f"  Wait for it to open - it does so an hour into the run that measures it - and "
+        f"commit afterwards. Both submissions survive that way.\n"
+        f"  Pass --run {joins_run} to commit anyway and accept losing the sealed one."
     )
 
 

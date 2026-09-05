@@ -539,7 +539,18 @@ def _cmd_commit(args: argparse.Namespace) -> int:
         # the next run and accept what that costs, so the refusal is skipped
         # there rather than made un-overridable.
         if args.run is None:
-            chain.check_not_closing(block)
+            # Exact first: what this hotkey actually holds. A hotkey with
+            # nothing sealed loses nothing by committing in the boundary hours,
+            # and a blanket hold would turn it away for no reason.
+            held = chain.held_reveal_round(
+                subtensor, args.netuid, _wallet(args).hotkey.ss58_address
+            )
+            if held is not None:
+                chain.check_not_overwriting(held, joins)
+            else:
+                # Nothing sealed, or the chain could not be read. The second
+                # case is indistinguishable here, so the time window stands in.
+                chain.check_not_closing(block)
         else:
             chain.check_window(block, args.run)
         sealed = chain.seal(recipe, args.run if args.run is not None else joins)
