@@ -41,12 +41,20 @@ def _opens(run: int) -> int:
 
 
 class Sealed:
-    """A commitment the chain has taken but not yet opened."""
+    """A commitment the chain has taken but not yet opened.
 
-    def __init__(self, hotkey, run_id, *, uid=7):
+    ``history`` is what the pallet has opened for this hotkey *before*. It is
+    non-empty for every returning miner and says nothing about the commitment
+    in hand - which is what ``status`` carries. A double that left it empty is
+    how a filter reading it as a boolean went unnoticed while dropping 22 of 50
+    live commitments.
+    """
+
+    def __init__(self, hotkey, run_id, *, uid=7, history=()):
         self.hotkey, self.uid = hotkey, uid
         self.reveal_round = T.reveal_round_for_run(run_id)
-        self.revealed = []
+        self.revealed = list(history)
+        self.status = "sealed"
 
 
 class Opened:
@@ -56,6 +64,7 @@ class Opened:
         self.hotkey, self.uid = hotkey, uid
         self.reveal_round = T.reveal_round_for_run(run_id)
         self.revealed = [(block, "0x" + payload.hex())]
+        self.status = "revealed"
 
 
 class View:
@@ -139,3 +148,31 @@ class TestOnlyThisRunsReveals:
         _patched(monkeypatch, View([Sealed(BOB, 430, uid=8)]))
 
         assert field_for_run(object(), 424) == []
+
+
+class TestAReturningMinerIsStillPending:
+    """A hotkey that has opened a commitment before still has this one sealed.
+
+    The pallet keeps the reveal history on the record, so the two differ only
+    for a miner who has submitted before - which is why a suite whose doubles
+    all had empty histories passed while the field lost its returning half.
+    """
+
+    def test_a_sealed_commitment_with_history_is_pending(self):
+        from capability_subnet.validator.field import _pending_reveals
+
+        past = [(_opens(423), "0xdeadbeef")]
+        records = [Sealed("5Returning", 424, history=past)]
+
+        assert _pending_reveals(records, 425, run_blocks=C.DEFAULT_RUN_BLOCKS) == ["5Returning"]
+
+    def test_it_matches_a_first_time_miner(self):
+        from capability_subnet.validator.field import _pending_reveals
+
+        past = [(_opens(423), "0xdeadbeef")]
+        fresh = _pending_reveals([Sealed("5Fresh", 424)], 425, run_blocks=C.DEFAULT_RUN_BLOCKS)
+        returning = _pending_reveals(
+            [Sealed("5Returning", 424, history=past)], 425, run_blocks=C.DEFAULT_RUN_BLOCKS
+        )
+
+        assert len(fresh) == len(returning) == 1

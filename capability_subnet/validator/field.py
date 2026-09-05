@@ -78,7 +78,10 @@ def _pending_reveals(records, measuring_run: int, *, run_blocks: int) -> list[st
         getattr(record, "hotkey", "")
         for record in records
         if int(getattr(record, "reveal_round", 0) or 0) in expected
-        and not getattr(record, "revealed", None)
+        # The state of this commitment, not whether the hotkey has ever opened
+        # one. ``revealed`` is a history the pallet keeps, so reading it as a
+        # boolean drops every returning miner from the pending count.
+        and getattr(record, "status", "") == "sealed"
     ]
 
 
