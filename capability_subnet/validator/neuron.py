@@ -121,6 +121,11 @@ class ValidatorNeuron:
 
         self.uid = self._resolve_uid()
         self.last_weight_block = 0
+        #: The run the last submission paid, and the run length used to derive
+        #: it. A new run pays a new field, so the boundary has to be able to
+        #: trigger a pass on its own - see :meth:`should_set_weights`.
+        self.last_paying_run: int | None = None
+        self.run_blocks = C.DEFAULT_RUN_BLOCKS
         self.should_exit = False
         # Endpoint mode reads scores rather than producing them, so it has no
         # use for a measuring fleet - and building one made a GPU-less host log
@@ -335,9 +340,32 @@ class ValidatorNeuron:
         return uid
 
     def should_set_weights(self, block: int) -> bool:
+        """Whether this pass should go on to derive and submit a vector.
+
+        The interval is a floor on how often weights are rewritten, not a
+        schedule the run boundary has to wait for. A run pays a different field
+        from the one before it, so when the boundary moves, the weights this
+        validator is holding are for the previous run's winners and every pass
+        that returns early here keeps them in force.
+
+        That is what a fixed interval alone cost: with a 30-minute floor and a
+        boundary landing just after a submission, the stale vector stood for the
+        rest of the interval. If an epoch step fell in that window, this
+        validator was scored against a consensus that had already moved on and
+        its trust collapsed - for weights that were correct when it set them.
+
+        So either condition is enough: the interval has elapsed, or the run has
+        changed since the last submission. The chain's own rate limit still
+        applies underneath and a refusal for rate is handled where it is seen.
+        """
         if self.config.disable_set_weights:
             return False
-        return (block - self.last_weight_block) >= self.config.weight_interval
+        if (block - self.last_weight_block) >= self.config.weight_interval:
+            return True
+        return (
+            self.last_paying_run is not None
+            and run_id_for_block(block, self.run_blocks) != self.last_paying_run
+        )
 
     def step(self) -> None:
         """One pass: measure this run here, then set weights from it."""
@@ -538,12 +566,47 @@ class ValidatorNeuron:
             trusted_signers=self._trusted,
         )
         run_blocks = client.run_blocks() or C.DEFAULT_RUN_BLOCKS
+        # Remembered so a boundary can trigger a pass on its own, without
+        # another round trip to work out how long a run is.
+        self.run_blocks = run_blocks
 
         # The run being paid now, and the measured run whose reports decide it. A
         # recipe committed in run N is measured in N+1 and paid in N+2, so the
         # field paid in the current run was measured in the run before it.
         paying_run = run_id_for_block(block, run_blocks)
         measured_run = paying_run - 1
+
+        # Which run this is gets decided by a block height, so a node that has
+        # fallen behind quietly moves the validator into the previous run and it
+        # pays that run's winners with full confidence. Nothing downstream can
+        # catch it: the vector is internally consistent, the reports are real and
+        # signed, and every check passes - against the wrong run.
+        #
+        # The engine's view is not taken as truth here; it is only used to notice
+        # that this node disagrees with it. A fresh read settles a stale cached
+        # height, and if the node is genuinely behind, holding the last weights
+        # is the conservative answer. Submitting a vector for a run the chain has
+        # already left is what costs a validator its trust, and it is worse than
+        # submitting nothing.
+        published_run = self._published_run(client)
+        if published_run is not None and published_run > paying_run:
+            block = current_block(self.subtensor)
+            paying_run = run_id_for_block(block, run_blocks)
+            measured_run = paying_run - 1
+            if published_run > paying_run:
+                log.error(
+                    "this node reads block %d, which is run %d, but the engine is "
+                    "already publishing run %d. Refusing to pay run %d with a chain "
+                    "read that is %d run(s) behind; leaving the last weights in "
+                    "force. Check this validator's subtensor endpoint - a lagging "
+                    "or half-synced node is the usual cause.",
+                    block,
+                    paying_run,
+                    published_run,
+                    paying_run,
+                    published_run - paying_run,
+                )
+                return
 
         try:
             reports = client.fetch_reports(measured_run)
@@ -607,6 +670,25 @@ class ValidatorNeuron:
 
     def _run_report_dir(self) -> Path:
         return Path(self.config.full_path) / "runs"
+
+    @staticmethod
+    def _published_run(client) -> int | None:
+        """The run the engine says it is on, or ``None`` if it will not say.
+
+        Read only to cross-check this validator's own chain height. A missing,
+        unparseable or absent value means no cross-check is available, which is
+        not itself a reason to stop paying.
+        """
+        from capability_subnet.validator.client import BackendUnavailable
+
+        try:
+            value = client.health().get("current_run")
+        except BackendUnavailable:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
 
     def _reigning_grade(self, run_id: int) -> float | None:
         """The grade a challenger in ``run_id`` has to beat.
@@ -985,6 +1067,10 @@ class ValidatorNeuron:
 
     def _submit(self, vector, block: int) -> None:
         uids, weights = vector.as_uid_weight_lists()
+        # What the vector says it pays, so the next pass can tell a boundary
+        # from an interval. Taken from the vector rather than re-derived from
+        # the block: this is the run that was actually paid.
+        paid_run = getattr(vector, "run_id", None)
 
         if self.config.disable_set_weights:
             log.info(
@@ -992,6 +1078,7 @@ class ValidatorNeuron:
                 ", ".join(f"uid {u}={w:.4f}" for u, w in zip(uids, weights, strict=True)),
             )
             self.last_weight_block = block
+            self.last_paying_run = paid_run
             return
 
         success, message = submit_weights(
@@ -1009,6 +1096,7 @@ class ValidatorNeuron:
 
         if success:
             self.last_weight_block = block
+            self.last_paying_run = paid_run
             log.info(
                 "set weights at block %d: %s",
                 block,
@@ -1018,6 +1106,7 @@ class ValidatorNeuron:
             # The chain's own guard. Advancing the marker stops the validator
             # from retrying every pass until the limit clears.
             self.last_weight_block = block
+            self.last_paying_run = paid_run
             log.info("weight submission rate-limited; will retry next interval")
         else:
             log.error("weight submission failed: %s", message)
