@@ -176,3 +176,31 @@ class TestAReturningMinerIsStillPending:
         )
 
         assert len(fresh) == len(returning) == 1
+
+
+class TestACheckThatCouldNotRunSaysSo:
+    """ "The draw was not re-rolled" and "I could not check" are different claims.
+
+    check_draw_was_not_re_rolled returns True when fewer than two disclosed
+    runs are reachable, because refusing would burn a run every time the
+    endpoint hiccups. The caller reads only the boolean, so the distinction is
+    lost - and a verification that silently reports success is worse than one
+    that is absent, because it is counted as evidence.
+    """
+
+    def test_it_warns_when_it_verified_nothing(self, caplog, monkeypatch):
+        import logging
+
+        from capability_subnet.validator import client as C_
+
+        class Blind:
+            def fetch_disclosure(self, run_id):
+                raise C_.BackendUnavailable("no endpoint")
+
+        with caplog.at_level(logging.WARNING):
+            ok, detail = C_.check_draw_was_not_re_rolled(Blind(), 424)
+
+        assert ok is True, "must not burn a run over an unreachable endpoint"
+        assert "could not run" in caplog.text
+        assert "verified nothing" in caplog.text
+        assert "not enough disclosed runs" in detail

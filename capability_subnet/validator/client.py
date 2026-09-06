@@ -327,6 +327,16 @@ def check_draw_was_not_re_rolled(
             continue
 
     if len(collected) < 2:
+        # True, because refusing here would burn a run every time the endpoint
+        # hiccups - but said out loud, because "the draw was not re-rolled" and
+        # "I could not check whether the draw was re-rolled" are different
+        # claims and the caller only reads the boolean.
+        log.warning(
+            "seed-root check could not run for run %d: %d disclosed run(s) available, "
+            "2 needed. Reporting pass, having verified nothing.",
+            run_id,
+            len(collected),
+        )
         return True, "not enough disclosed runs to compare seed roots"
 
     agreed, detail = commitments_agree(collected)
