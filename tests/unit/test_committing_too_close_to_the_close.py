@@ -33,12 +33,18 @@ class TestTheCommandStopsBeforeTheProtocolDoes:
         check_not_closing(_close() - C.COMMIT_CUTOFF_BLOCKS - 1)
 
     def test_one_block_past_the_cutoff_is_refused(self):
-        with pytest.raises(CommitError, match="stops 600 blocks out"):
+        with pytest.raises(CommitError, match="stops 300 blocks out"):
             check_not_closing(_close() - C.COMMIT_CUTOFF_BLOCKS)
 
-    def test_the_cutoff_is_twice_the_protocol_s(self):
-        """The gap between them is the whole margin this buys."""
-        assert C.COMMIT_CUTOFF_BLOCKS == 2 * C.MIN_COMMITMENT_AGE_BLOCKS
+    def test_the_cutoff_is_the_protocol_s_own(self):
+        """They were two apart, and the command stopped an hour early to buy a
+        margin against an extrinsic landing late. They are now the same, so
+        every surface names one window - one hour before a close, two after the
+        next opens. The margin that bought is covered instead by the engine
+        keeping every sealed ciphertext, which recovers a commitment lost that
+        way rather than trying to avoid losing it.
+        """
+        assert C.COMMIT_CUTOFF_BLOCKS == C.MIN_COMMITMENT_AGE_BLOCKS
 
     def test_the_protocol_rule_is_untouched(self):
         """Consensus reads MIN_COMMITMENT_AGE_BLOCKS, so it must not move.
@@ -77,11 +83,13 @@ class TestTheRefusalSaysWhatIsAtStake:
     def test_before_it_the_override_is_this_run_not_the_next(self):
         """The advice has to differ, because the safe move differs.
 
-        Between the two cutoffs a commitment still joins run 424, so telling a
+        At exactly the cutoff a commitment still joins run 424, so telling a
         miner to wait for 425 would cost them the run they can still enter.
+        With the two cutoffs equal this band is one block wide, which is
+        precisely where an off-by-one would hide.
         """
         with pytest.raises(CommitError) as caught:
-            check_not_closing(_close(424) - 450)
+            check_not_closing(_close(424) - C.MIN_COMMITMENT_AGE_BLOCKS)
         message = str(caught.value)
 
         assert "--run 424 to commit to run 424 anyway" in message
@@ -93,11 +101,12 @@ class TestTheRefusalSaysWhatIsAtStake:
             check_not_closing(_close(424) - 100)
         assert "joins run 425, not run 424" in str(caught.value)
 
-    def test_between_the_two_cutoffs_it_says_the_run_still_holds(self):
-        """Between 600 and 300 blocks out the run does not change - the refusal
-        is about how little room is left, and must not claim otherwise."""
+    def test_at_the_cutoff_it_says_the_run_still_holds(self):
+        """Standing exactly the settling window counts as settled, so the run
+        does not change here - the refusal is about how little room is left,
+        and must not claim otherwise."""
         with pytest.raises(CommitError) as caught:
-            check_not_closing(_close(424) - 450)
+            check_not_closing(_close(424) - C.MIN_COMMITMENT_AGE_BLOCKS)
         message = str(caught.value)
 
         assert "would still join run 424" in message
@@ -114,14 +123,22 @@ class TestItAgreesWithTheRunItWouldJoin:
         with pytest.raises(CommitError):
             check_not_closing(block)
 
-    @pytest.mark.parametrize("left", [300, 450, 600])
-    def test_a_refused_block_outside_it_still_joins_this_run(self, left):
+    def test_the_boundary_block_is_refused_but_still_joins_this_run(self):
         """Refused by the command, admissible to the protocol. Both true.
 
         300 is the boundary and it belongs on this side: standing exactly the
         settling window counts as settled.
         """
-        block = _close(424) - left
+        block = _close(424) - C.MIN_COMMITMENT_AGE_BLOCKS
         assert run_for_commit(block) == 424
         with pytest.raises(CommitError):
             check_not_closing(block)
+
+    @pytest.mark.parametrize("left", [301, 450, 600, 1200])
+    def test_further_out_than_the_cutoff_is_allowed(self, left):
+        """The hour the command used to decline and no longer does. It joins
+        this run and replaces only this run's commitment, which is ordinary
+        resubmission."""
+        block = _close(424) - left
+        assert run_for_commit(block) == 424
+        check_not_closing(block)

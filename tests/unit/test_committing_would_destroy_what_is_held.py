@@ -107,8 +107,8 @@ class TestTheAdvisedSpan:
     * the protocol's own danger: MIN_COMMITMENT_AGE_BLOCKS before a run closes,
       then REVEAL_MARGIN_BLOCKS while the closing run is still sealed - 2 hours.
     * the submissions API's advice: 1 hour before, 2 after - 3 hours.
-    * this CLI: COMMIT_CUTOFF_BLOCKS is already 2 hours before a close, so with
-      a 2 hour hold after an open it declines across 4.
+    * this CLI: the same 3, since COMMIT_CUTOFF_BLOCKS was brought down to the
+      protocol's own cutoff so every surface names one window.
 
     The CLI is the most conservative because it is the one holding the miner's
     keys at the moment of the extrinsic, and its refusal is overridable with
@@ -120,9 +120,23 @@ class TestTheAdvisedSpan:
         span = C.MIN_COMMITMENT_AGE_BLOCKS + C.REVEAL_MARGIN_BLOCKS
         assert span * C.BLOCK_SECONDS / 3600 == 2.0
 
-    def test_this_cli_declines_across_four(self):
+    def test_this_cli_declines_across_three(self):
+        """One hour before a close, two after the next opens."""
         span = C.COMMIT_CUTOFF_BLOCKS + C.COMMIT_HOLD_AFTER_OPEN_BLOCKS
-        assert span * C.BLOCK_SECONDS / 3600 == 4.0
+        assert span * C.BLOCK_SECONDS / 3600 == 3.0
+        assert C.COMMIT_CUTOFF_BLOCKS * C.BLOCK_SECONDS / 3600 == 1.0
+        assert C.COMMIT_HOLD_AFTER_OPEN_BLOCKS * C.BLOCK_SECONDS / 3600 == 2.0
+
+    def test_every_surface_names_the_same_window(self):
+        """The contract and the command disagreeing is how a miner ends up
+        trusting whichever one they happened to read."""
+        import sys
+
+        sys.path.insert(0, "/home/shadeform/projects/bittensor/lora-merger/lora-merger-engine")
+        from submissions import api
+
+        assert api.SETTLING_BLOCKS == C.COMMIT_CUTOFF_BLOCKS
+        assert api.HOLD_AFTER_OPEN_BLOCKS == C.COMMIT_HOLD_AFTER_OPEN_BLOCKS
 
     def test_every_advisory_covers_the_real_danger(self):
         """Advice shorter than the danger would be worse than none."""

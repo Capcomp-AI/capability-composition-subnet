@@ -719,9 +719,20 @@ MIN_COMMITMENT_AGE_BLOCKS: Final[int] = 300
 #: second belongs to a different run and the first is simply gone, unmeasured.
 #: Fourteen submissions were lost that way in run 423 alone.
 #:
-#: So the command stops an hour before the protocol would, and says why. The
-#: hour it costs is a wait; the hour it saves is a run.
-COMMIT_CUTOFF_BLOCKS: Final[int] = 600
+#: The command stops where the protocol does - MIN_COMMITMENT_AGE_BLOCKS out -
+#: rather than an hour earlier, at the operator's decision, so that every
+#: surface names the same window: one hour before a run closes and two after
+#: the next one opens, three in total. A miner reading the contract and a miner
+#: running the command are now told the same thing, which matters more than the
+#: extra hour did.
+#:
+#: What that hour bought: the few blocks between reading the head and the
+#: extrinsic landing. A commitment sent at 305 blocks out that takes ten blocks
+#: to land crosses the cutoff and joins the next run, destroying what the
+#: hotkey held. That risk is real and is now covered elsewhere - the engine
+#: keeps every sealed ciphertext, so a commitment lost this way can be opened
+#: at its round regardless of what the pallet holds by then.
+COMMIT_CUTOFF_BLOCKS: Final[int] = 300
 
 #: How long after a run opens the miner CLI holds a commitment back when it
 #: cannot read what the hotkey already holds. The protocol opens the previous
